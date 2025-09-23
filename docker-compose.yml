@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: hermes-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hermes}
+      POSTGRES_USER: ${POSTGRES_USER:-hermes}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hermes}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - hermes-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hermes}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hermes-worker:
+    build:
+      context: ./hermes_worker
+      dockerfile: Dockerfile
+    container_name: hermes-worker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      POLL_INTERVAL: ${POLL_INTERVAL:-60}
+      ENABLE_BACKFILL: ${ENABLE_BACKFILL:-false}
+      RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-3}
+      RETRY_BACKOFF_SECONDS: ${RETRY_BACKOFF_SECONDS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - hermes-network
+    restart: unless-stopped
+
+  # ETL-Analysis 服務 - 未來會加入
+  # etl-analysis:
+  #   build:
+  #     context: ./etl-analysis
+  #     dockerfile: Dockerfile
+  #   container_name: hermes-etl
+  #   environment:
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes}
+  #     ETL_INTERVAL: ${ETL_INTERVAL:-300}
+  #     ENABLE_AI_ANALYSIS: ${ENABLE_AI_ANALYSIS:-false}
+  #     AI_API_KEY: ${AI_API_KEY}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - hermes-network
+  #   restart: unless-stopped
+
+  # Metabase BI 工具 - 未來會加入
+  # metabase:
+  #   image: metabase/metabase:latest
+  #   container_name: hermes-metabase
+  #   environment:
+  #     MB_DB_TYPE: postgres
+  #     MB_DB_DBNAME: ${METABASE_DB:-hermes_metabase}
+  #     MB_DB_PORT: 5432
+  #     MB_DB_USER: ${POSTGRES_USER:-hermes}
+  #     MB_DB_PASS: ${POSTGRES_PASSWORD:-hermes}
+  #     MB_DB_HOST: postgres
+  #   ports:
+  #     - "${METABASE_PORT:-3000}:3000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - hermes-network
+  #   restart: unless-stopped
+
+networks:
+  hermes-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
