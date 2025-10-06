@@ -28,6 +28,8 @@ x-airflow-common:
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # Hermes PostgreSQL connection (使用环境变量构建连接字符串)
+    AIRFLOW_CONN_POSTGRES_HERMES: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
