@@ -7,7 +7,7 @@ CREATE TABLE chat_messages (
     live_stream_id VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     timestamp BIGINT NOT NULL,
-    published_at TIMESTAMP NOT NULL,
+    published_at TIMESTAMP WITH TIME ZONE NOT NULL,
     author_name VARCHAR(255) NOT NULL,
     author_id VARCHAR(255) NOT NULL,
     author_images JSONB,
@@ -15,7 +15,7 @@ CREATE TABLE chat_messages (
     message_type VARCHAR(50),
     action_type VARCHAR(50),
     raw_data JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create stream_stats table
@@ -23,12 +23,12 @@ CREATE TABLE stream_stats (
     id SERIAL PRIMARY KEY,
     live_stream_id VARCHAR(255) NOT NULL,
     concurrent_viewers INTEGER,
-    actual_start_time TIMESTAMP,
-    scheduled_start_time TIMESTAMP,
+    actual_start_time TIMESTAMP WITH TIME ZONE,
+    scheduled_start_time TIMESTAMP WITH TIME ZONE,
     active_live_chat_id VARCHAR(255),
     etag VARCHAR(255),
     raw_response JSONB,
-    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    collected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for performance

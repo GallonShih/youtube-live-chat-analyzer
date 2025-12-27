@@ -17,7 +17,7 @@ class ChatMessage(Base):
     live_stream_id = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     timestamp = Column(BigInteger, nullable=False)
-    published_at = Column(DateTime, nullable=False)
+    published_at = Column(DateTime(timezone=True), nullable=False)
     author_name = Column(String(255), nullable=False)
     author_id = Column(String(255), nullable=False)
     author_images = Column(JSON)
@@ -25,13 +25,16 @@ class ChatMessage(Base):
     message_type = Column(String(50))
     action_type = Column(String(50))
     raw_data = Column(JSON)
-    created_at = Column(DateTime, default=func.current_timestamp())
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
 
     @classmethod
     def from_chat_data(cls, chat_data, live_stream_id):
         """Create ChatMessage instance from chat-downloader data"""
-        # Convert microsecond timestamp to datetime
-        published_at = datetime.datetime.fromtimestamp(chat_data['timestamp'] / 1000000.0)
+        # Convert microsecond timestamp to timezone-aware datetime (UTC)
+        published_at = datetime.datetime.fromtimestamp(
+            chat_data['timestamp'] / 1000000.0,
+            tz=datetime.timezone.utc
+        )
 
         return cls(
             message_id=chat_data['message_id'],
@@ -58,12 +61,12 @@ class StreamStats(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     live_stream_id = Column(String(255), nullable=False)
     concurrent_viewers = Column(Integer)
-    actual_start_time = Column(DateTime)
-    scheduled_start_time = Column(DateTime)
+    actual_start_time = Column(DateTime(timezone=True))
+    scheduled_start_time = Column(DateTime(timezone=True))
     active_live_chat_id = Column(String(255))
     etag = Column(String(255))
     raw_response = Column(JSON)
-    collected_at = Column(DateTime, default=func.current_timestamp())
+    collected_at = Column(DateTime(timezone=True), default=func.current_timestamp())
 
     @classmethod
     def from_youtube_api(cls, youtube_data, live_stream_id):

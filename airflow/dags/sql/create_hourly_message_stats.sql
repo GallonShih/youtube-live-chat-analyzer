@@ -4,10 +4,10 @@
 CREATE TABLE IF NOT EXISTS hourly_message_stats (
     id SERIAL PRIMARY KEY,
     live_stream_id VARCHAR(255) NOT NULL,
-    hour_timestamp TIMESTAMP NOT NULL,  -- 该小时的起始时间，例如: 2025-10-06 14:00:00
+    hour_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,  -- 该小时的起始时间，例如: 2025-10-06 14:00:00+00
     message_count INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
     -- 唯一约束：同一个直播在同一小时只能有一条记录
     CONSTRAINT unique_stream_hour UNIQUE (live_stream_id, hour_timestamp)
