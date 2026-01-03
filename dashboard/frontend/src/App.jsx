@@ -46,6 +46,10 @@ function App() {
             unit: 'hour',
             displayFormats: { hour: 'MM/dd HH:mm' }
         },
+        ticks: {
+            source: 'auto', // Ensure ticks are generated based on scale, not just data
+            autoSkip: false // Try to show all hour ticks if space permits
+        },
         min: new Date(new Date().getTime() - 12 * 60 * 60 * 1000).getTime(), // Initial rolling 12h
         max: new Date().getTime(),
     });
@@ -79,7 +83,8 @@ function App() {
             const data = await res.json();
             const validData = data.map(d => ({
                 // API returns UTC ISO string without Z
-                x: new Date(d.hour.endsWith('Z') ? d.hour : d.hour + 'Z').getTime(),
+                // Shift by +30 minutes to center the bar in the hour slot
+                x: new Date(d.hour.endsWith('Z') ? d.hour : d.hour + 'Z').getTime() + 30 * 60 * 1000,
                 y: d.count
             }));
             setCommentData(validData);
