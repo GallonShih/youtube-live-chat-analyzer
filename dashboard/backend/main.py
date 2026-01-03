@@ -142,10 +142,12 @@ def get_chat_messages(
     offset: int = 0,
     start_time: datetime = None,
     end_time: datetime = None,
+    author_filter: str = None,
+    message_filter: str = None,
     db: Session = Depends(get_db)
 ):
     """
-    Get chat messages with pagination and optional time filtering.
+    Get chat messages with pagination and optional filtering.
     Returns messages in descending order (newest first).
     
     Args:
@@ -153,6 +155,8 @@ def get_chat_messages(
         offset: Pagination offset
         start_time: Filter messages from this time onwards (UTC)
         end_time: Filter messages up to this time (UTC)
+        author_filter: Filter by author name (case-insensitive, fuzzy match)
+        message_filter: Filter by message content (case-insensitive, fuzzy match)
     
     Returns:
         {
@@ -175,6 +179,14 @@ def get_chat_messages(
             query = query.filter(ChatMessage.published_at >= start_time)
         if end_time:
             query = query.filter(ChatMessage.published_at <= end_time)
+        
+        # Apply author filter (case-insensitive fuzzy match)
+        if author_filter:
+            query = query.filter(ChatMessage.author_name.ilike(f'%{author_filter}%'))
+        
+        # Apply message filter (case-insensitive fuzzy match, supports emoji)
+        if message_filter:
+            query = query.filter(ChatMessage.message.ilike(f'%{message_filter}%'))
         
         # Get total count for pagination (before limit/offset)
         total = query.count()
