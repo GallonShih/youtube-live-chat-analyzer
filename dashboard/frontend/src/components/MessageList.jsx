@@ -29,47 +29,73 @@ const MessageRow = ({ message }) => {
         const emoteMap = {};
         emotes.forEach(e => {
             if (e.name && e.images && e.images.length > 0) {
-                // Use the first image URL
                 emoteMap[e.name] = e.images[0].url;
             }
         });
 
-        // Split message by emoji patterns (looking for :emoji_name: format)
-        // Updated regex to support Unicode characters (e.g., :_gtvemoji風77:)
+        // Find all positions of valid emojis in the message
+        // Only search for emoji names that actually exist in emoteMap
+        const emojiPositions = [];
+
+        Object.keys(emoteMap).forEach(emojiName => {
+            let searchPos = 0;
+            while (true) {
+                const pos = messageText.indexOf(emojiName, searchPos);
+                if (pos === -1) break;
+
+                emojiPositions.push({
+                    start: pos,
+                    end: pos + emojiName.length,
+                    name: emojiName,
+                    url: emoteMap[emojiName]
+                });
+
+                searchPos = pos + 1; // Move forward to find overlapping matches
+            }
+        });
+
+        // If no emojis found, return plain text
+        if (emojiPositions.length === 0) {
+            return <span>{messageText}</span>;
+        }
+
+        // Sort positions by start index
+        emojiPositions.sort((a, b) => a.start - b.start);
+
+        // Remove overlapping emojis (keep the first occurrence)
+        const validPositions = [];
+        let lastEnd = -1;
+        for (const pos of emojiPositions) {
+            if (pos.start >= lastEnd) {
+                validPositions.push(pos);
+                lastEnd = pos.end;
+            }
+        }
+
+        // Build parts array
         const parts = [];
         let lastIndex = 0;
-        const regex = /:[^:]+:/g;  // Match any characters except colons between two colons
-        let match;
 
-        while ((match = regex.exec(messageText)) !== null) {
+        validPositions.forEach((pos, idx) => {
             // Add text before emoji
-            if (match.index > lastIndex) {
+            if (pos.start > lastIndex) {
                 parts.push({
                     type: 'text',
-                    content: messageText.substring(lastIndex, match.index),
+                    content: messageText.substring(lastIndex, pos.start),
                     key: `text-${lastIndex}`
                 });
             }
 
-            // Add emoji or text if not found
-            const emojiName = match[0];
-            if (emoteMap[emojiName]) {
-                parts.push({
-                    type: 'emoji',
-                    name: emojiName,
-                    url: emoteMap[emojiName],
-                    key: `emoji-${match.index}`
-                });
-            } else {
-                parts.push({
-                    type: 'text',
-                    content: emojiName,
-                    key: `text-${match.index}`
-                });
-            }
+            // Add emoji
+            parts.push({
+                type: 'emoji',
+                name: pos.name,
+                url: pos.url,
+                key: `emoji-${pos.start}`
+            });
 
-            lastIndex = match.index + emojiName.length;
-        }
+            lastIndex = pos.end;
+        });
 
         // Add remaining text
         if (lastIndex < messageText.length) {
