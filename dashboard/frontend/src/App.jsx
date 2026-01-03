@@ -14,6 +14,7 @@ import {
 import { Chart } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { enUS } from 'date-fns/locale';
+import MessageList from './components/MessageList';
 
 ChartJS.register(
     CategoryScale,
@@ -451,6 +452,9 @@ function App() {
                 <div className="bg-white p-6 rounded-lg shadow-md h-[80vh]">
                     <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin]} />
                 </div>
+
+                {/* Message List */}
+                <MessageList />
             </div >
         </div >
     );

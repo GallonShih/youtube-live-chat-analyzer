@@ -135,3 +135,72 @@ def get_comment_stats_hourly(
     except Exception as e:
         logger.error(f"Error fetching comment stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/messages")
+def get_chat_messages(
+    limit: int = 100,
+    offset: int = 0,
+    start_time: datetime = None,
+    end_time: datetime = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get chat messages with pagination and optional time filtering.
+    Returns messages in descending order (newest first).
+    
+    Args:
+        limit: Number of messages to return (max 500)
+        offset: Pagination offset
+        start_time: Filter messages from this time onwards (UTC)
+        end_time: Filter messages up to this time (UTC)
+    
+    Returns:
+        {
+            "messages": [...],
+            "total": int,
+            "limit": int,
+            "offset": int
+        }
+    """
+    try:
+        # Enforce max limit
+        if limit > 500:
+            limit = 500
+        
+        # Base query
+        query = db.query(ChatMessage).order_by(ChatMessage.published_at.desc())
+        
+        # Apply time filters
+        if start_time:
+            query = query.filter(ChatMessage.published_at >= start_time)
+        if end_time:
+            query = query.filter(ChatMessage.published_at <= end_time)
+        
+        # Get total count for pagination (before limit/offset)
+        total = query.count()
+        
+        # Apply pagination
+        messages = query.limit(limit).offset(offset).all()
+        
+        # Format response
+        result = {
+            "messages": [
+                {
+                    "id": msg.message_id,
+                    "time": msg.published_at.isoformat() if msg.published_at else None,
+                    "author": msg.author_name,
+                    "message": msg.message,
+                    "emotes": msg.emotes if msg.emotes else []
+                }
+                for msg in messages
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching chat messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
