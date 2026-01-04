@@ -1,8 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from database import get_db_session, get_db_manager
-from models import StreamStats, ChatMessage
+from models import (
+    StreamStats, ChatMessage,
+    PendingReplaceWord, PendingSpecialWord,
+    ReplaceWord, SpecialWord
+)
+from validation import (
+    validate_replace_word,
+    validate_special_word,
+    batch_validate_replace_words,
+    batch_validate_special_words
+)
+
 import logging
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
@@ -215,4 +226,729 @@ def get_chat_messages(
         
     except Exception as e:
         logger.error(f"Error fetching chat messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================
+# Admin API Endpoints for Word Review System
+# ============================================
+
+@app.get("/api/admin/pending-replace-words")
+def get_pending_replace_words(
+    status: str = 'pending',
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = 'confidence',
+    order: str = 'desc',
+    db: Session = Depends(get_db)
+):
+    """
+    獲取待審核的替換詞彙列表
+    
+    Args:
+        status: 狀態篩選 (pending/approved/rejected)
+        limit: 每頁數量
+        offset: 分頁偏移
+        sort_by: 排序欄位 (confidence/occurrence/discovered_at)
+        order: 排序方向 (asc/desc)
+    """
+    try:
+        # Base query
+        query = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.status == status
+        )
+        
+        # Sorting
+        if sort_by == 'confidence':
+            order_col = PendingReplaceWord.confidence_score
+        elif sort_by == 'occurrence':
+            order_col = PendingReplaceWord.occurrence_count
+        else:  # discovered_at
+            order_col = PendingReplaceWord.discovered_at
+        
+        if order == 'asc':
+            query = query.order_by(order_col.asc())
+        else:
+            query = query.order_by(order_col.desc())
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        items = query.limit(limit).offset(offset).all()
+        
+        # Format response
+        result = {
+            "items": [
+                {
+                    "id": item.id,
+                    "source_word": item.source_word,
+                    "target_word": item.target_word,
+                    "confidence_score": float(item.confidence_score) if item.confidence_score else None,
+                    "occurrence_count": item.occurrence_count,
+                    "example_messages": item.example_messages if item.example_messages else [],
+                    "discovered_at": item.discovered_at.isoformat() if item.discovered_at else None,
+                    "status": item.status,
+                    "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None,
+                    "reviewed_by": item.reviewed_by,
+                    "notes": item.notes
+                }
+                for item in items
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching pending replace words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/pending-special-words")
+def get_pending_special_words(
+    status: str = 'pending',
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = 'confidence',
+    order: str = 'desc',
+    db: Session = Depends(get_db)
+):
+    """
+    獲取待審核的特殊詞彙列表
+    
+    Args:
+        status: 狀態篩選 (pending/approved/rejected)
+        limit: 每頁數量
+        offset: 分頁偏移
+        sort_by: 排序欄位 (confidence/occurrence/discovered_at)
+        order: 排序方向 (asc/desc)
+    """
+    try:
+        # Base query
+        query = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.status == status
+        )
+        
+        # Sorting
+        if sort_by == 'confidence':
+            order_col = PendingSpecialWord.confidence_score
+        elif sort_by == 'occurrence':
+            order_col = PendingSpecialWord.occurrence_count
+        else:  # discovered_at
+            order_col = PendingSpecialWord.discovered_at
+        
+        if order == 'asc':
+            query = query.order_by(order_col.asc())
+        else:
+            query = query.order_by(order_col.desc())
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        items = query.limit(limit).offset(offset).all()
+        
+        # Format response
+        result = {
+            "items": [
+                {
+                    "id": item.id,
+                    "word": item.word,
+                    "word_type": item.word_type,
+                    "confidence_score": float(item.confidence_score) if item.confidence_score else None,
+                    "occurrence_count": item.occurrence_count,
+                    "example_messages": item.example_messages if item.example_messages else [],
+                    "discovered_at": item.discovered_at.isoformat() if item.discovered_at else None,
+                    "status": item.status,
+                    "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None,
+                    "reviewed_by": item.reviewed_by,
+                    "notes": item.notes
+                }
+                for item in items
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching pending special words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/validate-replace-word")
+def validate_pending_replace_word(
+    source_word: str = Body(...),
+    target_word: str = Body(...),
+    pending_id: int = Body(None),
+    db: Session = Depends(get_db)
+):
+    """
+    驗證替換詞彙是否有衝突
+    """
+    try:
+        validation_result = validate_replace_word(
+            db, source_word, target_word, pending_id
+        )
+        return validation_result
+    except Exception as e:
+        logger.error(f"Error validating replace word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/validate-special-word")
+def validate_pending_special_word(
+    word: str = Body(...),
+    pending_id: int = Body(None),
+    db: Session = Depends(get_db)
+):
+    """
+    驗證特殊詞彙是否有衝突
+    """
+    try:
+        validation_result = validate_special_word(
+            db, word, pending_id
+        )
+        return validation_result
+    except Exception as e:
+        logger.error(f"Error validating special word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/approve-replace-word/{word_id}")
+def approve_replace_word(
+    word_id: int,
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批准替換詞彙並移至正式表
+    """
+    try:
+        # Get pending word
+        pending = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.id == word_id
+        ).first()
+        
+        if not pending:
+            raise HTTPException(status_code=404, detail=f"找不到 ID 為 {word_id} 的待審核詞彙")
+        
+        # Validate
+        validation = validate_replace_word(
+            db, pending.source_word, pending.target_word, word_id
+        )
+        
+        if not validation['valid']:
+            return {
+                "success": False,
+                "message": "驗證失敗，存在衝突",
+                "validation": validation
+            }
+        
+        # Update pending word status
+        pending.status = 'approved'
+        pending.reviewed_at = func.now()
+        pending.reviewed_by = reviewed_by
+        pending.notes = notes
+        
+        # Insert or update in replace_words table (UPSERT)
+        existing = db.query(ReplaceWord).filter(
+            ReplaceWord.source_word == pending.source_word
+        ).first()
+        
+        if existing:
+            # Update existing
+            existing.target_word = pending.target_word
+            existing.updated_at = func.now()
+        else:
+            # Insert new
+            new_word = ReplaceWord(
+                source_word=pending.source_word,
+                target_word=pending.target_word
+            )
+            db.add(new_word)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "替換詞彙已批准並加入正式表",
+            "word": {
+                "source_word": pending.source_word,
+                "target_word": pending.target_word
+            },
+            "validation": validation
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error approving replace word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/approve-special-word/{word_id}")
+def approve_special_word(
+    word_id: int,
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批准特殊詞彙並移至正式表
+    """
+    try:
+        # Get pending word
+        pending = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.id == word_id
+        ).first()
+        
+        if not pending:
+            raise HTTPException(status_code=404, detail=f"找不到 ID 為 {word_id} 的待審核詞彙")
+        
+        # Validate
+        validation = validate_special_word(db, pending.word, word_id)
+        
+        if not validation['valid']:
+            return {
+                "success": False,
+                "message": "驗證失敗，存在衝突",
+                "validation": validation
+            }
+        
+        # Update pending word status
+        pending.status = 'approved'
+        pending.reviewed_at = func.now()
+        pending.reviewed_by = reviewed_by
+        pending.notes = notes
+        
+        # Insert in special_words table (ignore if exists)
+        existing = db.query(SpecialWord).filter(
+            SpecialWord.word == pending.word
+        ).first()
+        
+        if not existing:
+            new_word = SpecialWord(word=pending.word)
+            db.add(new_word)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "特殊詞彙已批准並加入正式表",
+            "word": {
+                "word": pending.word,
+                "type": pending.word_type
+            },
+            "validation": validation
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error approving special word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/reject-replace-word/{word_id}")
+def reject_replace_word(
+    word_id: int,
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    否決替換詞彙
+    """
+    try:
+        # Get pending word
+        pending = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.id == word_id
+        ).first()
+        
+        if not pending:
+            raise HTTPException(status_code=404, detail=f"找不到 ID 為 {word_id} 的待審核詞彙")
+        
+        # Update status
+        pending.status = 'rejected'
+        pending.reviewed_at = func.now()
+        pending.reviewed_by = reviewed_by
+        pending.notes = notes
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "替換詞彙已否決",
+            "word": {
+                "source_word": pending.source_word,
+                "target_word": pending.target_word
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error rejecting replace word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/reject-special-word/{word_id}")
+def reject_special_word(
+    word_id: int,
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    否決特殊詞彙
+    """
+    try:
+        # Get pending word
+        pending = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.id == word_id
+        ).first()
+        
+        if not pending:
+            raise HTTPException(status_code=404, detail=f"找不到 ID 為 {word_id} 的待審核詞彙")
+        
+        # Update status
+        pending.status = 'rejected'
+        pending.reviewed_at = func.now()
+        pending.reviewed_by = reviewed_by
+        pending.notes = notes
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "特殊詞彙已否決",
+            "word": {
+                "word": pending.word
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error rejecting special word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/batch-approve-replace-words")
+def batch_approve_replace_words(
+    ids: List[int] = Body(...),
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批量批准替換詞彙
+    """
+    try:
+        # Validate all words first
+        validations = batch_validate_replace_words(db, ids)
+        
+        approved = 0
+        failed = 0
+        errors = []
+        
+        for word_id in ids:
+            validation = validations.get(word_id, {})
+            
+            if not validation.get('valid', False):
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "驗證失敗: " + str(validation.get('conflicts', []))
+                })
+                continue
+            
+            # Get and approve
+            pending = db.query(PendingReplaceWord).filter(
+                PendingReplaceWord.id == word_id
+            ).first()
+            
+            if not pending:
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "找不到待審核詞彙"
+                })
+                continue
+            
+            # Update pending status
+            pending.status = 'approved'
+            pending.reviewed_at = func.now()
+            pending.reviewed_by = reviewed_by
+            pending.notes = notes
+            
+            # Insert or update in replace_words
+            existing = db.query(ReplaceWord).filter(
+                ReplaceWord.source_word == pending.source_word
+            ).first()
+            
+            if existing:
+                existing.target_word = pending.target_word
+                existing.updated_at = func.now()
+            else:
+                new_word = ReplaceWord(
+                    source_word=pending.source_word,
+                    target_word=pending.target_word
+                )
+                db.add(new_word)
+            
+            approved += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "approved": approved,
+            "failed": failed,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error batch approving replace words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/batch-reject-replace-words")
+def batch_reject_replace_words(
+    ids: List[int] = Body(...),
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批量否決替換詞彙
+    """
+    try:
+        rejected = 0
+        failed = 0
+        errors = []
+        
+        for word_id in ids:
+            pending = db.query(PendingReplaceWord).filter(
+                PendingReplaceWord.id == word_id
+            ).first()
+            
+            if not pending:
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "找不到待審核詞彙"
+                })
+                continue
+            
+            pending.status = 'rejected'
+            pending.reviewed_at = func.now()
+            pending.reviewed_by = reviewed_by
+            pending.notes = notes
+            rejected += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "rejected": rejected,
+            "failed": failed,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error batch rejecting replace words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/statistics")
+def get_admin_statistics(db: Session = Depends(get_db)):
+    """
+    獲取統計資訊
+    """
+    try:
+        # Pending counts
+        pending_replace = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.status == 'pending'
+        ).count()
+        
+        pending_special = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.status == 'pending'
+        ).count()
+        
+        # Today's approved/rejected counts
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        approved_replace_today = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.status == 'approved',
+            PendingReplaceWord.reviewed_at >= today_start
+        ).count()
+        
+        approved_special_today = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.status == 'approved',
+            PendingSpecialWord.reviewed_at >= today_start
+        ).count()
+        
+        rejected_replace_today = db.query(PendingReplaceWord).filter(
+            PendingReplaceWord.status == 'rejected',
+            PendingReplaceWord.reviewed_at >= today_start
+        ).count()
+        
+        rejected_special_today = db.query(PendingSpecialWord).filter(
+            PendingSpecialWord.status == 'rejected',
+            PendingSpecialWord.reviewed_at >= today_start
+        ).count()
+        
+        # Total counts in official tables
+        total_replace = db.query(ReplaceWord).count()
+        total_special = db.query(SpecialWord).count()
+        
+        return {
+            "pending_replace_words": pending_replace,
+            "pending_special_words": pending_special,
+            "approved_replace_words_today": approved_replace_today,
+            "approved_special_words_today": approved_special_today,
+            "rejected_replace_words_today": rejected_replace_today,
+            "rejected_special_words_today": rejected_special_today,
+            "total_replace_words": total_replace,
+            "total_special_words": total_special
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching statistics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/batch-approve-special-words")
+def batch_approve_special_words(
+    ids: List[int] = Body(...),
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批量批准特殊詞彙
+    """
+    try:
+        # Validate all words first
+        validations = batch_validate_special_words(db, ids)
+        
+        approved = 0
+        failed = 0
+        errors = []
+        
+        for word_id in ids:
+            validation = validations.get(word_id, {})
+            
+            if not validation.get('valid', False):
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "驗證失敗: " + str(validation.get('conflicts', []))
+                })
+                continue
+            
+            # Get and approve
+            pending = db.query(PendingSpecialWord).filter(
+                PendingSpecialWord.id == word_id
+            ).first()
+            
+            if not pending:
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "找不到待審核詞彙"
+                })
+                continue
+            
+            # Update pending status
+            pending.status = 'approved'
+            pending.reviewed_at = func.now()
+            pending.reviewed_by = reviewed_by
+            pending.notes = notes
+            
+            # Insert in special_words (ignore if exists)
+            existing = db.query(SpecialWord).filter(
+                SpecialWord.word == pending.word
+            ).first()
+            
+            if not existing:
+                new_word = SpecialWord(word=pending.word)
+                db.add(new_word)
+            
+            approved += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "approved": approved,
+            "failed": failed,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error batch approving special words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/batch-reject-special-words")
+def batch_reject_special_words(
+    ids: List[int] = Body(...),
+    reviewed_by: str = Body('admin'),
+    notes: str = Body(''),
+    db: Session = Depends(get_db)
+):
+    """
+    批量否決特殊詞彙
+    """
+    try:
+        rejected = 0
+        failed = 0
+        errors = []
+        
+        for word_id in ids:
+            pending = db.query(PendingSpecialWord).filter(
+                PendingSpecialWord.id == word_id
+            ).first()
+            
+            if not pending:
+                failed += 1
+                errors.append({
+                    "id": word_id,
+                    "error": "找不到待審核詞彙"
+                })
+                continue
+            
+            pending.status = 'rejected'
+            pending.reviewed_at = func.now()
+            pending.reviewed_by = reviewed_by
+            pending.notes = notes
+            rejected += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "rejected": rejected,
+            "failed": failed,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error batch rejecting special words: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -103,3 +103,74 @@ class StreamStats(Base):
 
     def __repr__(self):
         return f"<StreamStats(id={self.id}, stream={self.live_stream_id}, viewers={self.concurrent_viewers})>"
+
+
+# Text Analysis Dictionary Models
+
+class ReplaceWord(Base):
+    """正式的替換詞彙表"""
+    __tablename__ = 'replace_words'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_word = Column(String(255), nullable=False, unique=True)
+    target_word = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    def __repr__(self):
+        return f"<ReplaceWord(id={self.id}, {self.source_word} -> {self.target_word})>"
+
+
+class SpecialWord(Base):
+    """正式的特殊詞彙表"""
+    __tablename__ = 'special_words'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    word = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    def __repr__(self):
+        return f"<SpecialWord(id={self.id}, word={self.word})>"
+
+
+# Word Discovery Models (Pending Review)
+
+class PendingReplaceWord(Base):
+    """待審核的替換詞彙"""
+    __tablename__ = 'pending_replace_words'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_word = Column(String(255), nullable=False)
+    target_word = Column(String(255), nullable=False)
+    confidence_score = Column(JSON)  # Using JSON to store DECIMAL as float
+    occurrence_count = Column(Integer, default=1)
+    example_messages = Column(JSON)  # Using JSON for TEXT[] array
+    discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    status = Column(String(20), default='pending')  # pending, approved, rejected
+    reviewed_at = Column(DateTime(timezone=True))
+    reviewed_by = Column(String(100))
+    notes = Column(Text)
+
+    def __repr__(self):
+        return f"<PendingReplaceWord(id={self.id}, {self.source_word} -> {self.target_word}, status={self.status})>"
+
+
+class PendingSpecialWord(Base):
+    """待審核的特殊詞彙"""
+    __tablename__ = 'pending_special_words'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    word = Column(String(255), nullable=False, unique=True)
+    confidence_score = Column(JSON)  # Using JSON to store DECIMAL as float
+    occurrence_count = Column(Integer, default=1)
+    example_messages = Column(JSON)  # Using JSON for TEXT[] array
+    word_type = Column(String(50))  # meme, typo, variant, character, slang
+    discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    status = Column(String(20), default='pending')
+    reviewed_at = Column(DateTime(timezone=True))
+    reviewed_by = Column(String(100))
+    notes = Column(Text)
+
+    def __repr__(self):
+        return f"<PendingSpecialWord(id={self.id}, word={self.word}, type={self.word_type}, status={self.status})>"
