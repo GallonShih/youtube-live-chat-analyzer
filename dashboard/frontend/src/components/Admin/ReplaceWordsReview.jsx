@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ConfirmModal from './ConfirmModal';
 import ValidationResultModal from './ValidationResultModal';
+import AddReplaceWordForm from './AddReplaceWordForm';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -23,6 +24,7 @@ const ReplaceWordsReview = () => {
         isValid: false,
         conflicts: []
     });
+    const [showAddForm, setShowAddForm] = useState(false);
     const limit = 20;
 
     const fetchItems = async () => {
@@ -156,8 +158,24 @@ const ReplaceWordsReview = () => {
 
     return (
         <div>
+            {showAddForm && (
+                <AddReplaceWordForm
+                    onSuccess={() => {
+                        setShowAddForm(false);
+                        fetchItems();
+                    }}
+                    onCancel={() => setShowAddForm(false)}
+                />
+            )}
+
             <div className="flex justify-between items-center mb-4">
                 <div className="space-x-2">
+                    <button
+                        className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+                        onClick={() => setShowAddForm(!showAddForm)}
+                    >
+                        {showAddForm ? '關閉表單' : '➕ 新增詞彙'}
+                    </button>
                     <button
                         className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
                         disabled={selectedIds.length === 0}

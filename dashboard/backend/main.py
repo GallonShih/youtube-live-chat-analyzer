@@ -952,3 +952,120 @@ def batch_reject_special_words(
         db.rollback()
         logger.error(f"Error batch rejecting special words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/add-replace-word")
+def add_replace_word(
+    source_word: str = Body(...),
+    target_word: str = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    手動新增替換詞彙至正式詞庫
+    Manually add a new replace word directly to the official table
+    """
+    try:
+        # Validate before adding
+        validation_result = validate_replace_word(
+            db, source_word, target_word, pending_id=None
+        )
+        
+        if not validation_result['valid']:
+            return {
+                "success": False,
+                "message": "Validation failed",
+                "conflicts": validation_result['conflicts']
+            }
+        
+        # Check if already exists
+        existing = db.query(ReplaceWord).filter(
+            ReplaceWord.source_word == source_word,
+            ReplaceWord.target_word == target_word
+        ).first()
+        
+        if existing:
+            return {
+                "success": False,
+                "message": "Replace word already exists"
+            }
+        
+        # Add to official table
+        new_word = ReplaceWord(
+            source_word=source_word,
+            target_word=target_word
+        )
+        db.add(new_word)
+        db.commit()
+        db.refresh(new_word)
+        
+        logger.info(f"Manually added replace word: {source_word} -> {target_word}")
+        return {
+            "success": True,
+            "message": "Replace word added successfully",
+            "word": {
+                "id": new_word.id,
+                "source_word": new_word.source_word,
+                "target_word": new_word.target_word
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error adding replace word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/admin/add-special-word")
+def add_special_word(
+    word: str = Body(..., embed=True),
+    db: Session = Depends(get_db)
+):
+    """
+    手動新增特殊詞彙至正式詞庫
+    Manually add a new special word directly to the official table
+    """
+    try:
+        # Validate before adding
+        validation_result = validate_special_word(db, word, pending_id=None)
+        
+        if not validation_result['valid']:
+            return {
+                "success": False,
+                "message": "Validation failed",
+                "conflicts": validation_result['conflicts']
+            }
+        
+        # Check if already exists
+        existing = db.query(SpecialWord).filter(
+            SpecialWord.word == word
+        ).first()
+        
+        if existing:
+            return {
+                "success": False,
+                "message": "Special word already exists"
+            }
+        
+        # Add to official table
+        new_word = SpecialWord(
+            word=word
+        )
+        db.add(new_word)
+        db.commit()
+        db.refresh(new_word)
+        
+        logger.info(f"Manually added special word: {word}")
+        return {
+            "success": True,
+            "message": "Special word added successfully",
+            "word": {
+                "id": new_word.id,
+                "word": new_word.word
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error adding special word: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
