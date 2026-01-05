@@ -100,13 +100,15 @@ function Dashboard() {
     };
 
     const handleFilter = () => {
-        if (!startDate || !endDate) {
-            alert('Please select both start and end time');
+        if (!startDate) {
+            alert('Please select start time');
             return;
         }
 
         const startIso = new Date(startDate).toISOString();
-        const endObj = new Date(endDate);
+
+        // If no endDate, use current time (+8 timezone)
+        const endObj = endDate ? new Date(endDate) : new Date();
         endObj.setMinutes(59, 59, 999);
         const endIso = endObj.toISOString();
 
@@ -463,11 +465,11 @@ function Dashboard() {
                 {/* Message List */}
                 <MessageList
                     startTime={startDate ? new Date(startDate).toISOString() : null}
-                    endTime={endDate ? (() => {
-                        const d = new Date(endDate);
+                    endTime={(() => {
+                        const d = endDate ? new Date(endDate) : new Date();
                         d.setMinutes(59, 59, 999);
                         return d.toISOString();
-                    })() : null}
+                    })()}
                 />
             </div >
         </div >
