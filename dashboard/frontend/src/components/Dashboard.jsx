@@ -91,9 +91,11 @@ function Dashboard() {
             }));
             setCommentData(validData);
 
-            // Flash effect can remain
-            setBarFlash(true);
-            setTimeout(() => setBarFlash(false), 400);
+            // Flash effect only when no time filter is set
+            if (!endDate) {
+                setBarFlash(true);
+                setTimeout(() => setBarFlash(false), 400);
+            }
         } catch (err) {
             console.error("Failed to fetch comments", err);
         }
@@ -168,17 +170,20 @@ function Dashboard() {
                 pointRadius: (ctx) => {
                     const index = ctx.dataIndex;
                     const count = ctx.dataset.data.length;
-                    return index === count - 1 ? 5 : 0;
+                    // Only show red dot on last point if no time filter is set
+                    return (index === count - 1 && !endDate) ? 5 : 0;
                 },
                 pointBackgroundColor: (ctx) => {
                     const index = ctx.dataIndex;
                     const count = ctx.dataset.data.length;
-                    return index === count - 1 ? '#ff4d4f' : '#5470C6';
+                    // Only red color on last point if no time filter
+                    return (index === count - 1 && !endDate) ? '#ff4d4f' : '#5470C6';
                 },
                 pointBorderColor: (ctx) => {
                     const index = ctx.dataIndex;
                     const count = ctx.dataset.data.length;
-                    return index === count - 1 ? '#ff4d4f' : '#5470C6';
+                    // Only red color on last point if no time filter
+                    return (index === count - 1 && !endDate) ? '#ff4d4f' : '#5470C6';
                 },
                 pointHoverRadius: 8,
                 yAxisID: 'y1',
@@ -191,9 +196,12 @@ function Dashboard() {
                 backgroundColor: (ctx) => {
                     if (!commentData.length || !ctx.raw) return '#91cc75'; // Default color green-ish for distinction
 
-                    const maxX = commentData[commentData.length - 1].x;
-                    if (ctx.raw.x === maxX) {
-                        return barFlash ? 'rgba(255,77,79,0.5)' : '#ff4d4f';
+                    // Only highlight last bar if no time filter is set
+                    if (!endDate) {
+                        const maxX = commentData[commentData.length - 1].x;
+                        if (ctx.raw.x === maxX) {
+                            return barFlash ? 'rgba(255,77,79,0.5)' : '#ff4d4f';
+                        }
                     }
                     return '#91cc75';
                 },
@@ -435,6 +443,7 @@ function Dashboard() {
                             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
+                            max={formatLocalHour(new Date())}
                             placeholder="結束時間"
                         />
                         <button
@@ -486,6 +495,7 @@ function Dashboard() {
                         d.setMinutes(59, 59, 999);
                         return d.toISOString();
                     })()}
+                    hasTimeFilter={!!endDate}
                 />
             </div >
         </div >

@@ -138,7 +138,7 @@ const MessageRow = ({ message }) => {
     );
 };
 
-const MessageList = ({ startTime, endTime }) => {
+const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -153,14 +153,15 @@ const MessageList = ({ startTime, endTime }) => {
 
     // Auto-refresh effect
     useEffect(() => {
-        if (!autoRefresh) return;
+        // Don't auto-refresh when time filter is set
+        if (!autoRefresh || hasTimeFilter) return;
 
         const intervalId = setInterval(() => {
             fetchMessages();
         }, refreshInterval * 1000);
 
         return () => clearInterval(intervalId);
-    }, [autoRefresh, refreshInterval, startTime, endTime, currentPage, authorFilter, messageFilter]);
+    }, [autoRefresh, refreshInterval, startTime, endTime, currentPage, authorFilter, messageFilter, hasTimeFilter]);
 
     useEffect(() => {
         setCurrentPage(1); // Reset to first page when time range or filters change
@@ -302,9 +303,10 @@ const MessageList = ({ startTime, endTime }) => {
                         type="checkbox"
                         checked={autoRefresh}
                         onChange={(e) => setAutoRefresh(e.target.checked)}
-                        className="w-4 h-4"
+                        disabled={hasTimeFilter}
+                        className="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    <span className="text-sm font-medium">自動刷新</span>
+                    <span className="text-sm font-medium">自動刷新{hasTimeFilter && ' (已停用 - 時間範圍已固定)'}</span>
                 </label>
 
                 {autoRefresh && (
