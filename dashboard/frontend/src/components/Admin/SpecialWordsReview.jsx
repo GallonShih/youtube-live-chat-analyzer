@@ -12,6 +12,9 @@ const SpecialWordsReview = () => {
     const [error, setError] = useState(null);
     const [page, setPage] = useState(0);
     const [total, setTotal] = useState(0);
+    const [wordFilter, setWordFilter] = useState('');
+    const [sortBy, setSortBy] = useState('confidence');
+    const [sortOrder, setSortOrder] = useState('desc');
     const [modalConfig, setModalConfig] = useState({
         isOpen: false,
         title: '',
@@ -30,7 +33,16 @@ const SpecialWordsReview = () => {
     const fetchItems = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/pending-special-words?status=pending&limit=${limit}&offset=${page * limit}`);
+            const params = new URLSearchParams({
+                status: 'pending',
+                limit: limit.toString(),
+                offset: (page * limit).toString(),
+                sort_by: sortBy,
+                order: sortOrder
+            });
+            if (wordFilter) params.append('word_filter', wordFilter);
+
+            const res = await fetch(`${API_BASE_URL}/api/admin/pending-special-words?${params}`);
             const data = await res.json();
             setItems(data.items);
             setTotal(data.total);
@@ -43,8 +55,12 @@ const SpecialWordsReview = () => {
     };
 
     useEffect(() => {
+        setPage(0); // Reset to first page when filters/sort change
+    }, [wordFilter, sortBy, sortOrder]);
+
+    useEffect(() => {
         fetchItems();
-    }, [page]);
+    }, [page, wordFilter, sortBy, sortOrder]);
 
     const handleSelect = (id) => {
         setSelectedIds(prev =>
@@ -201,6 +217,30 @@ const SpecialWordsReview = () => {
                 />
             )}
 
+            {/* Search Filter */}
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                    <label className="block text-sm font-medium mb-1">Search Word:</label>
+                    <input
+                        type="text"
+                        value={wordFilter}
+                        onChange={(e) => setWordFilter(e.target.value)}
+                        placeholder="輸入詞彙搜尋..."
+                        className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                {wordFilter && (
+                    <div className="mt-2 flex justify-end">
+                        <button
+                            onClick={() => setWordFilter('')}
+                            className="text-sm text-red-600 hover:text-red-700 underline"
+                        >
+                            清除搜尋
+                        </button>
+                    </div>
+                )}
+            </div>
+
             <div className="flex justify-between items-center mb-4">
                 <div className="space-x-2">
                     <button
@@ -240,11 +280,19 @@ const SpecialWordsReview = () => {
                                     onChange={handleSelectAll}
                                 />
                             </th>
-                            <th className="px-4 py-2 border-b text-left">Word</th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('word'); setSortOrder(sortBy === 'word' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Word {sortBy === 'word' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
                             <th className="px-4 py-2 border-b text-left">Type</th>
-                            <th className="px-4 py-2 border-b text-left">Confidence</th>
-                            <th className="px-4 py-2 border-b text-left">Occurrences</th>
-                            <th className="px-4 py-2 border-b text-left">Discovered At</th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('confidence'); setSortOrder(sortBy === 'confidence' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Confidence {sortBy === 'confidence' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('occurrence'); setSortOrder(sortBy === 'occurrence' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Occurrences {sortBy === 'occurrence' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('discovered_at'); setSortOrder(sortBy === 'discovered_at' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Discovered At {sortBy === 'discovered_at' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
                             <th className="px-4 py-2 border-b text-center">Actions</th>
                         </tr>
                     </thead>

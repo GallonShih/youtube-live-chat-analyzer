@@ -12,6 +12,10 @@ const ReplaceWordsReview = () => {
     const [error, setError] = useState(null);
     const [page, setPage] = useState(0);
     const [total, setTotal] = useState(0);
+    const [sourceWordFilter, setSourceWordFilter] = useState('');
+    const [targetWordFilter, setTargetWordFilter] = useState('');
+    const [sortBy, setSortBy] = useState('confidence');
+    const [sortOrder, setSortOrder] = useState('desc');
     const [modalConfig, setModalConfig] = useState({
         isOpen: false,
         title: '',
@@ -30,7 +34,17 @@ const ReplaceWordsReview = () => {
     const fetchItems = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/pending-replace-words?status=pending&limit=${limit}&offset=${page * limit}`);
+            const params = new URLSearchParams({
+                status: 'pending',
+                limit: limit.toString(),
+                offset: (page * limit).toString(),
+                sort_by: sortBy,
+                order: sortOrder
+            });
+            if (sourceWordFilter) params.append('source_word_filter', sourceWordFilter);
+            if (targetWordFilter) params.append('target_word_filter', targetWordFilter);
+
+            const res = await fetch(`${API_BASE_URL}/api/admin/pending-replace-words?${params}`);
             const data = await res.json();
             setItems(data.items);
             setTotal(data.total);
@@ -43,8 +57,12 @@ const ReplaceWordsReview = () => {
     };
 
     useEffect(() => {
+        setPage(0); // Reset to first page when filters/sort change
+    }, [sourceWordFilter, targetWordFilter, sortBy, sortOrder]);
+
+    useEffect(() => {
         fetchItems();
-    }, [page]);
+    }, [page, sourceWordFilter, targetWordFilter, sortBy, sortOrder]);
 
     const handleSelect = (id) => {
         setSelectedIds(prev =>
@@ -168,6 +186,45 @@ const ReplaceWordsReview = () => {
                 />
             )}
 
+            {/* Search Filters */}
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Search Source Word:</label>
+                        <input
+                            type="text"
+                            value={sourceWordFilter}
+                            onChange={(e) => setSourceWordFilter(e.target.value)}
+                            placeholder="輸入原始詞彙搜尋..."
+                            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Search Target Word:</label>
+                        <input
+                            type="text"
+                            value={targetWordFilter}
+                            onChange={(e) => setTargetWordFilter(e.target.value)}
+                            placeholder="輸入替換詞彙搜尋..."
+                            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                </div>
+                {(sourceWordFilter || targetWordFilter) && (
+                    <div className="mt-2 flex justify-end">
+                        <button
+                            onClick={() => {
+                                setSourceWordFilter('');
+                                setTargetWordFilter('');
+                            }}
+                            className="text-sm text-red-600 hover:text-red-700 underline"
+                        >
+                            清除搜尋
+                        </button>
+                    </div>
+                )}
+            </div>
+
             <div className="flex justify-between items-center mb-4">
                 <div className="space-x-2">
                     <button
@@ -207,11 +264,21 @@ const ReplaceWordsReview = () => {
                                     onChange={handleSelectAll}
                                 />
                             </th>
-                            <th className="px-4 py-2 border-b text-left">Source Word</th>
-                            <th className="px-4 py-2 border-b text-left">Target Word</th>
-                            <th className="px-4 py-2 border-b text-left">Confidence</th>
-                            <th className="px-4 py-2 border-b text-left">Occurrences</th>
-                            <th className="px-4 py-2 border-b text-left">Discovered At</th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('source_word'); setSortOrder(sortBy === 'source_word' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Source Word {sortBy === 'source_word' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('target_word'); setSortOrder(sortBy === 'target_word' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Target Word {sortBy === 'target_word' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('confidence'); setSortOrder(sortBy === 'confidence' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Confidence {sortBy === 'confidence' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('occurrence'); setSortOrder(sortBy === 'occurrence' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Occurrences {sortBy === 'occurrence' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
+                            <th className="px-4 py-2 border-b text-left cursor-pointer hover:bg-gray-100" onClick={() => { setSortBy('discovered_at'); setSortOrder(sortBy === 'discovered_at' && sortOrder === 'asc' ? 'desc' : 'asc'); }}>
+                                Discovered At {sortBy === 'discovered_at' && (sortOrder === 'asc' ? '▲' : '▼')}
+                            </th>
                             <th className="px-4 py-2 border-b text-center">Actions</th>
                         </tr>
                     </thead>

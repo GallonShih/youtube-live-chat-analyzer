@@ -239,6 +239,8 @@ def get_pending_replace_words(
     offset: int = 0,
     sort_by: str = 'confidence',
     order: str = 'desc',
+    source_word_filter: str = '',
+    target_word_filter: str = '',
     db: Session = Depends(get_db)
 ):
     """
@@ -250,12 +252,20 @@ def get_pending_replace_words(
         offset: 分頁偏移
         sort_by: 排序欄位 (confidence/occurrence/discovered_at)
         order: 排序方向 (asc/desc)
+        source_word_filter: Source word 搜尋過濾
+        target_word_filter: Target word 搜尋過濾
     """
     try:
         # Base query
         query = db.query(PendingReplaceWord).filter(
             PendingReplaceWord.status == status
         )
+        
+        # Apply search filters
+        if source_word_filter:
+            query = query.filter(PendingReplaceWord.source_word.ilike(f'%{source_word_filter}%'))
+        if target_word_filter:
+            query = query.filter(PendingReplaceWord.target_word.ilike(f'%{target_word_filter}%'))
         
         # Sorting
         if sort_by == 'confidence':
@@ -313,6 +323,7 @@ def get_pending_special_words(
     offset: int = 0,
     sort_by: str = 'confidence',
     order: str = 'desc',
+    word_filter: str = '',
     db: Session = Depends(get_db)
 ):
     """
@@ -324,12 +335,17 @@ def get_pending_special_words(
         offset: 分頁偏移
         sort_by: 排序欄位 (confidence/occurrence/discovered_at)
         order: 排序方向 (asc/desc)
+        word_filter: Word 搜尋過濾
     """
     try:
         # Base query
         query = db.query(PendingSpecialWord).filter(
             PendingSpecialWord.status == status
         )
+        
+        # Apply search filter
+        if word_filter:
+            query = query.filter(PendingSpecialWord.word.ilike(f'%{word_filter}%'))
         
         # Sorting
         if sort_by == 'confidence':
