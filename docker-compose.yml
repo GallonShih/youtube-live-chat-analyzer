@@ -75,6 +75,9 @@ services:
     container_name: hermes-worker
     env_file:
       - .env
+    volumes:
+      # Mount source code for development
+      - ./hermes_worker:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -313,6 +316,9 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes}
+    volumes:
+      # Mount source code for development (hot reload)
+      - ./dashboard/backend:/app
     depends_on:
       postgres:
         condition: service_healthy
