@@ -1,14 +1,9 @@
-"""
-SQLAlchemy ORM models for Hermes
-"""
-
 from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import datetime
 
 Base = declarative_base()
-
 
 class ChatMessage(Base):
     __tablename__ = 'chat_messages'
@@ -29,8 +24,6 @@ class ChatMessage(Base):
 
     @classmethod
     def from_chat_data(cls, chat_data, live_stream_id):
-        """Create ChatMessage instance from chat-downloader data"""
-        # Convert microsecond timestamp to timezone-aware datetime (UTC)
         published_at = datetime.datetime.fromtimestamp(
             chat_data['timestamp'] / 1000000.0,
             tz=datetime.timezone.utc
@@ -54,7 +47,6 @@ class ChatMessage(Base):
     def __repr__(self):
         return f"<ChatMessage(id={self.message_id}, author={self.author_name})>"
 
-
 class StreamStats(Base):
     __tablename__ = 'stream_stats'
 
@@ -70,14 +62,12 @@ class StreamStats(Base):
 
     @classmethod
     def from_youtube_api(cls, youtube_data, live_stream_id):
-        """Create StreamStats instance from YouTube Data API response"""
         if not youtube_data.get('items'):
             return None
 
         item = youtube_data['items'][0]
         live_details = item.get('liveStreamingDetails', {})
 
-        # Parse datetime strings
         actual_start_time = None
         scheduled_start_time = None
 
@@ -104,11 +94,7 @@ class StreamStats(Base):
     def __repr__(self):
         return f"<StreamStats(id={self.id}, stream={self.live_stream_id}, viewers={self.concurrent_viewers})>"
 
-
-# Text Analysis Dictionary Models
-
 class ReplaceWord(Base):
-    """正式的替換詞彙表"""
     __tablename__ = 'replace_words'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -120,9 +106,7 @@ class ReplaceWord(Base):
     def __repr__(self):
         return f"<ReplaceWord(id={self.id}, {self.source_word} -> {self.target_word})>"
 
-
 class SpecialWord(Base):
-    """正式的特殊詞彙表"""
     __tablename__ = 'special_words'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -133,21 +117,17 @@ class SpecialWord(Base):
     def __repr__(self):
         return f"<SpecialWord(id={self.id}, word={self.word})>"
 
-
-# Word Discovery Models (Pending Review)
-
 class PendingReplaceWord(Base):
-    """待審核的替換詞彙"""
     __tablename__ = 'pending_replace_words'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_word = Column(String(255), nullable=False)
     target_word = Column(String(255), nullable=False)
-    confidence_score = Column(JSON)  # Using JSON to store DECIMAL as float
+    confidence_score = Column(JSON)
     occurrence_count = Column(Integer, default=1)
-    example_messages = Column(JSON)  # Using JSON for TEXT[] array
+    example_messages = Column(JSON)
     discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
-    status = Column(String(20), default='pending')  # pending, approved, rejected
+    status = Column(String(20), default='pending')
     reviewed_at = Column(DateTime(timezone=True))
     reviewed_by = Column(String(100))
     notes = Column(Text)
@@ -155,17 +135,15 @@ class PendingReplaceWord(Base):
     def __repr__(self):
         return f"<PendingReplaceWord(id={self.id}, {self.source_word} -> {self.target_word}, status={self.status})>"
 
-
 class PendingSpecialWord(Base):
-    """待審核的特殊詞彙"""
     __tablename__ = 'pending_special_words'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     word = Column(String(255), nullable=False, unique=True)
-    confidence_score = Column(JSON)  # Using JSON to store DECIMAL as float
+    confidence_score = Column(JSON)
     occurrence_count = Column(Integer, default=1)
-    example_messages = Column(JSON)  # Using JSON for TEXT[] array
-    word_type = Column(String(50))  # meme, typo, variant, character, slang
+    example_messages = Column(JSON)
+    word_type = Column(String(50))
     discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     status = Column(String(20), default='pending')
     reviewed_at = Column(DateTime(timezone=True))
@@ -175,17 +153,13 @@ class PendingSpecialWord(Base):
     def __repr__(self):
         return f"<PendingSpecialWord(id={self.id}, word={self.word}, type={self.word_type}, status={self.status})>"
 
-
-# Currency Rate Model
-
 class CurrencyRate(Base):
-    """匯率管理表"""
     __tablename__ = 'currency_rates'
 
-    currency = Column(String(10), primary_key=True)  # Currency code (e.g., USD, JPY, HKD)
-    rate_to_twd = Column(JSON)  # Exchange rate to TWD, stored as JSON to handle float
+    currency = Column(String(10), primary_key=True)
+    rate_to_twd = Column(JSON)
     updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())
-    notes = Column(String(255))  # Optional notes
+    notes = Column(String(255))
 
     def __repr__(self):
         return f"<CurrencyRate(currency={self.currency}, rate={self.rate_to_twd})>"
