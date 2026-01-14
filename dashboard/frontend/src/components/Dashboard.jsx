@@ -16,6 +16,7 @@ import 'chartjs-adapter-date-fns';
 import { enUS } from 'date-fns/locale';
 import MessageList from './MessageList';
 import MoneyStats from './MoneyStats';
+import WordCloudPanel from './WordCloud';
 import { Link } from 'react-router-dom';
 
 ChartJS.register(
@@ -490,6 +491,17 @@ function Dashboard() {
 
                 {/* Money Statistics */}
                 <MoneyStats
+                    startTime={startDate ? new Date(startDate).toISOString() : null}
+                    endTime={endDate ? (() => {
+                        const d = new Date(endDate);
+                        d.setMinutes(59, 59, 999);
+                        return d.toISOString();
+                    })() : null}
+                    hasTimeFilter={!!endDate}
+                />
+
+                {/* Word Cloud */}
+                <WordCloudPanel
                     startTime={startDate ? new Date(startDate).toISOString() : null}
                     endTime={endDate ? (() => {
                         const d = new Date(endDate);
