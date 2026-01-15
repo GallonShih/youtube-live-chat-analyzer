@@ -1,11 +1,11 @@
 -- Hermes Database Functions
 -- Essential helper functions for data processing
 
--- Function: Convert microsecond timestamp to PostgreSQL timestamp
+-- Function: Convert microsecond timestamp to PostgreSQL timestamp with timezone
 CREATE OR REPLACE FUNCTION microseconds_to_timestamp(microseconds BIGINT)
-RETURNS TIMESTAMP AS $$
+RETURNS TIMESTAMPTZ AS $$
 BEGIN
-    RETURN to_timestamp(microseconds / 1000000.0);
+    RETURN to_timestamp(microseconds / 1000000.0) AT TIME ZONE 'UTC';
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 

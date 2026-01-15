@@ -67,8 +67,8 @@ function Dashboard() {
             const res = await fetch(url);
             const data = await res.json();
             const validData = data.map(d => ({
-                // API returns UTC ISO string without Z
-                x: new Date(d.time.endsWith('Z') ? d.time : d.time + 'Z').getTime(),
+                // API returns UTC ISO string with timezone offset
+                x: new Date(d.time).getTime(),
                 y: d.count
             }));
             setViewData(validData);
@@ -86,9 +86,9 @@ function Dashboard() {
             const res = await fetch(url);
             const data = await res.json();
             const validData = data.map(d => ({
-                // API returns UTC ISO string without Z
+                // API returns UTC ISO string with timezone offset
                 // Shift by +30 minutes to center the bar in the hour slot
-                x: new Date(d.hour.endsWith('Z') ? d.hour : d.hour + 'Z').getTime() + 30 * 60 * 1000,
+                x: new Date(d.hour).getTime() + 30 * 60 * 1000,
                 y: d.count
             }));
             setCommentData(validData);

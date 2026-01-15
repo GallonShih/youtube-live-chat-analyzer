@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from app.core.database import get_db
@@ -29,7 +29,7 @@ def get_viewer_stats(
         if start_time and end_time:
             query = query.filter(StreamStats.collected_at >= start_time, StreamStats.collected_at <= end_time)
         elif hours:
-            since = datetime.utcnow() - timedelta(hours=hours)
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
             query = query.filter(StreamStats.collected_at >= since)
         else:
             query = query.limit(limit)
@@ -59,7 +59,7 @@ def get_comment_stats_hourly(
         if start_time and end_time:
             since = start_time
         else:
-            since = datetime.utcnow() - timedelta(hours=hours)
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
             start_time = since
             end_time = None
         

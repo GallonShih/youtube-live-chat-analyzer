@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from app.core.database import get_db
@@ -499,7 +499,7 @@ def get_admin_statistics(db: Session = Depends(get_db)):
             PendingSpecialWord.status == 'pending'
         ).count()
         
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         
         approved_replace_today = db.query(PendingReplaceWord).filter(
             PendingReplaceWord.status == 'approved',

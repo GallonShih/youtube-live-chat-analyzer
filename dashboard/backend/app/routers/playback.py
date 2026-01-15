@@ -88,14 +88,12 @@ def get_playback_snapshots(
         )
         
         # Helper to normalize datetime for comparison
-        # Database stores naive datetimes as UTC, so we need to convert aware datetimes to UTC first
+        # Convert all datetimes to UTC for consistent comparison
         def normalize_dt(dt):
-            if dt.tzinfo is not None:
-                # Convert to UTC first, then strip tzinfo
-                from datetime import timezone as tz
-                utc_dt = dt.astimezone(tz.utc)
-                return utc_dt.replace(tzinfo=None)
-            return dt
+            if dt.tzinfo is None:
+                # Assume naive datetimes are UTC
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
         
         # Helper to calculate revenue for a message
         def get_message_revenue(msg):

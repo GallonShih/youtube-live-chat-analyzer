@@ -27,7 +27,8 @@ ChartJS.register(
 const MessageRow = ({ message }) => {
     const formatTime = (utcTime) => {
         if (!utcTime) return 'N/A';
-        const date = new Date(utcTime + 'Z'); // Ensure UTC parsing
+        // Handle both timezone-aware (e.g., +00:00) and naive UTC timestamps
+        const date = new Date(utcTime);
         // Convert to +8 timezone (Asia/Taipei)
         const options = {
             timeZone: 'Asia/Taipei',
@@ -321,8 +322,8 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
                     if (isRealTime) {
                         const cutOff = new Date(Date.now() - 12 * 60 * 60 * 1000).getTime();
                         for (const [key, val] of map.entries()) {
-                            // key is ISO string
-                            const ts = new Date(key.endsWith('Z') ? key : key + 'Z').getTime();
+                            // key is ISO string - handle both naive and timezone-aware formats
+                            const ts = new Date(key).getTime();
                             if (ts < cutOff) {
                                 map.delete(key);
                             }
@@ -363,7 +364,8 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
         // Build a map of existing data
         const dataMap = new Map();
         hourlyStats.forEach(item => {
-            const ts = new Date(item.hour.endsWith('Z') ? item.hour : item.hour + 'Z').getTime();
+            // Handle both naive and timezone-aware ISO strings
+            const ts = new Date(item.hour).getTime();
             dataMap.set(ts, item.count);
         });
 
