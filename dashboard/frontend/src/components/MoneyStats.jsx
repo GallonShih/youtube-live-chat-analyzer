@@ -21,7 +21,13 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
         try {
             setLoading(true);
             const params = new URLSearchParams();
-            if (startTime) params.append('start_time', startTime);
+
+            let effectiveStartTime = startTime;
+            if (!effectiveStartTime && !endTime) {
+                effectiveStartTime = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+            }
+
+            if (effectiveStartTime) params.append('start_time', effectiveStartTime);
             if (endTime) params.append('end_time', endTime);
 
             const response = await fetch(`${API_BASE_URL}/api/stats/money-summary?${params}`);

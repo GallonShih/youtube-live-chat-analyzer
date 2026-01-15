@@ -231,7 +231,13 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
                 offset: offset.toString()
             });
 
-            if (startTime) params.append('start_time', startTime);
+            // Default to 12 hours ago if no time filter is set
+            let effectiveStartTime = startTime;
+            if (!effectiveStartTime && !endTime) {
+                effectiveStartTime = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+            }
+
+            if (effectiveStartTime) params.append('start_time', effectiveStartTime);
             if (endTime) params.append('end_time', endTime);
             if (authorFilter) params.append('author_filter', authorFilter);
             if (messageFilter) params.append('message_filter', messageFilter);
@@ -264,7 +270,14 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
 
             const params = new URLSearchParams();
 
-            if (startTime) params.append('start_time', startTime);
+            // Default to 12 hours ago if no time filter is set (for initial/full fetch)
+            let effectiveStartTime = startTime;
+            const isRealTime = !startTime && !endTime;
+            if (isRealTime && (forceFullFetch || !hasInitialStatsLoadedRef.current)) {
+                effectiveStartTime = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+            }
+
+            if (effectiveStartTime) params.append('start_time', effectiveStartTime);
             if (endTime) params.append('end_time', endTime);
             if (authorFilter) params.append('author_filter', authorFilter);
             if (messageFilter) params.append('message_filter', messageFilter);
@@ -274,8 +287,7 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
             // Only applies when not using time filters (real-time mode)
             const useIncrementalFetch = !forceFullFetch &&
                 hasInitialStatsLoadedRef.current &&
-                !startTime &&
-                !endTime &&
+                isRealTime &&
                 lastFetchedHourRef.current;
 
             if (useIncrementalFetch) {
@@ -305,6 +317,18 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
                     // Update or add new data points
                     data.forEach(item => map.set(item.hour, item.count));
 
+                    // Prune old data if in real-time mode (keep only last 12 hours)
+                    if (isRealTime) {
+                        const cutOff = new Date(Date.now() - 12 * 60 * 60 * 1000).getTime();
+                        for (const [key, val] of map.entries()) {
+                            // key is ISO string
+                            const ts = new Date(key.endsWith('Z') ? key : key + 'Z').getTime();
+                            if (ts < cutOff) {
+                                map.delete(key);
+                            }
+                        }
+                    }
+
                     // Convert back to sorted array
                     const merged = Array.from(map.entries())
                         .map(([hour, count]) => ({ hour, count }))
@@ -318,6 +342,7 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
                     chartRef.current.update('active');
                 }
             }
+
         } catch (err) {
             console.error('Error fetching hourly stats:', err);
         } finally {

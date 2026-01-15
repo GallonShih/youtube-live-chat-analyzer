@@ -526,6 +526,7 @@ function Dashboard() {
                         return d.toISOString();
                     })() : null}
                     hasTimeFilter={!!endDate}
+
                 />
             </div >
         </div >

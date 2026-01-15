@@ -24,8 +24,13 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
         try {
             let url = `${API_BASE_URL}/api/wordcloud/word-frequency?limit=100`;
 
-            if (startTime) {
-                url += `&start_time=${encodeURIComponent(startTime)}`;
+            let effectiveStartTime = startTime;
+            if (!effectiveStartTime && !endTime) {
+                effectiveStartTime = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+            }
+
+            if (effectiveStartTime) {
+                url += `&start_time=${encodeURIComponent(effectiveStartTime)}`;
             }
             if (endTime) {
                 url += `&end_time=${encodeURIComponent(endTime)}`;
