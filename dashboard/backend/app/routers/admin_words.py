@@ -41,6 +41,9 @@ def get_pending_replace_words(
         if target_word_filter:
             query = query.filter(PendingReplaceWord.target_word.ilike(f'%{target_word_filter}%'))
         
+        # Get count before applying ORDER BY to avoid PostgreSQL JSON column issue
+        total = query.count()
+        
         if sort_by == 'confidence':
             order_col = PendingReplaceWord.confidence_score
         elif sort_by == 'occurrence':
@@ -53,7 +56,6 @@ def get_pending_replace_words(
         else:
             query = query.order_by(order_col.desc())
         
-        total = query.count()
         items = query.limit(limit).offset(offset).all()
         
         result = {
@@ -102,6 +104,9 @@ def get_pending_special_words(
         if word_filter:
             query = query.filter(PendingSpecialWord.word.ilike(f'%{word_filter}%'))
         
+        # Get count before applying ORDER BY to avoid PostgreSQL JSON column issue
+        total = query.count()
+        
         if sort_by == 'confidence':
             order_col = PendingSpecialWord.confidence_score
         elif sort_by == 'occurrence':
@@ -114,7 +119,6 @@ def get_pending_special_words(
         else:
             query = query.order_by(order_col.desc())
         
-        total = query.count()
         items = query.limit(limit).offset(offset).all()
         
         result = {

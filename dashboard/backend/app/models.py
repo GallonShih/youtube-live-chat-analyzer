@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, JSON, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import datetime
@@ -123,7 +123,7 @@ class PendingReplaceWord(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_word = Column(String(255), nullable=False)
     target_word = Column(String(255), nullable=False)
-    confidence_score = Column(JSON)
+    confidence_score = Column(Numeric(3, 2))
     occurrence_count = Column(Integer, default=1)
     example_messages = Column(JSON)
     discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
@@ -140,7 +140,7 @@ class PendingSpecialWord(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     word = Column(String(255), nullable=False, unique=True)
-    confidence_score = Column(JSON)
+    confidence_score = Column(Numeric(3, 2))
     occurrence_count = Column(Integer, default=1)
     example_messages = Column(JSON)
     word_type = Column(String(50))

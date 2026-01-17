@@ -1,11 +1,8 @@
 import os
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.models import (
     Base, ChatMessage, StreamStats, 
@@ -15,37 +12,104 @@ from app.models import (
 from app.core.database import get_db
 from main import app
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+# Use environment variable for DATABASE_URL
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://hermes:hermes@localhost:5432/hermes_test"
 )
+
+# Create engine
+if DATABASE_URL.startswith("sqlite"):
+    from sqlalchemy.pool import StaticPool
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+else:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
-app.dependency_overrides[get_db] = override_get_db
+def terminate_other_connections():
+    """Terminate all other connections to hermes_test database.
+    
+    This prevents lock issues from stale connections left by interrupted tests.
+    Only works with PostgreSQL.
+    """
+    if DATABASE_URL.startswith("sqlite"):
+        return
+    
+    try:
+        # Connect to 'postgres' database to terminate connections to hermes_test
+        admin_url = DATABASE_URL.replace("/hermes_test", "/postgres")
+        admin_engine = create_engine(admin_url)
+        with admin_engine.connect() as conn:
+            conn.execute(text("""
+                SELECT pg_terminate_backend(pid) 
+                FROM pg_stat_activity 
+                WHERE datname = 'hermes_test' 
+                AND pid <> pg_backend_pid()
+            """))
+            conn.commit()
+        admin_engine.dispose()
+    except Exception as e:
+        print(f"Warning: Could not terminate other connections: {e}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_database():
+    """Create all tables once at session start, drop at session end.
+    
+    Terminates stale connections before setup to prevent lock issues.
+    """
+    # Kill any stale connections first
+    terminate_other_connections()
+    
+    # Now create tables
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    
+    yield
+    
+    # Cleanup
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
+
 
 @pytest.fixture(scope="function")
-def db():
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    yield db
-    db.close()
-    Base.metadata.drop_all(bind=engine)
+def db(setup_database):
+    """Provide a transactional scope around each test.
+    
+    Uses SAVEPOINT for nested transaction support, which allows
+    proper rollback without interfering with table operations.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+    
+    # Override the app's get_db dependency
+    def override_get_db():
+        try:
+            yield session
+        finally:
+            pass  # Don't close here, we'll rollback
+    
+    app.dependency_overrides[get_db] = override_get_db
+    
+    yield session
+    
+    session.close()
+    transaction.rollback()
+    connection.close()
+
 
 @pytest.fixture(scope="function")
 def client(db):
-    Base.metadata.create_all(bind=engine)
+    """Provide test client."""
     yield TestClient(app)
-    Base.metadata.drop_all(bind=engine)
+
 
 @pytest.fixture
 def sample_stream_stats(db):
@@ -59,8 +123,9 @@ def sample_stream_stats(db):
         for i in range(5)
     ]
     db.add_all(stats)
-    db.commit()
+    db.flush()  # Use flush instead of commit for transaction rollback
     return stats
+
 
 @pytest.fixture
 def sample_chat_messages(db):
@@ -80,8 +145,9 @@ def sample_chat_messages(db):
         for i in range(10)
     ]
     db.add_all(messages)
-    db.commit()
+    db.flush()
     return messages
+
 
 @pytest.fixture
 def sample_replace_words(db):
@@ -90,8 +156,9 @@ def sample_replace_words(db):
         ReplaceWord(source_word="錯字2", target_word="正字2"),
     ]
     db.add_all(words)
-    db.commit()
+    db.flush()
     return words
+
 
 @pytest.fixture
 def sample_special_words(db):
@@ -100,8 +167,9 @@ def sample_special_words(db):
         SpecialWord(word="特殊詞2"),
     ]
     db.add_all(words)
-    db.commit()
+    db.flush()
     return words
+
 
 @pytest.fixture
 def sample_pending_replace_words(db):
@@ -116,8 +184,9 @@ def sample_pending_replace_words(db):
         for i in range(5)
     ]
     db.add_all(words)
-    db.commit()
+    db.flush()
     return words
+
 
 @pytest.fixture
 def sample_pending_special_words(db):
@@ -132,8 +201,9 @@ def sample_pending_special_words(db):
         for i in range(5)
     ]
     db.add_all(words)
-    db.commit()
+    db.flush()
     return words
+
 
 @pytest.fixture
 def sample_currency_rates(db):
@@ -143,5 +213,5 @@ def sample_currency_rates(db):
         CurrencyRate(currency="TWD", rate_to_twd=1.0, notes="台幣"),
     ]
     db.add_all(rates)
-    db.commit()
+    db.flush()
     return rates
