@@ -22,6 +22,12 @@ const AdminPanel = () => {
                             📊 Dashboard
                         </Link>
                         <Link
+                            to="/playback"
+                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                        >
+                            ▶️ Playback
+                        </Link>
+                        <Link
                             to="/admin"
                             className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg"
                         >
