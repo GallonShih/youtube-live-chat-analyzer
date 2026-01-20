@@ -167,6 +167,27 @@ def import_meaningless_words(**context):
     }
 
 
+def truncate_replace_words(**context):
+    """
+    選擇性清空 replace_words 表
+    由 Airflow Variable TRUNCATE_REPLACE_WORDS 控制
+    """
+    truncate_flag = Variable.get("TRUNCATE_REPLACE_WORDS", default_var="false")
+    
+    if truncate_flag.lower() == "true":
+        print("TRUNCATE_REPLACE_WORDS is TRUE - truncating table")
+        pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+        pg_hook.run("TRUNCATE TABLE replace_words;")
+        
+        # 重設 flag 為 false
+        Variable.set("TRUNCATE_REPLACE_WORDS", "false")
+        print("Table truncated and flag reset to false")
+        return {'truncated': True}
+    
+    print("TRUNCATE_REPLACE_WORDS is FALSE - skipping truncate")
+    return {'truncated': False}
+
+
 def import_replace_words(**context):
     """
     導入替換詞彙對照表
@@ -223,6 +244,27 @@ def import_replace_words(**context):
         'processed': processed_count,
         'total': total_count
     }
+
+
+def truncate_special_words(**context):
+    """
+    選擇性清空 special_words 表
+    由 Airflow Variable TRUNCATE_SPECIAL_WORDS 控制
+    """
+    truncate_flag = Variable.get("TRUNCATE_SPECIAL_WORDS", default_var="false")
+    
+    if truncate_flag.lower() == "true":
+        print("TRUNCATE_SPECIAL_WORDS is TRUE - truncating table")
+        pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+        pg_hook.run("TRUNCATE TABLE special_words;")
+        
+        # 重設 flag 為 false
+        Variable.set("TRUNCATE_SPECIAL_WORDS", "false")
+        print("Table truncated and flag reset to false")
+        return {'truncated': True}
+    
+    print("TRUNCATE_SPECIAL_WORDS is FALSE - skipping truncate")
+    return {'truncated': False}
 
 
 def import_special_words(**context):
@@ -321,14 +363,28 @@ task_import_meaningless = PythonOperator(
     dag=dag,
 )
 
-# Task 2: 導入替換詞彙
+# Task 2a: 選擇性清空 replace_words 表
+task_truncate_replace = PythonOperator(
+    task_id='truncate_replace_words',
+    python_callable=truncate_replace_words,
+    dag=dag,
+)
+
+# Task 2b: 導入替換詞彙
 task_import_replace = PythonOperator(
     task_id='import_replace_words',
     python_callable=import_replace_words,
     dag=dag,
 )
 
-# Task 3: 導入特殊詞彙
+# Task 3a: 選擇性清空 special_words 表
+task_truncate_special = PythonOperator(
+    task_id='truncate_special_words',
+    python_callable=truncate_special_words,
+    dag=dag,
+)
+
+# Task 3b: 導入特殊詞彙
 task_import_special = PythonOperator(
     task_id='import_special_words',
     python_callable=import_special_words,
@@ -344,6 +400,11 @@ task_verify = PythonOperator(
 
 # 定義任務依賴
 # 1. 先創建表
-# 2. 表創建完成後，三個導入任務並行執行
+# 2. 表創建完成後，三個分支並行執行：
+#    - meaningless_words: 直接導入
+#    - replace_words: 先檢查是否清空 -> 導入
+#    - special_words: 先檢查是否清空 -> 導入
 # 3. 所有導入任務完成後，執行驗證
-task_create_tables >> [task_import_meaningless, task_import_replace, task_import_special] >> task_verify
+task_create_tables >> task_import_meaningless >> task_verify
+task_create_tables >> task_truncate_replace >> task_import_replace >> task_verify
+task_create_tables >> task_truncate_special >> task_import_special >> task_verify
