@@ -166,8 +166,8 @@ def initialize_analysis(**context):
 
 def fetch_new_messages(**context):
     """
-    Task 2: 獲取新留言
-    從上次分析的檢查點開始抓取新留言
+    Task 2: 獲取檢查點時間
+    從上次分析的檢查點開始並計算待處理留言數量
     """
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
 
@@ -182,11 +182,11 @@ def fetch_new_messages(**context):
     result = pg_hook.get_first(checkpoint_sql)
     last_analyzed_time = result[0] if result else datetime.now() - timedelta(hours=3)
 
-    print(f"Fetching messages since: {last_analyzed_time}")
+    print(f"Checkpoint time: {last_analyzed_time}")
 
-    # 抓取新留言（限制數量以控制 API 使用）
-    fetch_messages_sql = """
-        SELECT message_id, message, author_name, published_at
+    # 計算待處理留言數量（不拉取完整資料）
+    count_sql = """
+        SELECT COUNT(*)
         FROM chat_messages
         WHERE published_at > %s
         AND live_stream_id = (
@@ -194,31 +194,19 @@ def fetch_new_messages(**context):
             FROM chat_messages
             ORDER BY published_at DESC
             LIMIT 1
-        )
-        ORDER BY published_at ASC
-        LIMIT 2000;
+        );
     """
+    count_result = pg_hook.get_first(count_sql, parameters=(last_analyzed_time,))
+    message_count = count_result[0] if count_result else 0
 
-    messages = pg_hook.get_records(fetch_messages_sql, parameters=(last_analyzed_time,))
+    print(f"Found {message_count} new messages since checkpoint")
 
-    # 轉換為字典格式
-    messages_data = []
-    for msg in messages:
-        messages_data.append({
-            'message_id': msg[0],
-            'message': msg[1],
-            'author_name': msg[2],
-            'published_at': msg[3].isoformat() if msg[3] else None
-        })
-
-    print(f"Fetched {len(messages_data)} new messages")
-
-    # 推送到 XCom
-    context['task_instance'].xcom_push(key='messages', value=messages_data)
+    # 只推送檢查點時間（輕量級）
     context['task_instance'].xcom_push(key='last_analyzed_time', value=last_analyzed_time.isoformat())
+    context['task_instance'].xcom_push(key='message_count', value=message_count)
 
     return {
-        'count': len(messages_data),
+        'count': message_count,
         'last_analyzed_time': last_analyzed_time.isoformat()
     }
 
@@ -277,18 +265,59 @@ def load_existing_dictionaries(**context):
 def analyze_with_gemini(**context):
     """
     Task 4: 使用 Gemini API 分析留言
-    找出新的詞彙、梗、錯別字
+    找出新的詞彙、棗、錯別字
+    
+    優化：直接查詢資料庫獲取留言，避免通過 XCom 傳遞大量資料
     """
-    # 獲取留言資料
-    messages_data = context['task_instance'].xcom_pull(task_ids='fetch_new_messages', key='messages')
+    # 獲取檢查點時間和字典
+    last_analyzed_time_str = context['task_instance'].xcom_pull(task_ids='fetch_new_messages', key='last_analyzed_time')
+    message_count = context['task_instance'].xcom_pull(task_ids='fetch_new_messages', key='message_count')
     dictionaries = context['task_instance'].xcom_pull(task_ids='load_existing_dictionaries', key='dictionaries')
 
-    if not messages_data or len(messages_data) == 0:
+    if not message_count or message_count == 0:
         print("No new messages to analyze")
+        context['task_instance'].xcom_push(key='analysis_result', value={'replace_words': [], 'special_words': []})
+        context['task_instance'].xcom_push(key='last_message_info', value=None)
         return {'analyzed': 0, 'new_words': []}
 
+    # 解析檢查點時間
+    last_analyzed_time = datetime.fromisoformat(last_analyzed_time_str)
+
+    # 直接從資料庫獲取留言（避免 XCom 大量資料傳遞）
+    pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+    fetch_messages_sql = """
+        SELECT message_id, message, author_name, published_at
+        FROM chat_messages
+        WHERE published_at > %s
+        AND live_stream_id = (
+            SELECT live_stream_id
+            FROM chat_messages
+            ORDER BY published_at DESC
+            LIMIT 1
+        )
+        ORDER BY published_at ASC
+        LIMIT 2000;
+    """
+    messages = pg_hook.get_records(fetch_messages_sql, parameters=(last_analyzed_time,))
+    
+    messages_data = []
+    for msg in messages:
+        messages_data.append({
+            'message_id': msg[0],
+            'message': msg[1],
+            'author_name': msg[2],
+            'published_at': msg[3].isoformat() if msg[3] else None
+        })
+
+    if not messages_data:
+        print("No messages fetched")
+        context['task_instance'].xcom_push(key='analysis_result', value={'replace_words': [], 'special_words': []})
+        context['task_instance'].xcom_push(key='last_message_info', value=None)
+        return {'analyzed': 0, 'new_words': []}
+
+    print(f"Fetched {len(messages_data)} messages for analysis")
+
     # 設定 Gemini API
-    # 優先從 Airflow Variable 讀取，其次從環境變數讀取
     api_key = Variable.get("GEMINI_API_KEY", default_var=os.getenv('GEMINI_API_KEY'))
     
     if not api_key:
@@ -298,9 +327,9 @@ def analyze_with_gemini(**context):
     model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
     # 準備提示詞
-    messages_text = "\n".join([f"{i+1}. {msg['message']}" for i, msg in enumerate(messages_data[:500])])  # 限制數量
+    messages_text = "\n".join([f"{i+1}. {msg['message']}" for i, msg in enumerate(messages_data[:500])])
 
-    # 準備現有字典摘要（顯示部分範例）
+    # 準備現有字典摘要
     existing_replace_examples = dictionaries['replace_sources'][:20]
     existing_special_examples = dictionaries['special_words'][:30]
 
@@ -309,7 +338,7 @@ def analyze_with_gemini(**context):
 你是一個專門分析《後宮甄嬛傳》相關網路留言的助手。請分析以下留言，找出：
 
 1. **錯別字和變體詞彙**：需要替換成標準詞彙的錯字或諧音
-2. **特殊詞彙**：新出現的梗、角色名、網路用語等需要保留的詞彙
+2. **特殊詞彙**：新出現的棗、角色名、網路用語等需要保留的詞彙
 
 **現有的字典（請避免重複建議這些詞）**：
 - 已存在的替換詞彙範例：{{existing_replace_examples_str}}...（共 {{replace_count}} 個）
@@ -318,7 +347,7 @@ def analyze_with_gemini(**context):
 **重要規則**：
 1. 不要建議已存在的詞彙
 2. 替換後的標準詞彙（target）必須是準確、完整的詞
-3. 特殊詞彙只建議新發現的梗或重要詞彙
+3. 特殊詞彙只建議新發現的棗或重要詞彙
 
 **待分析的留言**：
 {{messages_text}}
@@ -353,10 +382,10 @@ def analyze_with_gemini(**context):
 5. 確保 target（替換後的詞）是正確且完整的標準詞彙
 """
 
-    # 從 Airflow Variable 獲取 Prompt，如果沒有則使用預設
+    # 從 Airflow Variable 獲取 Prompt
     prompt_template = Variable.get("DISCOVER_NEW_WORDS_PROMPT", default_var=default_prompt)
 
-    # 填充模板變數 (使用 .format 或 replace 以避免與 JSON 中的大括號衝突)
+    # 填充模板變數
     prompt = prompt_template.replace("{existing_replace_examples_str}", ', '.join(existing_replace_examples[:10])) \
                              .replace("{replace_count}", str(len(dictionaries['replace_sources']))) \
                              .replace("{existing_special_examples_str}", ', '.join(existing_special_examples[:15])) \
@@ -368,7 +397,7 @@ def analyze_with_gemini(**context):
         response = model.generate_content(prompt)
         response_text = response.text
 
-        # 清理 JSON（移除 markdown 格式）
+        # 清理 JSON
         if response_text.startswith('```json'):
             response_text = response_text[7:]
         if response_text.endswith('```'):
@@ -382,9 +411,14 @@ def analyze_with_gemini(**context):
         print(f"Found {len(analysis_result.get('replace_words', []))} replace words")
         print(f"Found {len(analysis_result.get('special_words', []))} special words")
 
-        # 推送到 XCom
+        # 推送分析結果和最後一條留言資訊（用於更新 checkpoint）
         context['task_instance'].xcom_push(key='analysis_result', value=analysis_result)
         context['task_instance'].xcom_push(key='api_calls', value=1)
+        context['task_instance'].xcom_push(key='last_message_info', value={
+            'message_id': messages_data[-1]['message_id'],
+            'published_at': messages_data[-1]['published_at']
+        })
+        context['task_instance'].xcom_push(key='messages_analyzed_count', value=len(messages_data))
 
         return {
             'analyzed': len(messages_data),
@@ -548,15 +582,15 @@ def update_checkpoint(**context):
     """
     Task 7: 更新分析檢查點
     """
-    messages_data = context['task_instance'].xcom_pull(task_ids='fetch_new_messages', key='messages')
+    # 從 analyze_with_gemini 獲取最後一條留言資訊（輕量級）
+    last_message_info = context['task_instance'].xcom_pull(task_ids='analyze_with_gemini', key='last_message_info')
 
-    if not messages_data or len(messages_data) == 0:
+    if not last_message_info:
         print("No messages analyzed, checkpoint not updated")
         return
 
-    # 取得最後一條留言的時間
-    last_message_time = messages_data[-1]['published_at']
-    last_message_id = messages_data[-1]['message_id']
+    last_message_id = last_message_info['message_id']
+    last_message_time = last_message_info['published_at']
 
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
 
@@ -585,7 +619,8 @@ def finalize_analysis(**context):
     run_id = context['task_instance'].xcom_pull(task_ids='initialize_analysis', key='run_id')
     log_id = context['task_instance'].xcom_pull(task_ids='initialize_analysis', key='log_id')
 
-    fetch_result = context['task_instance'].xcom_pull(task_ids='fetch_new_messages')
+    # 從 analyze_with_gemini 獲取實際分析的留言數
+    messages_analyzed = context['task_instance'].xcom_pull(task_ids='analyze_with_gemini', key='messages_analyzed_count') or 0
     save_result = context['task_instance'].xcom_pull(task_ids='save_discoveries')
 
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
@@ -612,7 +647,7 @@ def finalize_analysis(**context):
         update_log_sql,
         parameters=(
             datetime.now(),
-            fetch_result.get('count', 0),
+            messages_analyzed,
             save_result.get('replace_words_saved', 0),
             save_result.get('special_words_saved', 0),
             1,  # API calls
@@ -625,7 +660,7 @@ def finalize_analysis(**context):
     print("Analysis Summary:")
     print("=" * 60)
     print(f"Run ID: {run_id}")
-    print(f"Messages Analyzed: {fetch_result.get('count', 0)}")
+    print(f"Messages Analyzed: {messages_analyzed}")
     print(f"New Replace Words Found: {save_result.get('replace_words_saved', 0)}")
     print(f"New Special Words Found: {save_result.get('special_words_saved', 0)}")
     print(f"Execution Time: {execution_time} seconds")

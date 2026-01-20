@@ -15,8 +15,10 @@ from pathlib import Path
 import json
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from psycopg2.extras import execute_values
 
 # 默認參數
 default_args = {
@@ -114,8 +116,11 @@ def import_meaningless_words(**context):
     """
     導入無意義詞彙
     """
-    # 讀取 JSON 檔案
-    json_file = Path('/opt/airflow/text_analysis/meaningless_words.json')
+    # 從 Airflow Variable 讀取檔案路徑（含檔名）
+    json_file = Path(Variable.get(
+        "MEANINGLESS_WORDS_FILE",
+        default_var="/opt/airflow/text_analysis/meaningless_words.json"
+    ))
 
     if not json_file.exists():
         raise FileNotFoundError(f"File not found: {json_file}")
@@ -125,21 +130,27 @@ def import_meaningless_words(**context):
 
     words = data.get('meaningless_words', [])
 
-    # 獲取資料庫連接
+    if not words:
+        print("No meaningless words to import")
+        return {'processed': 0, 'total': 0}
+
+    # 使用批次插入
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+    conn = pg_hook.get_conn()
+    cursor = conn.cursor()
 
-    # 使用 INSERT ... ON CONFLICT DO NOTHING 來避免重複
-    insert_sql = """
-        INSERT INTO meaningless_words (word)
-        VALUES (%s)
-        ON CONFLICT (word) DO NOTHING;
-    """
-
-    # 批次插入
-    inserted_count = 0
-    for word in words:
-        pg_hook.run(insert_sql, parameters=(word,))
-        inserted_count += 1
+    try:
+        execute_values(
+            cursor,
+            "INSERT INTO meaningless_words (word) VALUES %s ON CONFLICT (word) DO NOTHING",
+            [(word,) for word in words],
+            page_size=100
+        )
+        conn.commit()
+        inserted_count = len(words)
+    finally:
+        cursor.close()
+        conn.close()
 
     print(f"Processed {inserted_count} meaningless words")
 
@@ -160,8 +171,11 @@ def import_replace_words(**context):
     """
     導入替換詞彙對照表
     """
-    # 讀取 JSON 檔案
-    json_file = Path('/opt/airflow/text_analysis/replace_words.json')
+    # 從 Airflow Variable 讀取檔案路徑（含檔名）
+    json_file = Path(Variable.get(
+        "REPLACE_WORDS_FILE",
+        default_var="/opt/airflow/text_analysis/replace_words.json"
+    ))
 
     if not json_file.exists():
         raise FileNotFoundError(f"File not found: {json_file}")
@@ -171,24 +185,30 @@ def import_replace_words(**context):
 
     replace_map = data.get('replace_words', {})
 
-    # 獲取資料庫連接
+    if not replace_map:
+        print("No replace words to import")
+        return {'processed': 0, 'total': 0}
+
+    # 使用批次插入（ON CONFLICT DO UPDATE 需要逐條處理以正確更新）
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+    conn = pg_hook.get_conn()
+    cursor = conn.cursor()
 
-    # 使用 INSERT ... ON CONFLICT DO UPDATE 來更新或插入
-    upsert_sql = """
-        INSERT INTO replace_words (source_word, target_word)
-        VALUES (%s, %s)
-        ON CONFLICT (source_word)
-        DO UPDATE SET
-            target_word = EXCLUDED.target_word,
-            updated_at = NOW();
-    """
-
-    # 批次插入/更新
-    processed_count = 0
-    for source, target in replace_map.items():
-        pg_hook.run(upsert_sql, parameters=(source, target))
-        processed_count += 1
+    try:
+        # 對於 UPSERT，使用 execute_values 配合 ON CONFLICT
+        execute_values(
+            cursor,
+            """INSERT INTO replace_words (source_word, target_word) VALUES %s
+               ON CONFLICT (source_word) DO UPDATE SET
+               target_word = EXCLUDED.target_word, updated_at = NOW()""",
+            [(source, target) for source, target in replace_map.items()],
+            page_size=100
+        )
+        conn.commit()
+        processed_count = len(replace_map)
+    finally:
+        cursor.close()
+        conn.close()
 
     print(f"Processed {processed_count} replace word mappings")
 
@@ -209,8 +229,11 @@ def import_special_words(**context):
     """
     導入特殊詞彙
     """
-    # 讀取 JSON 檔案
-    json_file = Path('/opt/airflow/text_analysis/special_words.json')
+    # 從 Airflow Variable 讀取檔案路徑（含檔名）
+    json_file = Path(Variable.get(
+        "SPECIAL_WORDS_FILE",
+        default_var="/opt/airflow/text_analysis/special_words.json"
+    ))
 
     if not json_file.exists():
         raise FileNotFoundError(f"File not found: {json_file}")
@@ -220,21 +243,27 @@ def import_special_words(**context):
 
     words = data.get('special_words', [])
 
-    # 獲取資料庫連接
+    if not words:
+        print("No special words to import")
+        return {'processed': 0, 'total': 0}
+
+    # 使用批次插入
     pg_hook = PostgresHook(postgres_conn_id='postgres_hermes')
+    conn = pg_hook.get_conn()
+    cursor = conn.cursor()
 
-    # 使用 INSERT ... ON CONFLICT DO NOTHING 來避免重複
-    insert_sql = """
-        INSERT INTO special_words (word)
-        VALUES (%s)
-        ON CONFLICT (word) DO NOTHING;
-    """
-
-    # 批次插入
-    inserted_count = 0
-    for word in words:
-        pg_hook.run(insert_sql, parameters=(word,))
-        inserted_count += 1
+    try:
+        execute_values(
+            cursor,
+            "INSERT INTO special_words (word) VALUES %s ON CONFLICT (word) DO NOTHING",
+            [(word,) for word in words],
+            page_size=100
+        )
+        conn.commit()
+        inserted_count = len(words)
+    finally:
+        cursor.close()
+        conn.close()
 
     print(f"Processed {inserted_count} special words")
 

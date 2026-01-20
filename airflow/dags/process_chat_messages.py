@@ -365,6 +365,47 @@ def process_all_batches(**context):
     }
 
 
+def check_dictionaries_tables(**context):
+    """
+    檢查字典表是否存在（空表允許繼續執行）
+    """
+    pg_hook = PostgresHook(postgres_conn_id=DB_CONN_ID)
+    
+    # 檢查表是否存在
+    check_sql = """
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name IN ('replace_words', 'special_words');
+    """
+    tables = pg_hook.get_records(check_sql)
+    existing_tables = {t[0] for t in tables}
+    
+    # 驗證兩個表都存在
+    required_tables = {'replace_words', 'special_words'}
+    missing_tables = required_tables - existing_tables
+    
+    if missing_tables:
+        raise ValueError(
+            f"Required tables missing: {missing_tables}. "
+            "Please run 'import_text_analysis_dicts' DAG first."
+        )
+    
+    # 檢查表是否有資料（僅警告，不阻止執行）
+    for table in required_tables:
+        count_sql = f"SELECT COUNT(*) FROM {table};"
+        result = pg_hook.get_first(count_sql)
+        count = result[0] if result else 0
+        
+        if count == 0:
+            print(f"⚠️ WARNING: Table '{table}' exists but is empty. "
+                  "Processing will continue but results may be incomplete.")
+        else:
+            print(f"✅ Table '{table}' has {count} records.")
+    
+    return {'status': 'ok', 'tables_checked': list(required_tables)}
+
+
 # 定義任務
 task_check_reset = PythonOperator(
     task_id='check_reset',
@@ -375,6 +416,12 @@ task_check_reset = PythonOperator(
 task_create_tables = PythonOperator(
     task_id='create_tables_if_not_exists',
     python_callable=create_tables_if_not_exists,
+    dag=dag,
+)
+
+task_check_tables = PythonOperator(
+    task_id='check_dictionaries_tables',
+    python_callable=check_dictionaries_tables,
     dag=dag,
 )
 
@@ -393,6 +440,7 @@ task_process_all = PythonOperator(
 # 定義任務依賴
 # 1. 檢查是否需要重置
 # 2. 創建表
-# 3. 載入字典
-# 4. 循環處理所有批次（fetch -> process -> upsert -> checkpoint）
-task_check_reset >> task_create_tables >> task_load_dict >> task_process_all
+# 3. 檢查字典表是否存在
+# 4. 載入字典
+# 5. 循環處理所有批次
+task_check_reset >> task_create_tables >> task_check_tables >> task_load_dict >> task_process_all
