@@ -232,9 +232,16 @@ function PlaybackPage() {
     const hourlyMessageData = useMemo(() => {
         const hourMap = {};
         visibleSnapshots.forEach(s => {
-            const hourKey = new Date(s.timestamp);
-            hourKey.setMinutes(0, 0, 0);
-            const key = hourKey.getTime();
+            const date = new Date(s.timestamp);
+
+            // If strictly on the hour (00:00), shift to previous hour
+            if (date.getMinutes() === 0 && date.getSeconds() === 0) {
+                date.setHours(date.getHours() - 1);
+            }
+
+            date.setMinutes(0, 0, 0);
+            const key = date.getTime();
+
             // Use the max message count for that hour
             if (!hourMap[key] || s.hourly_messages > hourMap[key]) {
                 hourMap[key] = s.hourly_messages;
@@ -294,6 +301,14 @@ function PlaybackPage() {
             },
         ],
     }), [viewerData, hourlyMessageData]);
+
+    // Calculate max values for Y-axis scaling (stable validation across playback)
+    const { maxViewerCount, maxMessageCount } = useMemo(() => {
+        if (!snapshots.length) return { maxViewerCount: 0, maxMessageCount: 0 };
+        const maxV = Math.max(...snapshots.map(s => s.viewer_count || 0));
+        const maxM = Math.max(...snapshots.map(s => s.hourly_messages || 0));
+        return { maxViewerCount: maxV, maxMessageCount: maxM };
+    }, [snapshots]);
 
     // Get time range for chart
     const timeRange = snapshots.length > 0 ? {
@@ -392,6 +407,7 @@ function PlaybackPage() {
                 title: { display: true, text: 'Viewers' },
                 grid: { display: true },
                 beginAtZero: true,
+                suggestedMax: maxViewerCount * 1.1, // Add 10% padding
             },
             y2: {
                 type: 'linear',
@@ -400,10 +416,14 @@ function PlaybackPage() {
                 title: { display: true, text: 'Comments' },
                 grid: { drawOnChartArea: false },
                 beginAtZero: true,
+                suggestedMax: maxMessageCount * 1.1, // Add 10% padding
+                ticks: {
+                    precision: 0
+                }
             },
         },
         animation: false,
-    }), [timeRange]);
+    }), [timeRange, maxViewerCount, maxMessageCount]);
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
