@@ -197,6 +197,10 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
     const chartOptions = {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false,
+        },
         plugins: {
             legend: { display: false },
             title: { display: true, text: '每小時訊息量', font: { size: 14, weight: 'bold' } },
