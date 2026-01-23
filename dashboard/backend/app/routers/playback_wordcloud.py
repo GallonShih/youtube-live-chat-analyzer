@@ -176,10 +176,11 @@ def _get_word_frequency_for_window(
     Returns list of {word, size} dictionaries.
     """
     # Build query for word frequency using PostgreSQL unnest
+    # Per-Message count: 同一則留言中，同個詞只計算一次，避免刷屏影響
     query = """
         SELECT word, COUNT(*) as count
         FROM (
-            SELECT unnest(tokens) as word
+            SELECT DISTINCT message_id, unnest(tokens) as word
             FROM processed_chat_messages
             WHERE published_at >= :window_start
               AND published_at < :window_end

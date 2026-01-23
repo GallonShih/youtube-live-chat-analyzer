@@ -50,10 +50,11 @@ def get_word_frequency(
         
         # 構建基礎查詢
         # 使用 unnest 展開 tokens array 並計算詞頻
+        # Per-Message count: 同一則留言中，同個詞只計算一次，避免刷屏影響
         base_query = """
             SELECT word, COUNT(*) as count
             FROM (
-                SELECT unnest(tokens) as word
+                SELECT DISTINCT message_id, unnest(tokens) as word
                 FROM processed_chat_messages
                 WHERE 1=1
         """
