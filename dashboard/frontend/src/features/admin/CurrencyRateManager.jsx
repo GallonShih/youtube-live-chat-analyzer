@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const CurrencyRateManager = () => {
     const [rates, setRates] = useState([]);

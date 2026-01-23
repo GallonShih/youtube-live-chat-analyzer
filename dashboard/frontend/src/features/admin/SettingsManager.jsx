@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const SettingsManager = () => {
     const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -17,7 +16,7 @@ const SettingsManager = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_BASE}/api/admin/settings/youtube_url`);
+            const response = await fetch(`${API_BASE_URL}/api/admin/settings/youtube_url`);
             const data = await response.json();
 
             if (data.value) {
@@ -48,7 +47,7 @@ const SettingsManager = () => {
 
         try {
             setSaving(true);
-            const response = await fetch(`${API_BASE}/api/admin/settings`, {
+            const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -98,8 +97,8 @@ const SettingsManager = () => {
 
             {message && (
                 <div className={`p-4 rounded-lg ${message.type === 'success'
-                        ? 'bg-green-50 text-green-800 border border-green-200'
-                        : 'bg-red-50 text-red-800 border border-red-200'
+                    ? 'bg-green-50 text-green-800 border border-green-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
                     }`}>
                     {message.text}
                 </div>
@@ -139,8 +138,8 @@ const SettingsManager = () => {
                             onClick={handleSave}
                             disabled={saving || !hasChanges}
                             className={`px-6 py-2 font-semibold rounded-lg transition-all duration-200 ${hasChanges && !saving
-                                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
                             {saving ? '儲存中...' : '💾 儲存設定'}

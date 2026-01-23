@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import ValidationResultModal from './ValidationResultModal';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
     const [sourceWord, setSourceWord] = useState('');

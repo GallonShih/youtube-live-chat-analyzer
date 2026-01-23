@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import DateTimeHourSelector from '../../components/common/DateTimeHourSelector';
 import { formatLocalHour } from '../../utils/formatters';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const TextMining = () => {
     // Filter state

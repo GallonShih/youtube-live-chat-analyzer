@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ConfirmModal from './ConfirmModal';
 import ValidationResultModal from './ValidationResultModal';
 import AddSpecialWordForm from './AddSpecialWordForm';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const SpecialWordsReview = () => {
     const [items, setItems] = useState([]);

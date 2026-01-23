@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ConfirmModal from './ConfirmModal';
 import ValidationResultModal from './ValidationResultModal';
 import AddReplaceWordForm from './AddReplaceWordForm';
-
-const API_BASE_URL = 'http://localhost:8000';
+import API_BASE_URL from '../../api/client';
 
 const ReplaceWordsReview = () => {
     const [items, setItems] = useState([]);
