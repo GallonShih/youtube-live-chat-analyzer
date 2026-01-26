@@ -1,24 +1,34 @@
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 
 /**
- * Dynamic Word Cloud Component using D3.js
+ * Dynamic Word Cloud Component with Physics Engine
  * 
  * Features:
- * - Slot-based stable layout (words stay in position)
- * - Boundary clamping (prevents text from going outside)
- * - Smooth transitions for size changes
- * - Color palette based on word text hash
+ * - Physics-based layout using d3-force
+ * - Custom rectangular collision detection
+ * - Real-time parameter tuning UI
+ * - Smooth variable speed animations
  */
 function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) {
     const containerRef = useRef(null);
     const svgRef = useRef(null);
-    const wordToSlotMapRef = useRef(new Map());
-    const slotsRef = useRef([]);
+    const simulationRef = useRef(null);
+    const nodesRef = useRef([]);
 
-    // Configuration
-    const margin = 60;
-    const numSlots = wordLimit;
+    // Physics Parameters State
+    const [configs, setConfigs] = useState({
+        damping: 0.80,
+        growth: 0.02,
+        tightness: 1.2,
+        shapeFactor: 0.5,
+        padding: 15,
+        repulsion: 60,
+        verticalProb: 0.3,
+        playSpeed: 1200
+    });
+
+    const [showControls, setShowControls] = useState(false);
 
     // Color palette
     const colorPalette = useMemo(() => [
@@ -27,7 +37,7 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
         '#6E7074', '#546570', '#C23531', '#2F4554', '#61A0A8'
     ], []);
 
-    // Generate stable color based on word text
+    // Color hashing function
     const getWordColor = useCallback((word) => {
         let hash = 0;
         for (let i = 0; i < word.length; i++) {
@@ -36,205 +46,299 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
         return colorPalette[Math.abs(hash) % colorPalette.length];
     }, [colorPalette]);
 
-    // Initialize slots with spread-out spiral + noise distribution to maximize canvas usage
-    useEffect(() => {
-        const slots = [];
-        const centerX = width / 2;
-        const centerY = height / 2;
+    // Canvas for text measuring
+    const measureCtx = useMemo(() => {
+        const canvas = document.createElement("canvas");
+        return canvas.getContext("2d");
+    }, []);
 
-        // Use a larger effective area to spread words out
-        // Leave a smaller margin for the actual calculation but clamp later
-        const effectiveWidth = width - margin * 1.5;
-        const effectiveHeight = height - margin * 1.5;
-        const maxRadius = Math.min(effectiveWidth, effectiveHeight) / 2;
+    const getTextMetrics = useCallback((text, size) => {
+        if (!measureCtx) return { width: 0, height: 0 };
+        measureCtx.font = `900 ${size}px 'Noto Sans TC', sans-serif`;
+        const metrics = measureCtx.measureText(text);
+        // Use full size for height to ensure ascenders/descenders are covered
+        return { width: metrics.width, height: size };
+    }, [measureCtx]);
 
-        const seededRandom = (seed) => {
-            const x = Math.sin(seed * 9999) * 10000;
-            return x - Math.floor(x);
+    // Custom rectangular collision force
+    const rectCollide = useCallback(() => {
+        const nodes = nodesRef.current;
+        const padding = configs.padding;
+
+        return (alpha) => {
+            const quadtree = d3.quadtree()
+                .x(d => d.x)
+                .y(d => d.y)
+                .addAll(nodes);
+
+            for (const d of nodes) {
+                if (d.size < 1) continue;
+                const m = getTextMetrics(d.text, d.size);
+
+                let w = (d.rotate === 90 ? m.height : m.width) / 2 + padding;
+                let h = (d.rotate === 90 ? m.width : m.height) / 2 + padding;
+
+                const x1 = d.x - w, x2 = d.x + w, y1 = d.y - h, y2 = d.y + h;
+
+                quadtree.visit((node, x1b, y1b, x2b, y2b) => {
+                    if (!node.length) {
+                        do {
+                            if (node.data !== d && node.data.size > 1) {
+                                const d2 = node.data;
+                                const m2 = getTextMetrics(d2.text, d2.size);
+                                let w2 = (d2.rotate === 90 ? m2.height : m2.width) / 2 + padding;
+                                let h2 = (d2.rotate === 90 ? m2.width : m2.height) / 2 + padding;
+
+                                const dx = d.x - d2.x, dy = d.y - d2.y;
+                                const adx = Math.abs(dx), ady = Math.abs(dy);
+                                const minW = w + w2, minH = h + h2;
+
+                                if (adx < minW && ady < minH) {
+                                    const overlapX = minW - adx, overlapY = minH - ady;
+                                    const strength = alpha * 0.5; // Collision strength
+
+                                    if (overlapX < overlapY) {
+                                        const sx = (dx > 0 ? 1 : -1) * overlapX * strength;
+                                        d.x += sx;
+                                        d2.x -= sx;
+                                    } else {
+                                        const sy = (dy > 0 ? 1 : -1) * overlapY * strength;
+                                        d.y += sy;
+                                        d2.y -= sy;
+                                    }
+                                }
+                            }
+                        } while (node = node.next);
+                    }
+                    return x1b > x2 || x2b < x1 || y1b > y2 || y2b < y1;
+                });
+            }
         };
+    }, [configs.padding, getTextMetrics]);
 
-        for (let i = 0; i < numSlots; i++) {
-            // Golden angle 
-            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-            const angle = i * goldenAngle;
-
-            // Square root distribution for area
-            const normalizedRadius = Math.sqrt((i + 1) / numSlots);
-
-            // Push words further out to use full canvas
-            const baseRadius = normalizedRadius * maxRadius;
-
-            // Scale X and Y to match aspect ratio
-            const aspectRatio = effectiveWidth / effectiveHeight;
-            const radiusX = baseRadius * (aspectRatio > 1 ? aspectRatio * 0.8 : 1);
-            const radiusY = baseRadius * (aspectRatio < 1 ? (1 / aspectRatio) * 0.8 : 1);
-
-            // Add organic noise, scaled by available space
-            const noiseX = (seededRandom(i * 7 + 1) - 0.5) * (effectiveWidth / 10);
-            const noiseY = (seededRandom(i * 13 + 2) - 0.5) * (effectiveHeight / 10);
-
-            let x = centerX + Math.cos(angle) * radiusX + noiseX;
-            let y = centerY + Math.sin(angle) * radiusY + noiseY;
-
-            // Clamp to stay strictly within margins
-            x = Math.max(margin, Math.min(width - margin, x));
-            y = Math.max(margin, Math.min(height - margin, y));
-
-            slots.push({
-                id: i,
-                x: x,
-                y: y,
-                occupiedBy: null
-            });
-        }
-        slotsRef.current = slots;
-        // Reset word-to-slot mapping when slots are re-initialized
-        wordToSlotMapRef.current = new Map();
-    }, [width, height, margin, numSlots]);
-
-    // Initialize SVG
+    // Simulation Setup
     useEffect(() => {
-        if (!containerRef.current || svgRef.current) return;
+        if (!containerRef.current) return;
 
+        // Setup SVG
         const svg = d3.select(containerRef.current)
-            .append('svg')
+            .selectAll('svg')
+            .data([null])
+            .join('svg')
             .attr('width', '100%')
             .attr('height', '100%')
             .attr('viewBox', `0 0 ${width} ${height}`)
             .style('font-family', 'Noto Sans TC, sans-serif');
 
-        svg.append('g').attr('class', 'word-group');
-        svgRef.current = svg;
+        const g = svg.selectAll('g').data([null]).join('g');
+        svgRef.current = g;
+
+        // Setup Simulation
+        const simulation = d3.forceSimulation(nodesRef.current)
+            .velocityDecay(configs.damping)
+            // Reduce centering force strongly to allow filling corners (Gas-like behavior with walls)
+            .force("x", d3.forceX(width / 2).strength(d => configs.tightness * 0.005 * configs.shapeFactor))
+            .force("y", d3.forceY(height / 2).strength(d => configs.tightness * 0.005))
+            // Stronger repulsion to push words into corners
+            .force("charge", d3.forceManyBody().strength(-configs.repulsion))
+            .force("rectCollide", rectCollide())
+            .on("tick", ticked);
+
+        simulationRef.current = simulation;
+
+        function ticked() {
+            // Growth and boundary logic
+            nodesRef.current.forEach(d => {
+                if (typeof d.size === 'undefined') d.size = 0;
+                d.size += (d.targetSize - d.size) * configs.growth;
+
+                const m = getTextMetrics(d.text, d.size);
+                // Extra safety margin for boundary
+                const safety = 5;
+                const w = (d.rotate === 90 ? m.height : m.width) / 2 + safety;
+                const h = (d.rotate === 90 ? m.width : m.height) / 2 + safety;
+
+                // Strict boundary clamping
+                // Ensure words never go outside the visible area
+                if (d.x < w) d.x = w;
+                if (d.x > width - w) d.x = width - w;
+                if (d.y < h) d.y = h;
+                if (d.y > height - h) d.y = height - h;
+            });
+
+            // Only update positions in tick
+            svgRef.current.selectAll("text")
+                .attr("transform", d => `translate(${d.x},${d.y}) rotate(${d.rotate || 0})`)
+                .style("font-size", d => `${d.size}px`)
+                .style("opacity", d => d.size > 5 ? 1 : 0);
+        }
 
         return () => {
-            if (containerRef.current) {
-                d3.select(containerRef.current).selectAll('*').remove();
-            }
-            svgRef.current = null;
+            simulation.stop();
         };
-    }, [width, height]);
+    }, [width, height, rectCollide, configs.damping, configs.growth, configs.shapeFactor, configs.tightness, getTextMetrics]);
 
-    // Update word cloud when words change
+    // Update Data
     useEffect(() => {
-        if (!svgRef.current || !words || words.length === 0) return;
-
-        const svg = svgRef.current;
-        const wordGroup = svg.select('.word-group');
-        const slots = slotsRef.current;
-        const wordToSlotMap = wordToSlotMapRef.current;
+        if (!words || !svgRef.current) return;
 
         const activeWordNames = new Set(words.map(w => w.word));
 
-        // Release disappeared words
-        for (let [word, slotId] of wordToSlotMap.entries()) {
-            if (!activeWordNames.has(word)) {
-                slots[slotId].occupiedBy = null;
-                wordToSlotMap.delete(word);
-            }
-        }
+        // Filter out removed nodes
+        const currentNodes = nodesRef.current.filter(n => activeWordNames.has(n.id));
 
-        // Assign slots to new words
+        // Add new nodes or update existing target sizes
         words.forEach(w => {
-            if (!wordToSlotMap.has(w.word)) {
-                const emptySlot = slots.find(s => s.occupiedBy === null);
-                if (emptySlot) {
-                    emptySlot.occupiedBy = w.word;
-                    wordToSlotMap.set(w.word, emptySlot.id);
-                }
+            let node = currentNodes.find(n => n.id === w.word);
+
+            // Calculate target size
+            const maxSize = Math.max(...words.map(item => item.size), 1);
+            const minSize = Math.min(...words.map(item => item.size), 0);
+            const sizeRange = maxSize - minSize || 1;
+            const normalized = (w.size - minSize) / sizeRange;
+            const targetFontSize = Math.floor(12 + normalized * 48); // 12-60px
+
+            if (!node) {
+                // Spawn new node with SAFE bounds (within 80% of width)
+                const rx = (Math.random() - 0.5) * (width * 0.8);
+                const ry = (Math.random() - 0.5) * (height * 0.8);
+
+                node = {
+                    id: w.word,
+                    text: w.word,
+                    x: width / 2 + rx,
+                    y: height / 2 + ry,
+                    size: 0,
+                    targetSize: targetFontSize,
+                    rotate: Math.random() < configs.verticalProb ? 90 : 0,
+                    vx: 0,
+                    vy: 0
+                };
+                currentNodes.push(node);
+            } else {
+                node.targetSize = targetFontSize;
             }
         });
 
-        // Calculate font size scaling
-        const maxSize = Math.max(...words.map(w => w.size), 1);
-        const minSize = Math.min(...words.map(w => w.size), 0);
-        const sizeRange = maxSize - minSize || 1;
+        nodesRef.current = currentNodes;
 
-        const getFontSize = (size) => {
-            const normalized = (size - minSize) / sizeRange;
-            return Math.floor(12 + normalized * 48); // 12-60px range
-        };
+        // Perform D3 Data Join ONLY here
+        const selection = svgRef.current.selectAll("text")
+            .data(nodesRef.current, d => d.id);
 
-        // Prepare display data
-        const displayData = words
-            .filter(w => wordToSlotMap.has(w.word))
-            .map(w => {
-                const slot = slots[wordToSlotMap.get(w.word)];
-                return {
-                    text: w.word,
-                    size: w.size,
-                    fontSize: getFontSize(w.size),
-                    x: slot.x,
-                    y: slot.y
-                };
-            });
+        selection.join(
+            enter => enter.append("text")
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("opacity", 0)
+                .style("font-weight", "900")
+                .style("cursor", "default")
+                .text(d => d.text)
+                .attr("transform", d => `translate(${width / 2},${height / 2}) scale(0)`)
+                .style("fill", d => getWordColor(d.text)),
+            update => update,
+            exit => exit.remove()
+        )
+            .style("fill", d => getWordColor(d.text))
+            .style("transition", "fill 0.6s ease");
 
-        // D3 Data Join
-        const texts = wordGroup.selectAll('text')
-            .data(displayData, d => d.text);
+        if (simulationRef.current) {
+            simulationRef.current.nodes(nodesRef.current);
+            simulationRef.current.alpha(0.3).restart();
+        }
+    }, [words, width, height, configs.verticalProb, getWordColor]);
 
-        // Exit - fade out and shrink (use d3.select for explicit transition)
-        const exitSelection = texts.exit();
-        exitSelection.each(function () {
-            d3.select(this)
-                .style('opacity', 0)
-                .style('font-size', '0px');
-        });
-        // Remove after a delay
-        setTimeout(() => {
-            exitSelection.remove();
-        }, 600);
 
-        // Enter - new words fade in
-        const enterTexts = texts.enter()
-            .append('text')
-            .attr('text-anchor', 'middle')
-            .attr('x', d => d.x)
-            .attr('y', d => d.y)
-            .style('opacity', 0)
-            .style('font-size', '0px')
-            .style('font-weight', '900')
-            .style('paint-order', 'stroke')
-            .style('stroke', '#ffffff')
-            .style('stroke-width', '1px')
-            .style('cursor', 'default')
-            .text(d => d.text);
+    // Helper for UI sliders
+    const ControlData = [
+        { id: 'damping', label: '物理阻尼 (Damping)', min: 0.1, max: 0.9, step: 0.05 },
+        { id: 'growth', label: '演進速度 (Growth)', min: 0.02, max: 0.3, step: 0.01 },
+        { id: 'tightness', label: '向心強度 (Tightness)', min: 0.2, max: 3.0, step: 0.1 },
+        { id: 'shapeFactor', label: '扁平率 (X/Y Ratio)', min: 0.1, max: 2.0, step: 0.1 },
+        { id: 'padding', label: '碰撞間距 (Padding)', min: 0, max: 30, step: 1 },
+        { id: 'repulsion', label: '排斥力 (Repulsion)', min: 10, max: 150, step: 5 },
+    ];
 
-        // Update - merge enter and update, animate using CSS transitions
-        const mergedTexts = texts.merge(enterTexts);
-
-        // Apply CSS transition for smooth animation
-        mergedTexts
-            .style('transition', 'all 0.8s cubic-bezier(0.33, 1, 0.68, 1)')
-            .attr('x', d => d.x)
-            .attr('y', d => d.y)
-            .style('opacity', 1)
-            .style('font-size', d => d.fontSize + 'px')
-            .style('fill', d => getWordColor(d.text));
-
-    }, [words, getWordColor]);
-
-    // Empty state
+    // Empty State
     if (!words || words.length === 0) {
         return (
-            <div
-                ref={containerRef}
-                className="flex items-center justify-center text-gray-400 bg-slate-50 rounded-2xl border border-slate-200"
-                style={{ height: `${height}px` }}
-            >
-                <div className="text-center">
+            <div className={`relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center`} style={{ height, width }}>
+                <div className="text-gray-400 text-center">
                     <div className="text-4xl mb-2">☁️</div>
                     <div>載入資料後顯示動態文字雲</div>
                 </div>
             </div>
-        );
+        )
     }
 
     return (
-        <div
-            ref={containerRef}
-            className="bg-slate-50 rounded-2xl overflow-hidden relative border border-slate-200 shadow-inner"
-            style={{ height: `${height}px` }}
-        />
+        <div className="relative group">
+            {/* Canvas Container */}
+            <div
+                ref={containerRef}
+                className="bg-slate-50 rounded-2xl overflow-hidden shadow-inner border border-slate-200"
+                style={{ height: `${height}px`, position: 'relative' }}
+            />
+
+            {/* Toggle Controls Button */}
+            <button
+                onClick={() => setShowControls(!showControls)}
+                className="absolute top-4 right-4 bg-white/80 hover:bg-white p-2 rounded-lg shadow-sm backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+                title="調整參數"
+            >
+                ⚙️
+            </button>
+
+            {/* Controls Panel */}
+            {showControls && (
+                <div className="absolute top-16 right-4 w-64 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-xl border border-slate-100 z-20 text-sm">
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="font-bold text-slate-700">🔧 物理參數</h4>
+                        <button onClick={() => setConfigs({
+                            damping: 0.80, growth: 0.02, tightness: 1.2, shapeFactor: 0.5, padding: 15, repulsion: 60, verticalProb: 0.3, playSpeed: 1200
+                        })} className="text-xs text-blue-500 hover:text-blue-700">重置</button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {ControlData.map(ctrl => (
+                            <div key={ctrl.id}>
+                                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                    <span>{ctrl.label}</span>
+                                    <span className="font-mono">{configs[ctrl.id]}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={ctrl.min}
+                                    max={ctrl.max}
+                                    step={ctrl.step}
+                                    value={configs[ctrl.id]}
+                                    onChange={(e) => {
+                                        setConfigs(prev => ({ ...prev, [ctrl.id]: Number(e.target.value) }));
+                                        if (simulationRef.current) simulationRef.current.alpha(0.3).restart();
+                                    }}
+                                    className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                />
+                            </div>
+                        ))}
+                        <div>
+                            <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                <span>垂直比例 (Vertical %)</span>
+                                <span className="font-mono">{Math.round(configs.verticalProb * 100)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="5"
+                                value={configs.verticalProb * 100}
+                                onChange={(e) => setConfigs(prev => ({ ...prev, verticalProb: Number(e.target.value) / 100 }))}
+                                className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 
