@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Link } from 'react-router-dom';
+import { Responsive, useContainerWidth } from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 import { registerChartComponents, hourGridPlugin } from '../../utils/chartSetup';
 import DynamicWordCloud from '../../components/common/DynamicWordCloud';
 import BarChartRace from '../../components/common/BarChartRace';
@@ -9,6 +12,7 @@ import { formatNumber, formatCurrency, formatTimestamp, formatLocalHour } from '
 import { usePlayback } from '../../hooks/usePlayback';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
+import { usePlaybackLayout } from '../../hooks/usePlaybackLayout';
 
 registerChartComponents();
 
@@ -39,6 +43,7 @@ function PlaybackPage() {
 
     const { savedWordlists: savedExclusionWordlists, loading: loadingExclusionWordlists } = useWordlists();
     const { savedWordlists: savedReplacementWordlists, loading: loadingReplacementWordlists } = useReplacementWordlists();
+    const { layout, handleLayoutChange, resetLayout } = usePlaybackLayout();
 
     // Word cloud config state
     const [windowHours, setWindowHours] = useState(4);
@@ -49,6 +54,9 @@ function PlaybackPage() {
     // Refs
     const playIntervalRef = useRef(null);
     const currentSnapshotRef = useRef(null);
+
+    // Grid layout width measurement
+    const { width: gridWidth, containerRef: gridContainerRef, mounted: gridMounted } = useContainerWidth();
 
     // Step options
     const stepOptions = [
@@ -451,122 +459,172 @@ function PlaybackPage() {
                 {/* Content */}
                 {snapshots.length > 0 && (
                     <>
-                        {/* Controls */}
-                        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                            <div className="flex flex-col items-center space-y-4">
-                                <div className="text-center">
-                                    <div className="text-3xl font-bold text-gray-800">{formatTimestamp(currentSnapshot?.timestamp)}</div>
-                                    <div className="text-sm text-gray-500 mt-1">Frame {currentIndex + 1} / {snapshots.length}</div>
-                                </div>
-                                <div className="flex items-center gap-4 w-full max-w-2xl">
-                                    <button
-                                        onClick={togglePlayback}
-                                        className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-lg transition-all duration-200 ${isPlaying ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
-                                    >
-                                        {isPlaying ? '⏸' : '▶️'}
-                                    </button>
-                                    <div className="flex-1">
-                                        <input
-                                            type="range"
-                                            min="0"
-                                            max={snapshots.length - 1}
-                                            value={currentIndex}
-                                            onChange={(e) => { setCurrentIndex(Number(e.target.value)); setIsPlaying(false); }}
-                                            className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                        />
-                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>{formatTimestamp(snapshots[0]?.timestamp)}</span>
-                                            <span>{formatTimestamp(snapshots[snapshots.length - 1]?.timestamp)}</span>
+                        {/* Draggable Chart Blocks */}
+                        <div className="mb-6" ref={gridContainerRef}>
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-lg font-semibold text-gray-700">📊 視覺化區塊 <span className="text-sm font-normal text-gray-400">(可拖曳排列與縮放)</span></h2>
+                                <button
+                                    onClick={resetLayout}
+                                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                                >
+                                    🔄 重置佈局
+                                </button>
+                            </div>
+                            {gridMounted && (
+                                <Responsive
+                                    width={gridWidth}
+                                    layouts={{ lg: layout, md: layout, sm: layout }}
+                                    breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+                                    cols={{ lg: 12, md: 12, sm: 1 }}
+                                    rowHeight={30}
+                                    onLayoutChange={(currentLayout) => handleLayoutChange(currentLayout)}
+                                    draggableHandle=".drag-handle"
+                                    isResizable={true}
+                                    isDraggable={true}
+                                    margin={[16, 16]}
+                                >
+                                    {/* Controls / Time Player */}
+                                    <div key="controls" className="bg-white rounded-lg shadow-md overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <span className="text-gray-400 select-none">⋮⋮</span>
+                                            <h3 className="text-base font-bold text-gray-800">⏱️ 時間播放器</h3>
+                                        </div>
+                                        <div className="p-4 h-[calc(100%-52px)] flex flex-col justify-center">
+                                            <div className="flex flex-col items-center space-y-3">
+                                                <div className="text-center">
+                                                    <div className="text-2xl font-bold text-gray-800">{formatTimestamp(currentSnapshot?.timestamp)}</div>
+                                                    <div className="text-sm text-gray-500">Frame {currentIndex + 1} / {snapshots.length}</div>
+                                                </div>
+                                                <div className="flex items-center gap-4 w-full max-w-2xl">
+                                                    <button
+                                                        onClick={togglePlayback}
+                                                        className={`w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-lg transition-all duration-200 ${isPlaying ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                                                    >
+                                                        {isPlaying ? '⏸' : '▶️'}
+                                                    </button>
+                                                    <div
+                                                        className="flex-1"
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                    >
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max={snapshots.length - 1}
+                                                            value={currentIndex}
+                                                            onChange={(e) => { setCurrentIndex(Number(e.target.value)); setIsPlaying(false); }}
+                                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                                        />
+                                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                                            <span>{formatTimestamp(snapshots[0]?.timestamp)}</span>
+                                                            <span>{formatTimestamp(snapshots[snapshots.length - 1]?.timestamp)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-gray-200 px-3 py-1 rounded-full text-sm font-medium text-gray-700">{speedOptions.find(o => o.value === playbackSpeed)?.label || '1x'}</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="bg-gray-200 px-3 py-1 rounded-full text-sm font-medium text-gray-700">{speedOptions.find(o => o.value === playbackSpeed)?.label || '1x'}</div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Chart */}
-                        <div className="bg-white p-6 rounded-lg shadow-md mb-6 h-[50vh]">
-                            <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin, currentPositionPlugin]} />
-                        </div>
-
-                        {/* Stats Card */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-md p-6 border border-blue-200">
-                                <div className="text-sm font-medium text-blue-700 mb-2">👥 觀看人數</div>
-                                <div className="text-4xl font-bold text-blue-900">{formatNumber(currentSnapshot?.viewer_count)}</div>
-                            </div>
-                            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-md p-6 border border-green-200">
-                                <div className="text-sm font-medium text-green-700 mb-2">💬 每小時留言</div>
-                                <div className="text-4xl font-bold text-green-900">{formatNumber(currentSnapshot?.hourly_messages)}</div>
-                            </div>
-                            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow-md p-6 border border-purple-200">
-                                <div className="text-sm font-medium text-purple-700 mb-2">💰 SC 數量</div>
-                                <div className="text-4xl font-bold text-purple-900">{formatNumber(currentSnapshot?.paid_message_count)}</div>
-                            </div>
-                            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg shadow-md p-6 border border-amber-200">
-                                <div className="text-sm font-medium text-amber-700 mb-2">💵 營收 (TWD)</div>
-                                <div className="text-4xl font-bold text-amber-900">{formatCurrency(currentSnapshot?.revenue_twd)}</div>
-                            </div>
-                        </div>
-
-                        {/* Dynamic Word Cloud & Bar Chart Race Side by Side */}
-                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-                            {/* Dynamic Word Cloud - 3/5 width */}
-                            <div className="lg:col-span-3 bg-white p-6 rounded-lg shadow-md">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4">☁️ 動態文字雲</h3>
-
-                                {wordcloudLoading && !wordcloudSnapshots.length ? (
-                                    <div className="h-[500px] flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
-                                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+                                    {/* Stats Cards */}
+                                    <div key="stats" className="bg-white rounded-lg shadow-md overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <span className="text-gray-400 select-none">⋮⋮</span>
+                                            <h3 className="text-base font-bold text-gray-800">📈 即時統計</h3>
+                                        </div>
+                                        <div className="p-4 h-[calc(100%-52px)]">
+                                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full">
+                                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-blue-700 mb-1">� 觀看人數</div>
+                                                    <div className="text-2xl font-bold text-blue-900">{formatNumber(currentSnapshot?.viewer_count)}</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-green-700 mb-1">� 每小時留言</div>
+                                                    <div className="text-2xl font-bold text-green-900">{formatNumber(currentSnapshot?.hourly_messages)}</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-purple-700 mb-1">💰 SC 數量</div>
+                                                    <div className="text-2xl font-bold text-purple-900">{formatNumber(currentSnapshot?.paid_message_count)}</div>
+                                                </div>
+                                                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-amber-700 mb-1">💵 營收 (TWD)</div>
+                                                    <div className="text-2xl font-bold text-amber-900">{formatCurrency(currentSnapshot?.revenue_twd)}</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                ) : wordcloudError ? (
-                                    <div className="h-[500px] flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
-                                        ⚠️ {wordcloudError}
-                                    </div>
-                                ) : (
-                                    <DynamicWordCloud
-                                        words={currentWordcloudWords}
-                                        width={900}
-                                        height={500}
-                                        wordLimit={wordLimit}
-                                    />
-                                )}
 
-                                <div className="mt-2 text-center text-sm text-gray-500">
-                                    當前統計區間: {
-                                        currentSnapshot
-                                            ? (() => {
-                                                const end = new Date(currentSnapshot.timestamp);
-                                                const start = new Date(end.getTime() - windowHours * 60 * 60 * 1000);
-                                                const pad = n => n.toString().padStart(2, '0');
-                                                const fmt = d => `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-                                                return `${fmt(start)} - ${fmt(end)}`;
-                                            })()
-                                            : '--/-- --:-- - --/-- --:--'
-                                    }
-                                </div>
-                            </div>
-
-                            {/* Bar Chart Race - 2/5 width */}
-                            <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4">🏆 熱門詞彙排行</h3>
-
-                                {wordcloudLoading && !wordcloudSnapshots.length ? (
-                                    <div className="h-[500px] flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
-                                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+                                    {/* Main Chart */}
+                                    <div key="chart" className="bg-white rounded-lg shadow-md overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <span className="text-gray-400 select-none">⋮⋮</span>
+                                            <h3 className="text-base font-bold text-gray-800">📈 觀看人數與留言趨勢</h3>
+                                        </div>
+                                        <div className="p-4 h-[calc(100%-52px)]">
+                                            <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin, currentPositionPlugin]} />
+                                        </div>
                                     </div>
-                                ) : wordcloudError ? (
-                                    <div className="h-[500px] flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
-                                        ⚠️ {wordcloudError}
+
+                                    {/* Dynamic Word Cloud */}
+                                    <div key="wordcloud" className="bg-white rounded-lg shadow-md overflow-visible">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <span className="text-gray-400 select-none">⋮⋮</span>
+                                            <h3 className="text-base font-bold text-gray-800">☁️ 動態文字雲</h3>
+                                            <span className="ml-auto text-xs text-gray-400">
+                                                {currentSnapshot
+                                                    ? (() => {
+                                                        const end = new Date(currentSnapshot.timestamp);
+                                                        const start = new Date(end.getTime() - windowHours * 60 * 60 * 1000);
+                                                        const pad = n => n.toString().padStart(2, '0');
+                                                        const fmt = d => `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                                                        return `${fmt(start)} - ${fmt(end)}`;
+                                                    })()
+                                                    : '--'}
+                                            </span>
+                                        </div>
+                                        <div className="p-4 h-[calc(100%-52px)]">
+                                            {wordcloudLoading && !wordcloudSnapshots.length ? (
+                                                <div className="h-full flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
+                                                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+                                                </div>
+                                            ) : wordcloudError ? (
+                                                <div className="h-full flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
+                                                    ⚠️ {wordcloudError}
+                                                </div>
+                                            ) : (
+                                                <DynamicWordCloud
+                                                    words={currentWordcloudWords}
+                                                    wordLimit={wordLimit}
+                                                />
+                                            )}
+                                        </div>
                                     </div>
-                                ) : (
-                                    <BarChartRace
-                                        words={currentWordcloudWords}
-                                        height={500}
-                                        barLimit={10}
-                                    />
-                                )}
-                            </div>
+
+                                    {/* Bar Chart Race */}
+                                    <div key="barrace" className="bg-white rounded-lg shadow-md overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                            <span className="text-gray-400 select-none">⋮⋮</span>
+                                            <h3 className="text-base font-bold text-gray-800">🏆 熱門詞彙排行</h3>
+                                        </div>
+                                        <div className="p-4 h-[calc(100%-52px)]">
+                                            {wordcloudLoading && !wordcloudSnapshots.length ? (
+                                                <div className="h-full flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
+                                                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
+                                                </div>
+                                            ) : wordcloudError ? (
+                                                <div className="h-full flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
+                                                    ⚠️ {wordcloudError}
+                                                </div>
+                                            ) : (
+                                                <BarChartRace
+                                                    words={currentWordcloudWords}
+                                                    barLimit={10}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                </Responsive>
+                            )}
                         </div>
                     </>
                 )}

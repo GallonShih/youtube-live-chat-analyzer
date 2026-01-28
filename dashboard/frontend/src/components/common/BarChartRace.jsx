@@ -1,17 +1,36 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 
 /**
  * Bar Chart Race Component
  * 
  * Displays a ranked bar chart that animates smoothly when rankings change.
  * Uses CSS transitions for smooth position swapping animations.
+ * Auto-resizes to fit container.
  * 
  * @param {Array} words - Array of { word: string, size: number }
- * @param {number} width - Container width
- * @param {number} height - Container height  
  * @param {number} barLimit - Maximum number of bars to display (default: 10)
  */
-function BarChartRace({ words = [], width = 400, height = 500, barLimit = 10 }) {
+function BarChartRace({ words = [], barLimit = 10 }) {
+    const containerRef = useRef(null);
+    const [containerHeight, setContainerHeight] = useState(500);
+
+    // ResizeObserver for dynamic sizing
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { height } = entry.contentRect;
+                if (height > 0) {
+                    setContainerHeight(Math.floor(height));
+                }
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+
     // Color palette - expanded with richer, more vibrant colors (synced with DynamicWordCloud)
     const colorPalette = useMemo(() => [
         '#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE',
@@ -85,19 +104,22 @@ function BarChartRace({ words = [], width = 400, height = 500, barLimit = 10 }) 
         };
     }, [words, barLimit, getWordColor]);
 
-    // Layout constants
-    const barHeight = 36;
-    const barGap = 10;
+    // Dynamic layout constants based on container height
     const labelWidth = 100;
     const rightPadding = 16;
-    const chartHeight = Math.min(barLimit, sortedData.length) * (barHeight + barGap);
+    const topBottomPadding = 48; // Reserve space for padding and axis labels
+    const availableHeight = Math.max(containerHeight - topBottomPadding, 100);
+    const barCount = Math.min(barLimit, sortedData.length) || 1;
+    const barHeight = Math.max(Math.floor((availableHeight / barCount) * 0.7), 20);
+    const barGap = Math.max(Math.floor((availableHeight / barCount) * 0.3), 4);
+    const chartHeight = barCount * (barHeight + barGap);
 
     // Empty state
     if (!words || words.length === 0) {
         return (
             <div
-                className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center"
-                style={{ height, width: '100%' }}
+                ref={containerRef}
+                className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center h-full w-full"
             >
                 <div className="text-gray-400 text-center">
                     <div className="text-4xl mb-2">🏆</div>
@@ -108,7 +130,7 @@ function BarChartRace({ words = [], width = 400, height = 500, barLimit = 10 }) 
     }
 
     return (
-        <div className="relative bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 p-4" style={{ height }}>
+        <div ref={containerRef} className="relative bg-slate-50 rounded-2xl overflow-hidden border border-slate-200 p-4 h-full w-full">
             {/* Grid lines container */}
             <div
                 className="absolute pointer-events-none"

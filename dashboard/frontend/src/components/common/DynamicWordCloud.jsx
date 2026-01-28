@@ -9,12 +9,35 @@ import * as d3 from 'd3';
  * - Custom rectangular collision detection
  * - Real-time parameter tuning UI
  * - Smooth variable speed animations
+ * - Auto-resize support via ResizeObserver
  */
-function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) {
+function DynamicWordCloud({ words, wordLimit = 30 }) {
     const containerRef = useRef(null);
     const svgRef = useRef(null);
     const simulationRef = useRef(null);
     const nodesRef = useRef([]);
+
+    // Dynamic container dimensions
+    const [dimensions, setDimensions] = useState({ width: 900, height: 500 });
+
+    // ResizeObserver for dynamic sizing
+    useEffect(() => {
+        if (!containerRef.current) return;
+
+        const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0) {
+                    setDimensions({ width: Math.floor(width), height: Math.floor(height) });
+                }
+            }
+        });
+
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+    }, []);
+
+    const { width, height } = dimensions;
 
     // Physics Parameters State
     const [configs, setConfigs] = useState({
@@ -29,6 +52,9 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
     });
 
     const [showControls, setShowControls] = useState(false);
+
+    // Font scale state (moved from parent for easy tuning)
+    const [fontScale, setFontScale] = useState(1);
 
     // Color palette - expanded with richer, more vibrant colors
     const colorPalette = useMemo(() => [
@@ -199,7 +225,7 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
             const minSize = Math.min(...words.map(item => item.size), 0);
             const sizeRange = maxSize - minSize || 1;
             const normalized = (w.size - minSize) / sizeRange;
-            const targetFontSize = Math.floor(12 + normalized * 48); // 12-60px
+            const targetFontSize = Math.floor((12 + normalized * 48) * fontScale); // 12-60px base, scaled
 
             if (!node) {
                 // Spawn new node with SAFE bounds (within 80% of width)
@@ -249,7 +275,7 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
             simulationRef.current.nodes(nodesRef.current);
             simulationRef.current.alpha(0.3).restart();
         }
-    }, [words, width, height, configs.verticalProb, getWordColor]);
+    }, [words, width, height, configs.verticalProb, fontScale, getWordColor]);
 
 
     // Helper for UI sliders
@@ -265,7 +291,7 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
     // Empty State
     if (!words || words.length === 0) {
         return (
-            <div className={`relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center`} style={{ height, width }}>
+            <div className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center h-full w-full">
                 <div className="text-gray-400 text-center">
                     <div className="text-4xl mb-2">☁️</div>
                     <div>載入資料後顯示動態文字雲</div>
@@ -275,12 +301,11 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
     }
 
     return (
-        <div className="relative group">
+        <div className="relative group h-full w-full overflow-visible">
             {/* Canvas Container */}
             <div
                 ref={containerRef}
-                className="bg-slate-50 rounded-2xl overflow-hidden shadow-inner border border-slate-200"
-                style={{ height: `${height}px`, position: 'relative' }}
+                className="bg-slate-50 rounded-2xl overflow-hidden shadow-inner border border-slate-200 h-full w-full"
             />
 
             {/* Toggle Controls Button */}
@@ -294,7 +319,11 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
 
             {/* Controls Panel */}
             {showControls && (
-                <div className="absolute top-16 right-4 w-64 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-xl border border-slate-100 z-20 text-sm">
+                <div
+                    className="absolute top-16 right-4 w-64 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-2xl border border-slate-100 z-[100] text-sm"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
                     <div className="flex justify-between items-center mb-3">
                         <h4 className="font-bold text-slate-700">🔧 物理參數</h4>
                         <button onClick={() => setConfigs({
@@ -335,6 +364,21 @@ function DynamicWordCloud({ words, width = 900, height = 500, wordLimit = 30 }) 
                                 step="5"
                                 value={configs.verticalProb * 100}
                                 onChange={(e) => setConfigs(prev => ({ ...prev, verticalProb: Number(e.target.value) / 100 }))}
+                                className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+                        <div>
+                            <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                <span>文字大小 (Font Scale)</span>
+                                <span className="font-mono">{fontScale.toFixed(1)}x</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="2"
+                                step="0.1"
+                                value={fontScale}
+                                onChange={(e) => setFontScale(Number(e.target.value))}
                                 className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                         </div>
