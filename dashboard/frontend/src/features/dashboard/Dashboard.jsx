@@ -8,6 +8,7 @@ import { formatLocalHour } from '../../utils/formatters';
 import MessageList from '../messages/MessageList';
 import WordCloudPanel from '../wordcloud/WordCloudPanel';
 import MoneyStats from './MoneyStats';
+import EmojiStatsPanel from './EmojiStatsPanel';
 
 registerChartComponents();
 
@@ -422,6 +423,17 @@ function Dashboard() {
 
                 {/* Word Cloud */}
                 <WordCloudPanel
+                    startTime={startDate ? new Date(startDate).toISOString() : null}
+                    endTime={endDate ? (() => {
+                        const d = new Date(endDate);
+                        d.setMinutes(59, 59, 999);
+                        return d.toISOString();
+                    })() : null}
+                    hasTimeFilter={!!endDate}
+                />
+
+                {/* Emoji Stats */}
+                <EmojiStatsPanel
                     startTime={startDate ? new Date(startDate).toISOString() : null}
                     endTime={endDate ? (() => {
                         const d = new Date(endDate);
