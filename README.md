@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.icons8.com/fluency/96/hermes.png" alt="Hermes Logo" width="80"/>
+  <img src="docs/hermes_logo.png" alt="Hermes Logo" width="80"/>
 </p>
 
 <h1 align="center">⚡ Hermes</h1>
@@ -34,7 +34,7 @@ The system captures chat messages from live streams, processes them through NLP 
 |---------|-------------|
 | 📥 **Real-time Collection** | Capture live chat messages using `chat-downloader` with automatic retry & reconnection |
 | 🔄 **ETL Processing** | Chinese tokenization with Jieba, emoji extraction, word replacement pipelines |
-| 🤖 **AI-Powered Discovery** | Gemini API analyzes chat to discover new memes, slang, and typos automatically |
+| 🤖 **AI-Powered Discovery** | Gemini API (`gemini-2.5-flash-lite`) analyzes chat to discover new memes, slang, and typos automatically |
 | 📊 **Interactive Dashboard** | React-based dashboard with word cloud, playback timeline, and admin management |
 | 🛠️ **Admin Panel** | Approve/reject AI-discovered words, manage dictionaries, configure settings |
 
@@ -94,7 +94,10 @@ cd hermes
 
 # 2. Configure environment variables
 cp .env.example .env
-# Edit .env with your API keys (YouTube, Gemini, etc.)
+# Edit .env and set:
+# - YOUTUBE_API_KEY: Your YouTube Data API Key
+# - GEMINI_API_KEY: Your Google AI API Key (for discovery DAG)
+# - YOUTUBE_URL: The full URL (or ID) of the live stream you want to track
 
 # 3. Start all services
 docker-compose up -d
