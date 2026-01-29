@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
+  <style>
+    .node-rect{fill:#1e293b;stroke:#414868;stroke-width:1.5;rx:14}.group-box{fill:none;stroke:#1e293b;stroke-width:2;stroke-dasharray:4,4}text{font-family:sans-serif;fill:#c0caf5;font-size:13px}.t-title{font-weight:700;font-size:15px;fill:#fff}.t-label{font-size:11px;fill:#9ece6a}.t-group{font-weight:700;font-size:10px;fill:#565f89}.p-blue{stroke:#38bdf8}.p-blue,.p-orange,.p-purple{fill:none;stroke-width:5;stroke-dasharray:4 16}.p-orange{stroke:#fb923c}.p-purple{stroke:#bb9af7}
+  </style>
+  <rect width="1000" height="700" rx="24" style="fill:#0f172a"/>
+  <rect x="40" y="50" width="540" height="180" class="group-box" rx="20"/>
+  <text x="60" y="42" class="t-group">DATA COLLECTION</text>
+  <rect x="320" y="480" width="540" height="180" class="group-box" rx="20"/>
+  <text x="340" y="472" class="t-group">ETL PIPELINE</text>
+  <rect x="800" y="190" width="180" height="380" class="group-box" rx="20"/>
+  <text x="820" y="182" class="t-group">DASHBOARD</text>
+  <path id="yt_to_worker" d="M140 140h95" class="p-blue" opacity=".5">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <circle r="6" fill="#38bdf8">
+    <animateMotion dur="2s" repeatCount="indefinite">
+      <mpath href="#yt_to_worker"/>
+    </animateMotion>
+  </circle>
+  <path id="worker_to_pg" d="M435 140h245v140" class="p-purple" opacity=".5">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <circle r="6" fill="#bb9af7">
+    <animateMotion dur="2s" repeatCount="indefinite">
+      <mpath href="#worker_to_pg"/>
+    </animateMotion>
+  </circle>
+  <path id="pg_to_process" d="M670 420v90" class="p-orange" opacity=".5"/>
+  <circle r="6" fill="#fb923c">
+    <animateMotion dur="2s" repeatCount="indefinite">
+      <mpath href="#pg_to_process"/>
+    </animateMotion>
+  </circle>
+  <path id="process_to_pg" d="M690 510v-90" class="p-purple" opacity=".5"/>
+  <circle r="6" fill="#bb9af7">
+    <animateMotion dur="2s" repeatCount="indefinite">
+      <mpath href="#process_to_pg"/>
+    </animateMotion>
+  </circle>
+  <path id="pg_to_discover" d="M730 420q10 90 10 180" class="p-orange" opacity=".5"/>
+  <circle r="6" fill="#fb923c">
+    <animateMotion dur="2.5s" repeatCount="indefinite">
+      <mpath href="#pg_to_discover"/>
+    </animateMotion>
+  </circle>
+  <path id="discover_to_pg" d="M755 600q0-90-10-180" class="p-purple" opacity=".5"/>
+  <circle r="6" fill="#bb9af7">
+    <animateMotion dur="2.5s" repeatCount="indefinite">
+      <mpath href="#discover_to_pg"/>
+    </animateMotion>
+  </circle>
+  <path d="M480 600q80 0 100-60" class="p-orange">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <path d="M480 600q80 0 100 60" class="p-orange">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <path d="M740 350h30v-70h30" style="fill:none;stroke:#4ade80;stroke-width:5;stroke-dasharray:4 16">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <path d="M890 310v140" class="p-blue">
+    <animate attributeName="stroke-dashoffset" from="40" to="0" dur="1.5s" repeatCount="indefinite"/>
+  </path>
+  <path class="node-rect" stroke="red" d="M60 100h80v80H60z"/>
+  <path d="M85 130c0-5 2-7 7-7h16c5 0 7 2 7 7v12c0 5-2 7-7 7H92c-5 0-7-2-7-7z" fill="red"/>
+  <path d="m96 131 10 5-10 5z" fill="#fff"/>
+  <text x="40" y="68" text-anchor="middle" class="t-title" transform="translate(60 100)">YouTube</text>
+  <path class="node-rect" stroke="#38bdf8" d="M235 100h200v80H235z"/>
+  <path d="M270.92 125c-6 0-5.64 2.58-5.64 2.58l.06 2.7h5.7v.78h-7.98s-3 .36-3 5.64 2.64 5.1 2.64 5.1h1.56v-2.22s-.06-2.64 2.64-2.64h5.58s2.58.06 2.58-2.52v-6.78s.66-2.64-4.14-2.64" fill="#38bdf8"/>
+  <path d="M267.08 149c6 0 5.64-2.58 5.64-2.58l-.06-2.7h-5.7v-.78h7.98s3-.36 3-5.64-2.64-5.1-2.64-5.1h-1.56v2.22s.06 2.64-2.64 2.64h-5.28s-2.58-.06-2.58 2.52v6.78s-.96 2.64 3.84 2.64" fill="#38bdf8" opacity=".7"/>
+  <text x="115" y="40" text-anchor="middle" class="t-title" transform="translate(235 100)">hermes-worker</text>
+  <text x="115" y="62" text-anchor="middle" class="t-label" transform="translate(235 100)">Python Collector</text>
+  <path class="node-rect" stroke="#bb9af7" d="M620 280h120v140H620z"/>
+  <path d="M660 315h40v10q0 5-20 5t-20-5zm0 15v10q0 5 20 5t20-5v-10m-40 15v10q0 5 20 5t20-5v-10" fill="none" stroke="#bb9af7" stroke-width="1.5"/>
+  <text x="60" y="95" text-anchor="middle" class="t-title" transform="translate(620 280)">Postgres</text>
+  <text x="60" y="115" text-anchor="middle" class="t-label" style="fill:#bb9af7" transform="translate(620 280)">Core Database</text>
+  <path class="node-rect" stroke="#fb923c" d="M320 560h160v80H320z"/>
+  <g transform="translate(350 600)">
+    <g>
+      <circle r="2" fill="#fb923c"/>
+      <path d="M0-12A12 12 0 0 1 10 0H0ZM10.392 6A12 12 0 0 1-5 8.66L0 0Zm-20.784 0A12 12 0 0 1-5-8.66L0 0Z" fill="#fb923c" opacity=".8"/>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="3s" repeatCount="indefinite"/>
+    </g>
+    <circle r="15" fill="none" stroke="#fb923c" stroke-dasharray="2,2" opacity=".5"/>
+  </g>
+  <text x="100" y="40" text-anchor="middle" class="t-title" transform="translate(320 560)">Airflow</text>
+  <text x="100" y="62" text-anchor="middle" class="t-label" style="fill:#fb923c" transform="translate(320 560)">Orchestrator</text>
+  <path class="node-rect" stroke="#fb923c" d="M580 510h200v60H580z"/>
+  <text x="100" y="36" text-anchor="middle" class="t-title" style="font-size:12px" transform="translate(580 510)">process_chat_messages</text>
+  <text x="100" y="52" text-anchor="middle" class="t-label" transform="translate(580 510)">Tokenization</text>
+  <path class="node-rect" stroke="#fb923c" d="M580 600h200v60H580z"/>
+  <text x="100" y="36" text-anchor="middle" class="t-title" style="font-size:12px" transform="translate(580 600)">discover_new_words</text>
+  <text x="100" y="52" text-anchor="middle" class="t-label" transform="translate(580 600)">Gemini AI Analysis</text>
+  <path class="node-rect" stroke="#4ade80" d="M800 250h180v60H800z"/>
+  <path d="m830 265-10 20h12l-8 20 22-25h-12l10-15z" fill="#4ade80"/>
+  <text x="105" y="36" text-anchor="middle" class="t-title" transform="translate(800 250)">FastAPI Backend</text>
+  <g transform="translate(800 450)">
+  <path class="node-rect" stroke="#61dafb" fill="none" d="M0 0h180v60H0z"/>
+  <g transform="translate(30, 30) scale(0.6)" stroke="#61dafb" stroke-width="2" fill="none">
+    <ellipse rx="20" ry="8" />
+    <ellipse rx="20" ry="8" transform="rotate(60)" />
+    <ellipse rx="20" ry="8" transform="rotate(120)" />
+    <circle r="4" fill="#61dafb" />
+  </g>
+  <text x="105" y="36" text-anchor="middle" class="t-title" fill="#61dafb">React Dashboard</text>
+</g>
+</svg>

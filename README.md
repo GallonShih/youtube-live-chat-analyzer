@@ -42,38 +42,9 @@ The system captures chat messages from live streams, processes them through NLP 
 
 ## 🏗️ Architecture
 
-```mermaid
-flowchart TB
-    subgraph Collection["📥 Data Collection"]
-        YT[YouTube Live Stream]
-        Worker[hermes-worker]
-    end
-
-    subgraph Storage["💾 Storage"]
-        PG[(PostgreSQL)]
-    end
-
-    subgraph ETL["🔄 ETL Pipeline"]
-        AF[Airflow]
-        DAG1[process_chat_messages]
-        DAG2[discover_new_words]
-    end
-
-    subgraph Presentation["📊 Dashboard"]
-        BE[FastAPI Backend]
-        FE[React Frontend]
-    end
-
-    YT -->|chat-downloader| Worker
-    Worker -->|Insert Messages| PG
-    PG --> AF
-    AF --> DAG1
-    AF --> DAG2
-    DAG1 -->|Tokenized Data| PG
-    DAG2 -->|Gemini API| PG
-    PG --> BE
-    BE --> FE
-```
+<p align="center">
+  <img src="docs/architecture.svg" alt="Hermes Architecture" width="1000"/>
+</p>
 
 ---
 
