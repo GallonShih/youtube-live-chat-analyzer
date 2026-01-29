@@ -1,117 +1,178 @@
-# 🪄 Hermes
+<p align="center">
+  <img src="https://img.icons8.com/fluency/96/hermes.png" alt="Hermes Logo" width="80"/>
+</p>
 
-YouTube 直播留言收集與分析系統
+<h1 align="center">⚡ Hermes</h1>
 
-## 📋 專案概述
+<p align="center">
+  <strong>YouTube Live Stream Chat Collection & Analysis System</strong>
+</p>
 
-Hermes 是一個用於即時/近即時收集 YouTube 直播留言與統計數據的系統，並提供 ETL 分析與 BI 可視化功能。
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="#"><img src="https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI"></a>
+  <a href="#"><img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React"></a>
+  <a href="#"><img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Airflow-2.11-017CEE?style=flat-square&logo=apacheairflow&logoColor=white" alt="Airflow"></a>
+  <a href="#"><img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License"></a>
+</p>
 
-### 核心功能
+---
 
-- **即時留言收集**：使用 chat-downloader 收集直播聊天室留言
-- **統計數據追蹤**：透過 YouTube Data API 定期獲取觀看數、按讚數等統計
-- **數據分析**：清洗、斷詞、詞頻分析、文字雲生成
-- **AI 輕量分析**：摘要與情緒分析（可選）
-- **BI 可視化**：使用 Metabase 進行數據探索與視覺化
+## 🪽 What is Hermes?
 
-## 🏗️ 系統架構
+**Hermes** — named after the Greek god of messages and communication — is a complete data pipeline for collecting, processing, and visualizing YouTube live stream chat messages in real-time.
 
+The system captures chat messages from live streams, processes them through NLP pipelines (Chinese tokenization, emoji extraction), and uses **Gemini AI** to automatically discover new slang, memes, and typos from the community.
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📥 **Real-time Collection** | Capture live chat messages using `chat-downloader` with automatic retry & reconnection |
+| 🔄 **ETL Processing** | Chinese tokenization with Jieba, emoji extraction, word replacement pipelines |
+| 🤖 **AI-Powered Discovery** | Gemini API analyzes chat to discover new memes, slang, and typos automatically |
+| 📊 **Interactive Dashboard** | React-based dashboard with word cloud, playback timeline, and admin management |
+| 🛠️ **Admin Panel** | Approve/reject AI-discovered words, manage dictionaries, configure settings |
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TB
+    subgraph Collection["📥 Data Collection"]
+        YT[YouTube Live Stream]
+        Worker[hermes-worker]
+    end
+
+    subgraph Storage["💾 Storage"]
+        PG[(PostgreSQL)]
+    end
+
+    subgraph ETL["🔄 ETL Pipeline"]
+        AF[Airflow]
+        DAG1[process_chat_messages]
+        DAG2[discover_new_words]
+    end
+
+    subgraph Presentation["📊 Dashboard"]
+        BE[FastAPI Backend]
+        FE[React Frontend]
+    end
+
+    YT -->|chat-downloader| Worker
+    Worker -->|Insert Messages| PG
+    PG --> AF
+    AF --> DAG1
+    AF --> DAG2
+    DAG1 -->|Tokenized Data| PG
+    DAG2 -->|Gemini API| PG
+    PG --> BE
+    BE --> FE
 ```
-       ┌──────────────┐   chat messages    ┌───────────────┐
-YouTube│ chat-downloader├─────────────────►│   PostgreSQL   │
- Live   └───────┬──────┘                   │   (pg db)      │
- Stream         │       stats polling       └───────┬───────┘
-                ▼                               ▲
-       ┌──────────────┐  stats snapshots        │
-       │ YouTube Data │────────────────────────┘
-       │   API        │
-       └──────────────┘
 
-                ┌─────────────────────────────┐
-                │        ETL-Analysis         │
-                │ (清洗 / 斷詞 / 統計 / AI分析) │
-                └──────────┬──────────────────┘
-                           │ aggregated views
-                           ▼
-                      ┌─────────┐
-                      │ Metabase│
-                      │   (BI)  │
-                      └─────────┘
-```
+---
 
-### 服務組件
+## 🚀 Quick Start
 
-1. **Worker**：留言收集與統計數據 polling
-2. **PostgreSQL**：數據儲存
-3. **ETL-Analysis**：數據清洗、斷詞、分析
-4. **Metabase**：BI 工具與可視化
-
-## 🚀 快速開始
-
-### 系統需求
+### Prerequisites
 
 - Docker & Docker Compose
-- 最小資源：2 vCPU、4GB RAM、20GB SSD
+- YouTube Data API Key
+- Gemini API Key (for AI word discovery)
 
-### 環境設定
+### Setup
 
-1. 複製環境變量範例：
 ```bash
+# 1. Clone the repository
+git clone https://github.com/your-username/hermes.git
+cd hermes
+
+# 2. Configure environment variables
 cp .env.example .env
-```
+# Edit .env with your API keys (YouTube, Gemini, etc.)
 
-2. 編輯 `.env` 填入必要設定：
-   - YouTube Data API Key
-   - PostgreSQL 連線資訊
-   - 其他服務設定
-
-### 啟動服務
-
-```bash
+# 3. Start all services
 docker-compose up -d
+
+# 4. Configure Airflow (required for ETL)
+# Access Airflow at http://localhost:8080 (default: airflow/airflow)
+# See SETUP.md for detailed Airflow Variables configuration
+
+# 5. Access the dashboard
+open http://localhost:3000
 ```
 
-### 訪問服務
+> 📖 **First-time setup?** See [docs/SETUP.md](docs/SETUP.md) for detailed configuration including Airflow Variables and initial DAG triggers.
 
-- Metabase: http://localhost:3000
-- PostgreSQL: localhost:5432
+---
 
-## 📁 專案結構
+## 🔌 Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| **Dashboard Frontend** | `3000` | React-based visualization & admin UI |
+| **Dashboard Backend** | `8000` | FastAPI REST API (`/docs` for Swagger) |
+| **Airflow Webserver** | `8080` | ETL pipeline management |
+| **PostgreSQL** | `5432` | Primary data storage |
+| **pgAdmin** | `5050` | Database administration UI |
+
+---
+
+## 📁 Project Structure
 
 ```
 hermes/
-├── worker/           # 留言收集 Worker
-├── etl-analysis/     # ETL 分析服務
-├── database/         # 資料庫 schema 與 migrations
-├── docker-compose.yml
-├── .env.example
-└── README.md
+├── hermes_worker/       # Chat collection service (Python)
+│   ├── main.py          # Entry point: coordinates collection & stats polling
+│   ├── chat_collector.py# Real-time chat message collection
+│   └── youtube_api.py   # YouTube Data API integration
+│
+├── dashboard/
+│   ├── backend/         # FastAPI REST API
+│   │   ├── app/routers/ # API endpoints (chat, wordcloud, admin, etc.)
+│   │   └── app/models.py# SQLAlchemy models
+│   └── frontend/        # React + Vite + TailwindCSS
+│       └── src/features/# Feature-based components (playback, admin, etc.)
+│
+├── airflow/
+│   └── dags/
+│       ├── process_chat_messages.py  # ETL: tokenization, emoji extraction
+│       └── discover_new_words.py     # AI: Gemini-powered word discovery
+│
+├── database/
+│   └── init/            # SQL migrations (auto-executed on first start)
+│
+├── text_analysis/       # NLP dictionaries (stopwords, special words, etc.)
+│
+├── docker-compose.yml   # Full stack orchestration
+├── .env.example         # Environment variables template
+└── CLAUDE.md            # AI agent development guide
 ```
 
-## 🔧 設定說明
+---
 
-### Worker 設定
+## 🛠️ Development
 
-- `YOUTUBE_API_KEY`: YouTube Data API 金鑰
-- `POLL_INTERVAL`: 統計數據輪詢間隔（秒）
-- `ENABLE_BACKFILL`: 是否啟用歷史資料補抓
+For detailed development commands and guidelines, see [CLAUDE.md](./CLAUDE.md).
 
-### ETL 設定
+```bash
+# View logs
+docker-compose logs -f hermes-worker
 
-- `ETL_INTERVAL`: ETL 執行間隔
-- `ENABLE_AI_ANALYSIS`: 是否啟用 AI 分析
+# Rebuild a specific service
+docker-compose up -d --build dashboard-backend
 
-## 📊 資料流
+# Access database
+docker-compose exec postgres psql -U hermes -d hermes
+```
 
-1. Worker 收集留言 → `chat_messages` 表
-2. Worker 輪詢統計 → `stream_stats` 表
-3. ETL 分析處理 → `etl_tokens`, `etl_aggregates`, `etl_insights` 表
-4. Metabase 讀取彙總資料 → 視覺化呈現
+---
 
-## 🛠️ 開發指南
+## 📄 License
 
-請參考 [CLAUDE.md](./CLAUDE.md) 了解開發規範與常用命令。
-
-## 📝 License
-
-MIT
+MIT License - see [LICENSE](./LICENSE) for details.
