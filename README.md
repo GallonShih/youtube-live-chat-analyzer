@@ -26,6 +26,10 @@
 
 The system captures chat messages from live streams, processes them through NLP pipelines (Chinese tokenization, emoji extraction), and uses **Gemini AI** to automatically discover new slang, memes, and typos from the community.
 
+<p align="center">
+  <img src="docs/images/playtback-demo.gif" alt="Playback Demo" width="100%">
+</p>
+
 ---
 
 ## ✨ Features
@@ -37,6 +41,16 @@ The system captures chat messages from live streams, processes them through NLP 
 | 🤖 **AI-Powered Discovery** | Gemini API (`gemini-2.5-flash-lite`) analyzes chat to discover new memes, slang, and typos automatically |
 | 📊 **Interactive Dashboard** | React-based dashboard with word cloud, playback timeline, and admin management |
 | 🛠️ **Admin Panel** | Approve/reject AI-discovered words, manage dictionaries, configure settings |
+
+## 📸 Gallery
+
+| ⚡ Real-time Analytics | ☁️ Word Cloud |
+|:---:|:---:|
+| <img src="docs/images/dashboard_real-time-analytics.gif" width="400"/> | <img src="docs/images/dashboard_wordcloud-demo.gif" width="400"/> |
+
+| 🤣 Emoji Statistics | 🛠️ Admin Text Mining |
+|:---:|:---:|
+| <img src="docs/images/dashboard_emoji-statistic.png" width="400"/> | <img src="docs/images/admin_text-mining.png" width="400"/> |
 
 ---
 
