@@ -142,37 +142,42 @@ const CurrencyRateManager = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Currency Code *
+                            <label htmlFor="currency-code" className="block text-sm font-medium text-gray-700 mb-1">
+                                Currency Code <span className="text-red-500" aria-label="required">*</span>
                             </label>
                             <input
+                                id="currency-code"
                                 type="text"
                                 value={currency}
                                 onChange={(e) => setCurrency(e.target.value.toUpperCase())}
                                 placeholder="e.g., USD, JPY, HKD"
                                 maxLength="10"
+                                aria-required="true"
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 disabled={editingCurrency !== null}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Rate to TWD *
+                            <label htmlFor="rate-to-twd" className="block text-sm font-medium text-gray-700 mb-1">
+                                Rate to TWD <span className="text-red-500" aria-label="required">*</span>
                             </label>
                             <input
+                                id="rate-to-twd"
                                 type="number"
                                 step="0.0001"
                                 value={rateToTwd}
                                 onChange={(e) => setRateToTwd(e.target.value)}
                                 placeholder="e.g., 31.5"
+                                aria-required="true"
                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Notes
+                            <label htmlFor="currency-notes" className="block text-sm font-medium text-gray-700 mb-1">
+                                Notes <span className="text-gray-400 text-xs">(optional)</span>
                             </label>
                             <input
+                                id="currency-notes"
                                 type="text"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}

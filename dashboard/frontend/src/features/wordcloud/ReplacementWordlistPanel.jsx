@@ -189,45 +189,53 @@ const ReplacementWordlistPanel = ({
             <div className="space-y-3">
                 {/* Input Row */}
                 <div className="flex gap-2 items-center">
+                    <label htmlFor="replacement-source" className="sr-only">原始詞</label>
                     <input
+                        id="replacement-source"
                         type="text"
                         value={source}
                         onChange={(e) => onSourceChange(e.target.value)}
                         placeholder="原始詞 (如: 酥)"
-                        className="border rounded px-2 py-1 text-sm flex-1"
+                        className="border rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        aria-label="原始詞"
                     />
-                    <ArrowRightIcon className="w-4 h-4 text-gray-400" />
+                    <ArrowRightIcon className="w-4 h-4 text-gray-400" aria-hidden="true" />
+                    <label htmlFor="replacement-target" className="sr-only">取代為</label>
                     <input
+                        id="replacement-target"
                         type="text"
                         value={target}
                         onChange={(e) => onTargetChange(e.target.value)}
                         placeholder="取代為 (如: 方塊酥)"
-                        className="border rounded px-2 py-1 text-sm flex-1"
+                        className="border rounded px-2 py-1 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-purple-500"
                         onKeyPress={(e) => e.key === 'Enter' && handleAddRule()}
+                        aria-label="取代為"
                     />
                     <button
                         onClick={handleAddRule}
                         disabled={!source.trim() || !target.trim()}
-                        className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+                        className="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700 disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                        aria-label="新增取代規則"
                     >
                         +
                     </button>
                 </div>
 
                 {/* Rules List */}
-                <div className="bg-gray-50 rounded p-2 max-h-[150px] overflow-y-auto border border-gray-100 flex flex-wrap gap-2">
+                <div className="bg-gray-50 rounded p-2 max-h-[150px] overflow-y-auto border border-gray-100 flex flex-wrap gap-2" role="list" aria-label="取代規則清單">
                     {rules.length === 0 && <div className="text-gray-400 text-xs w-full text-center py-2">尚無取代規則</div>}
                     {rules.map((rule, idx) => (
-                        <div key={`${rule.source}-${idx}`} className="bg-white border rounded px-2 py-1 text-sm flex items-center gap-2 shadow-sm">
+                        <div key={`${rule.source}-${idx}`} className="bg-white border rounded px-2 py-1 text-sm flex items-center gap-2 shadow-sm" role="listitem">
                             <span className="text-gray-600">{rule.source}</span>
-                            <ArrowRightIcon className="w-3 h-3 text-purple-400" />
+                            <ArrowRightIcon className="w-3 h-3 text-purple-400" aria-hidden="true" />
                             <span className="font-medium text-gray-800">{rule.target}</span>
                             <button
                                 type="button"
                                 onClick={() => confirmRemoveRule(rule.source)}
-                                className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-0.5 ml-1 cursor-pointer transition-colors"
+                                className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded p-0.5 ml-1 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                                aria-label={`移除 ${rule.source} 到 ${rule.target} 的規則`}
                             >
-                                <XMarkIcon className="w-4 h-4" />
+                                <XMarkIcon className="w-4 h-4" aria-hidden="true" />
                             </button>
                         </div>
                     ))}
@@ -236,28 +244,40 @@ const ReplacementWordlistPanel = ({
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="create-list-title"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowCreateModal(false);
+                    }}
+                >
                     <div className="bg-white rounded-lg p-6 w-80 shadow-xl">
-                        <h3 className="text-lg font-bold mb-4">建立取代清單</h3>
+                        <h3 id="create-list-title" className="text-lg font-bold mb-4">建立取代清單</h3>
+                        <label htmlFor="new-list-name" className="sr-only">清單名稱</label>
                         <input
+                            id="new-list-name"
                             type="text"
                             value={newListName}
                             onChange={(e) => setNewListName(e.target.value)}
                             placeholder="清單名稱"
-                            className="w-full border p-2 mb-2 rounded"
+                            className="w-full border p-2 mb-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                             autoFocus
+                            aria-required="true"
+                            aria-describedby={createError ? "create-error" : undefined}
                         />
-                        {createError && <div className="text-red-500 text-sm mb-2">{createError}</div>}
+                        {createError && <div id="create-error" className="text-red-500 text-sm mb-2" role="alert">{createError}</div>}
                         <div className="flex justify-end gap-2 mt-4">
                             <button
                                 onClick={() => setShowCreateModal(false)}
-                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                             >
                                 取消
                             </button>
                             <button
                                 onClick={handleCreateNew}
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             >
                                 建立
                             </button>

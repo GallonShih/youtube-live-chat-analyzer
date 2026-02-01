@@ -92,34 +92,38 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
     };
 
     return (
-        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-4">
-            <h3 className="text-lg font-bold mb-4">新增替換詞彙</h3>
-            <form onSubmit={handleSubmit}>
+        <div className="bg-white border border-gray-300 rounded-lg p-6 mb-4" role="region" aria-labelledby="add-replace-word-title">
+            <h3 id="add-replace-word-title" className="text-lg font-bold mb-4">新增替換詞彙</h3>
+            <form onSubmit={handleSubmit} aria-label="新增替換詞彙表單">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-semibold mb-1">
-                            Source Word <span className="text-red-500">*</span>
+                        <label htmlFor="source-word-input" className="block text-sm font-semibold mb-1">
+                            Source Word <span className="text-red-500" aria-label="required">*</span>
                         </label>
                         <input
+                            id="source-word-input"
                             type="text"
                             value={sourceWord}
                             onChange={(e) => { setSourceWord(e.target.value); handleInputChange(); }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="輸入原始詞彙"
                             required
+                            aria-required="true"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-semibold mb-1">
-                            Target Word <span className="text-red-500">*</span>
+                        <label htmlFor="target-word-input" className="block text-sm font-semibold mb-1">
+                            Target Word <span className="text-red-500" aria-label="required">*</span>
                         </label>
                         <input
+                            id="target-word-input"
                             type="text"
                             value={targetWord}
                             onChange={(e) => { setTargetWord(e.target.value); handleInputChange(); }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="輸入替換詞彙"
                             required
+                            aria-required="true"
                         />
                     </div>
                 </div>
@@ -127,21 +131,22 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                     <button
                         type="button"
                         onClick={handleValidate}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded focus:outline-none"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
                         檢查
                     </button>
                     <button
                         type="submit"
                         disabled={!isValidated || isSubmitting}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-busy={isSubmitting}
                     >
                         {isSubmitting ? '新增中...' : '新增'}
                     </button>
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded focus:outline-none"
+                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                     >
                         取消
                     </button>

@@ -376,8 +376,24 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                                 </div>
                             </div>
                             <div className="flex gap-2 mb-2">
-                                <input type="text" value={newExcludeWord} onChange={(e) => setNewExcludeWord(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddExcludeWord()} className="border rounded px-2 py-1 flex-1 text-sm" placeholder="新增..." />
-                                <button onClick={handleAddExcludeWord} className="bg-red-500 text-white px-3 rounded text-sm">+</button>
+                                <label htmlFor="new-exclude-word" className="sr-only">新增排除詞彙</label>
+                                <input
+                                    id="new-exclude-word"
+                                    type="text"
+                                    value={newExcludeWord}
+                                    onChange={(e) => setNewExcludeWord(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleAddExcludeWord()}
+                                    className="border rounded px-2 py-1 flex-1 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                    placeholder="新增..."
+                                    aria-label="新增排除詞彙"
+                                />
+                                <button
+                                    onClick={handleAddExcludeWord}
+                                    className="bg-red-500 text-white px-3 rounded text-sm cursor-pointer hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                    aria-label="新增詞彙"
+                                >
+                                    +
+                                </button>
                             </div>
                             <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto">
                                 {excludeWords.map(w => (
@@ -386,9 +402,10 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                                         <button
                                             type="button"
                                             onClick={() => confirmRemoveWord(w)}
-                                            className="cursor-pointer hover:bg-red-200 rounded p-0.5 transition-colors"
+                                            className="cursor-pointer hover:bg-red-200 rounded p-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            aria-label={`移除 ${w}`}
                                         >
-                                            <XMarkIcon className="w-4 h-4" />
+                                            <XMarkIcon className="w-4 h-4" aria-hidden="true" />
                                         </button>
                                     </span>
                                 ))}
