@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowsRightLeftIcon, ArrowRightIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
 
 const ReplacementWordlistPanel = ({
@@ -100,7 +101,7 @@ const ReplacementWordlistPanel = ({
             {/* Header / Selector */}
             <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-700">🔀 取代規則</span>
+                    <span className="font-bold text-gray-700 flex items-center gap-1"><ArrowsRightLeftIcon className="w-4 h-4" /> 取代規則</span>
                     {currentListName && <span className="text-sm text-gray-600">({currentListName}{isModified ? '*' : ''})</span>}
                 </div>
 
@@ -110,7 +111,7 @@ const ReplacementWordlistPanel = ({
                         onChange={(e) => onSelect(e.target.value ? parseInt(e.target.value) : null)}
                         className="border rounded px-2 py-1 text-sm max-w-[150px]"
                     >
-                        <option value="">⛔️ 無</option>
+                        <option value="">-- 無 --</option>
                         {savedWordlists.map(w => (
                             <option key={w.id} value={w.id}>{w.name}</option>
                         ))}
@@ -161,7 +162,7 @@ const ReplacementWordlistPanel = ({
                         placeholder="原始詞 (如: 酥)"
                         className="border rounded px-2 py-1 text-sm flex-1"
                     />
-                    <span className="text-gray-400">➜</span>
+                    <ArrowRightIcon className="w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         value={target}
@@ -185,13 +186,13 @@ const ReplacementWordlistPanel = ({
                     {rules.map((rule, idx) => (
                         <div key={`${rule.source}-${idx}`} className="bg-white border rounded px-2 py-1 text-sm flex items-center gap-2 shadow-sm">
                             <span className="text-gray-600">{rule.source}</span>
-                            <span className="text-xs text-purple-400">➜</span>
+                            <ArrowRightIcon className="w-3 h-3 text-purple-400" />
                             <span className="font-medium text-gray-800">{rule.target}</span>
                             <button
                                 onClick={() => handleRemoveRule(rule.source)}
-                                className="text-red-400 hover:text-red-600 ml-1"
+                                className="text-red-400 hover:text-red-600 ml-1 cursor-pointer"
                             >
-                                ✕
+                                <XMarkIcon className="w-3 h-3" />
                             </button>
                         </div>
                     ))}

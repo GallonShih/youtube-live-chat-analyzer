@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import {
+    CurrencyDollarIcon,
+    ExclamationTriangleIcon,
+    TrophyIcon,
+} from '@heroicons/react/24/outline';
 import { fetchMoneySummary } from '../../api/stats';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -42,11 +47,15 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
 
     return (
         <div className="mt-8 space-y-4">
-            <h2 className="text-2xl font-bold text-gray-800">💰 Money Statistics</h2>
+            <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+                <CurrencyDollarIcon className="w-7 h-7" />
+                <span>Money Statistics</span>
+            </h2>
             {stats.unknown_currencies?.length > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-800">
-                        ⚠️ Some currencies don't have exchange rates set: <strong>{stats.unknown_currencies.join(', ')}</strong>
+                    <p className="text-sm text-yellow-800 flex items-start gap-2">
+                        <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <span>Some currencies don't have exchange rates set: <strong>{stats.unknown_currencies.join(', ')}</strong></span>
                         <br />
                         <a href="/admin" className="underline hover:text-yellow-900">Go to Admin Panel</a>
                     </p>
@@ -75,7 +84,10 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
                 </div>
 
                 <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">🏆 Top 5 Contributors</h3>
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800 mb-4">
+                        <TrophyIcon className="w-5 h-5" />
+                        <span>Top 5 Contributors</span>
+                    </h3>
                     {stats.top_authors?.length > 0 ? (
                         <div className="space-y-3">
                             {stats.top_authors.map((author, index) => {

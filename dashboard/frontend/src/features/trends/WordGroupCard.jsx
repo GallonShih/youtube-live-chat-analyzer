@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+    EyeIcon,
+    EyeSlashIcon,
+    PencilIcon,
+    TrashIcon,
+} from '@heroicons/react/24/outline';
 
 /**
  * Card component for managing a single word group
@@ -128,27 +134,27 @@ const WordGroupCard = ({
                         <>
                             <button
                                 onClick={() => onToggleVisibility?.(group.id)}
-                                className={`p-2 rounded-lg transition-colors ${isVisible
+                                className={`p-2 rounded-lg transition-colors cursor-pointer ${isVisible
                                         ? 'text-blue-600 hover:bg-blue-50'
                                         : 'text-gray-400 hover:bg-gray-100'
                                     }`}
                                 title={isVisible ? '隱藏圖表' : '顯示圖表'}
                             >
-                                {isVisible ? '👁️' : '👁️‍🗨️'}
+                                {isVisible ? <EyeIcon className="w-5 h-5" /> : <EyeSlashIcon className="w-5 h-5" />}
                             </button>
                             <button
                                 onClick={() => setIsEditing(true)}
-                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                                 title="編輯"
                             >
-                                ✏️
+                                <PencilIcon className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={handleDelete}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                 title="刪除"
                             >
-                                🗑️
+                                <TrashIcon className="w-5 h-5" />
                             </button>
                         </>
                     )}
@@ -244,7 +250,7 @@ const WordGroupCard = ({
                         disabled={isSaving}
                         className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                     >
-                        {isSaving ? '儲存中...' : '💾 儲存'}
+                        {isSaving ? '儲存中...' : '儲存'}
                     </button>
                     <button
                         onClick={handleCancel}

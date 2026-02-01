@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+    ChartBarIcon,
+    PlayIcon,
+    ArrowTrendingUpIcon,
+    Cog6ToothIcon,
+    CurrencyDollarIcon,
+    MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline';
 import ReplaceWordsReview from './ReplaceWordsReview';
 import SpecialWordsReview from './SpecialWordsReview';
 import CurrencyRateManager from './CurrencyRateManager';
@@ -13,32 +21,39 @@ const AdminPanel = () => {
         <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-4 md:mb-0">Hermes Admin Panel</h1>
+                    <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-800 mb-4 md:mb-0">
+                        <Cog6ToothIcon className="w-8 h-8" />
+                        <span>Hermes Admin Panel</span>
+                    </h1>
 
                     <div className="flex gap-3">
                         <Link
                             to="/"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📊 Dashboard
+                            <ChartBarIcon className="w-5 h-5" />
+                            <span>Dashboard</span>
                         </Link>
                         <Link
                             to="/playback"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ▶️ Playback
+                            <PlayIcon className="w-5 h-5" />
+                            <span>Playback</span>
                         </Link>
                         <Link
                             to="/trends"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📈 Trends
+                            <ArrowTrendingUpIcon className="w-5 h-5" />
+                            <span>Trends</span>
                         </Link>
                         <Link
                             to="/admin"
-                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ⚙️ Admin Panel
+                            <Cog6ToothIcon className="w-5 h-5" />
+                            <span>Admin Panel</span>
                         </Link>
                     </div>
                 </header>
@@ -64,31 +79,34 @@ const AdminPanel = () => {
                             Pending Special Words
                         </button>
                         <button
-                            className={`px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap ${activeTab === 'currency'
+                            className={`flex items-center gap-2 px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap cursor-pointer ${activeTab === 'currency'
                                 ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                             onClick={() => setActiveTab('currency')}
                         >
-                            Currency Rates 💱
+                            <CurrencyDollarIcon className="w-4 h-4" />
+                            <span>Currency Rates</span>
                         </button>
                         <button
-                            className={`px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap ${activeTab === 'settings'
+                            className={`flex items-center gap-2 px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap cursor-pointer ${activeTab === 'settings'
                                 ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                             onClick={() => setActiveTab('settings')}
                         >
-                            Settings ⚙️
+                            <Cog6ToothIcon className="w-4 h-4" />
+                            <span>Settings</span>
                         </button>
                         <button
-                            className={`px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap ${activeTab === 'textmining'
+                            className={`flex items-center gap-2 px-6 py-4 font-medium text-sm focus:outline-none whitespace-nowrap cursor-pointer ${activeTab === 'textmining'
                                 ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                                 }`}
                             onClick={() => setActiveTab('textmining')}
                         >
-                            Text Mining 🔍
+                            <MagnifyingGlassIcon className="w-4 h-4" />
+                            <span>Text Mining</span>
                         </button>
                     </div>
 

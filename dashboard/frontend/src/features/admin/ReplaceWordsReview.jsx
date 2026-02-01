@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TrashIcon } from '@heroicons/react/24/outline';
 import ConfirmModal from './ConfirmModal';
 import ValidationResultModal from './ValidationResultModal';
 import AddReplaceWordForm from './AddReplaceWordForm';
@@ -286,7 +287,8 @@ const ReplaceWordsReview = () => {
                         className="bg-red-800 text-white px-4 py-2 rounded hover:bg-red-900"
                         onClick={() => confirmAction('clear')}
                     >
-                        🗑️ Clear All
+                        <TrashIcon className="w-4 h-4 inline mr-1" />
+                        Clear All
                     </button>
                 </div>
                 <div>

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import { CloudIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 
 /**
  * Dynamic Word Cloud Component with Physics Engine
- * 
+ *
  * Features:
  * - Physics-based layout using d3-force
  * - Custom rectangular collision detection
@@ -293,7 +294,7 @@ function DynamicWordCloud({ words, wordLimit = 30 }) {
         return (
             <div className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center h-full w-full">
                 <div className="text-gray-400 text-center">
-                    <div className="text-4xl mb-2">☁️</div>
+                    <CloudIcon className="w-16 h-16 mx-auto mb-2" />
                     <div>載入資料後顯示動態文字雲</div>
                 </div>
             </div>
@@ -311,10 +312,10 @@ function DynamicWordCloud({ words, wordLimit = 30 }) {
             {/* Toggle Controls Button */}
             <button
                 onClick={() => setShowControls(!showControls)}
-                className="absolute top-4 right-4 bg-white/80 hover:bg-white p-2 rounded-lg shadow-sm backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+                className="absolute top-4 right-4 bg-white/80 hover:bg-white p-2 rounded-lg shadow-sm backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 z-10 cursor-pointer"
                 title="調整參數"
             >
-                ⚙️
+                <Cog6ToothIcon className="w-5 h-5 text-gray-600" />
             </button>
 
             {/* Controls Panel */}

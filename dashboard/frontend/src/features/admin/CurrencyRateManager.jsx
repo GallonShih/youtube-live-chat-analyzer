@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CurrencyDollarIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import API_BASE_URL from '../../api/client';
 
 const CurrencyRateManager = () => {
@@ -116,7 +117,10 @@ const CurrencyRateManager = () => {
 
     return (
         <div className="p-6 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800">Currency Rate Management 💱</h2>
+            <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+                <CurrencyDollarIcon className="w-7 h-7" />
+                <span>Currency Rate Management</span>
+            </h2>
 
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
@@ -199,8 +203,9 @@ const CurrencyRateManager = () => {
             {/* Unknown Currencies */}
             {unknownCurrencies.length > 0 && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-yellow-800 mb-4">
-                        ⚠️ Unknown Currencies ({unknownCurrencies.length})
+                    <h3 className="flex items-center gap-2 text-lg font-semibold text-yellow-800 mb-4">
+                        <ExclamationTriangleIcon className="w-5 h-5" />
+                        <span>Unknown Currencies ({unknownCurrencies.length})</span>
                     </h3>
                     <p className="text-sm text-yellow-700 mb-3">
                         These currencies appear in your messages but don't have exchange rates set yet.

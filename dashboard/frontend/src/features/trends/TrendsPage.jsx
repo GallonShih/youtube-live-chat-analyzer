@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import {
+    ChartBarIcon,
+    PlayIcon,
+    ArrowTrendingUpIcon,
+    Cog6ToothIcon,
+    MagnifyingGlassIcon,
+    XMarkIcon,
+    EyeIcon,
+} from '@heroicons/react/24/outline';
 import WordGroupCard from './WordGroupCard';
 import TrendChart from './TrendChart';
 import {
@@ -153,10 +162,8 @@ const TrendsPage = () => {
     };
 
     const handleClearFilter = () => {
-        setStartDate('');
-        setEndDate('');
-        // Trigger reload with default 24h
-        setTimeout(() => loadTrendData(), 0);
+        // Reset to default 24h range
+        setQuickRange(24);
     };
 
     // Quick time range setters
@@ -206,32 +213,39 @@ const TrendsPage = () => {
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 {/* Header with Navigation */}
                 <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                    <h1 className="text-3xl font-bold text-gray-800">📈 詞彙趨勢分析</h1>
+                    <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-800">
+                        <ArrowTrendingUpIcon className="w-8 h-8" />
+                        <span>詞彙趨勢分析</span>
+                    </h1>
 
                     <div className="flex gap-3">
                         <Link
                             to="/"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📊 Dashboard
+                            <ChartBarIcon className="w-5 h-5" />
+                            <span>Dashboard</span>
                         </Link>
                         <Link
                             to="/playback"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ▶️ Playback
+                            <PlayIcon className="w-5 h-5" />
+                            <span>Playback</span>
                         </Link>
                         <Link
                             to="/trends"
-                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📈 Trends
+                            <ArrowTrendingUpIcon className="w-5 h-5" />
+                            <span>Trends</span>
                         </Link>
                         <Link
                             to="/admin"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ⚙️ Admin Panel
+                            <Cog6ToothIcon className="w-5 h-5" />
+                            <span>Admin Panel</span>
                         </Link>
                     </div>
                 </header>
@@ -283,16 +297,18 @@ const TrendsPage = () => {
                         />
                         <button
                             onClick={handleFilter}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            🔍 篩選
+                            <MagnifyingGlassIcon className="w-4 h-4" />
+                            <span>篩選</span>
                         </button>
                         {(startDate || endDate) && (
                             <button
                                 onClick={handleClearFilter}
-                                className="text-red-600 hover:text-red-700 text-sm font-medium underline transition-colors"
+                                className="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm font-medium underline transition-colors cursor-pointer"
                             >
-                                ✕ 清除
+                                <XMarkIcon className="w-4 h-4" />
+                                <span>清除</span>
                             </button>
                         )}
                     </div>
@@ -389,9 +405,11 @@ const TrendsPage = () => {
 
                             {visibleGroups.size === 0 ? (
                                 <div className="text-center text-gray-500 py-16">
-                                    <p className="text-4xl mb-4">📊</p>
+                                    <ChartBarIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                                     <p>請選擇要顯示的詞彙組</p>
-                                    <p className="text-sm mt-2">在左側點擊 👁️ 圖示來顯示/隱藏圖表</p>
+                                    <p className="text-sm mt-2 flex items-center justify-center gap-1">
+                                        在左側點擊 <EyeIcon className="w-4 h-4" /> 圖示來顯示/隱藏圖表
+                                    </p>
                                 </div>
                             ) : (
                                 <>

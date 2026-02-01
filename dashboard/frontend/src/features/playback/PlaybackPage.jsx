@@ -4,6 +4,20 @@ import { Link } from 'react-router-dom';
 import { Responsive, useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import {
+    ChartBarIcon,
+    PlayIcon,
+    PauseIcon,
+    ArrowTrendingUpIcon,
+    Cog6ToothIcon,
+    CloudIcon,
+    ClockIcon,
+    ArrowPathIcon,
+    ExclamationTriangleIcon,
+    TrophyIcon,
+    CurrencyDollarIcon,
+    NoSymbolIcon,
+} from '@heroicons/react/24/outline';
 import { registerChartComponents, hourGridPlugin } from '../../utils/chartSetup';
 import DynamicWordCloud from '../../components/common/DynamicWordCloud';
 import BarChartRace from '../../components/common/BarChartRace';
@@ -334,18 +348,36 @@ function PlaybackPage() {
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-4 md:mb-0">▶️ Playback Mode</h1>
+                    <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-800 mb-4 md:mb-0">
+                        <PlayIcon className="w-8 h-8" />
+                        <span>Playback Mode</span>
+                    </h1>
                     <div className="flex gap-3">
-                        <Link to="/" className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg">📊 Dashboard</Link>
-                        <Link to="/playback" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg">▶️ Playback</Link>
-                        <Link to="/trends" className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg">📈 Trends</Link>
-                        <Link to="/admin" className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg">⚙️ Admin Panel</Link>
+                        <Link to="/" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                            <ChartBarIcon className="w-5 h-5" />
+                            <span>Dashboard</span>
+                        </Link>
+                        <Link to="/playback" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg cursor-pointer">
+                            <PlayIcon className="w-5 h-5" />
+                            <span>Playback</span>
+                        </Link>
+                        <Link to="/trends" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                            <ArrowTrendingUpIcon className="w-5 h-5" />
+                            <span>Trends</span>
+                        </Link>
+                        <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                            <Cog6ToothIcon className="w-5 h-5" />
+                            <span>Admin Panel</span>
+                        </Link>
                     </div>
                 </div>
 
                 {/* Configuration Panel */}
                 <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">🎬 回放設定</h2>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800 mb-4">
+                        <PlayIcon className="w-5 h-5" />
+                        <span>回放設定</span>
+                    </h2>
 
                     <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-12 md:col-span-6 lg:col-span-3">
@@ -390,7 +422,7 @@ function PlaybackPage() {
                                 disabled={isLoading}
                                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
                             >
-                                {isLoading ? '載入中...' : '📥 載入資料'}
+                                {isLoading ? '載入中...' : '載入資料'}
                             </button>
                         </div>
                     </div>
@@ -399,7 +431,7 @@ function PlaybackPage() {
                     <div className="mt-6 pt-4 border-t-2 border-dashed border-gray-200">
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                             <div className="flex items-center gap-2 mb-4">
-                                <span className="text-xl">☁️</span>
+                                <CloudIcon className="w-6 h-6 text-slate-600" />
                                 <h3 className="text-base font-bold text-slate-700">文字雲進階設定 (下列選項僅影響文字雲顯示)</h3>
                             </div>
                             <div className="grid grid-cols-12 gap-4">
@@ -431,7 +463,7 @@ function PlaybackPage() {
                                         onChange={(e) => setSelectedWordlistId(e.target.value ? parseInt(e.target.value) : null)}
                                         disabled={loadingExclusionWordlists}
                                     >
-                                        <option value="">⛔️ 不使用清單</option>
+                                        <option value="">不使用清單</option>
                                         {savedExclusionWordlists.map(wl => <option key={wl.id} value={wl.id}>{wl.name}</option>)}
                                     </select>
                                 </div>
@@ -443,7 +475,7 @@ function PlaybackPage() {
                                         onChange={(e) => setSelectedReplacementWordlistId(e.target.value ? parseInt(e.target.value) : null)}
                                         disabled={loadingReplacementWordlists}
                                     >
-                                        <option value="">🔀 不使用清單</option>
+                                        <option value="">不使用清單</option>
                                         {savedReplacementWordlists.map(wl => <option key={wl.id} value={wl.id}>{wl.name}</option>)}
                                     </select>
                                 </div>
@@ -454,7 +486,10 @@ function PlaybackPage() {
                         </div>
                     </div>
 
-                    {error && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">⚠️ {error}</div>}
+                    {error && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm flex items-center gap-2">
+                        <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                        <span>{error}</span>
+                    </div>}
                 </div>
 
                 {/* Content */}
@@ -463,12 +498,16 @@ function PlaybackPage() {
                         {/* Draggable Chart Blocks */}
                         <div className="mb-6" ref={gridContainerRef}>
                             <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-lg font-semibold text-gray-700">📊 視覺化區塊 <span className="text-sm font-normal text-gray-400">(可拖曳排列與縮放)</span></h2>
+                                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-700">
+                                    <ChartBarIcon className="w-5 h-5" />
+                                    <span>視覺化區塊 <span className="text-sm font-normal text-gray-400">(可拖曳排列與縮放)</span></span>
+                                </h2>
                                 <button
                                     onClick={resetLayout}
-                                    className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors cursor-pointer"
                                 >
-                                    🔄 重置佈局
+                                    <ArrowPathIcon className="w-4 h-4" />
+                                    <span>重置佈局</span>
                                 </button>
                             </div>
                             {gridMounted && (
@@ -488,7 +527,8 @@ function PlaybackPage() {
                                     <div key="controls" className="bg-white rounded-lg shadow-md overflow-hidden">
                                         <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
-                                            <h3 className="text-base font-bold text-gray-800">⏱️ 時間播放器</h3>
+                                            <ClockIcon className="w-5 h-5 text-gray-700" />
+                                            <h3 className="text-base font-bold text-gray-800">時間播放器</h3>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)] flex flex-col justify-center">
                                             <div className="flex flex-col items-center space-y-3">
@@ -499,9 +539,9 @@ function PlaybackPage() {
                                                 <div className="flex items-center gap-4 w-full max-w-2xl">
                                                     <button
                                                         onClick={togglePlayback}
-                                                        className={`w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-lg transition-all duration-200 ${isPlaying ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
+                                                        className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${isPlaying ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white'}`}
                                                     >
-                                                        {isPlaying ? '⏸' : '▶️'}
+                                                        {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
                                                     </button>
                                                     <div
                                                         className="flex-1"
@@ -531,7 +571,8 @@ function PlaybackPage() {
                                     <div key="stats" className="bg-white rounded-lg shadow-md overflow-hidden">
                                         <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
-                                            <h3 className="text-base font-bold text-gray-800">📈 即時統計</h3>
+                                            <ArrowTrendingUpIcon className="w-5 h-5 text-gray-700" />
+                                            <h3 className="text-base font-bold text-gray-800">即時統計</h3>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full">
@@ -544,11 +585,11 @@ function PlaybackPage() {
                                                     <div className="text-2xl font-bold text-green-900">{formatNumber(currentSnapshot?.hourly_messages)}</div>
                                                 </div>
                                                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200 flex flex-col justify-center">
-                                                    <div className="text-xs font-medium text-purple-700 mb-1">💰 SC 數量</div>
+                                                    <div className="text-xs font-medium text-purple-700 mb-1">SC 數量</div>
                                                     <div className="text-2xl font-bold text-purple-900">{formatNumber(currentSnapshot?.paid_message_count)}</div>
                                                 </div>
                                                 <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200 flex flex-col justify-center">
-                                                    <div className="text-xs font-medium text-amber-700 mb-1">💵 營收 (TWD)</div>
+                                                    <div className="text-xs font-medium text-amber-700 mb-1">營收 (TWD)</div>
                                                     <div className="text-2xl font-bold text-amber-900">{formatCurrency(currentSnapshot?.revenue_twd)}</div>
                                                 </div>
                                             </div>
@@ -559,7 +600,8 @@ function PlaybackPage() {
                                     <div key="chart" className="bg-white rounded-lg shadow-md overflow-hidden">
                                         <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
-                                            <h3 className="text-base font-bold text-gray-800">📈 觀看人數與留言趨勢</h3>
+                                            <ArrowTrendingUpIcon className="w-5 h-5 text-gray-700" />
+                                            <h3 className="text-base font-bold text-gray-800">觀看人數與留言趨勢</h3>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
                                             <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin, currentPositionPlugin]} />
@@ -570,7 +612,8 @@ function PlaybackPage() {
                                     <div key="wordcloud" className="bg-white rounded-lg shadow-md overflow-visible">
                                         <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
-                                            <h3 className="text-base font-bold text-gray-800">☁️ 動態文字雲</h3>
+                                            <CloudIcon className="w-5 h-5 text-gray-700" />
+                                            <h3 className="text-base font-bold text-gray-800">動態文字雲</h3>
                                             <span className="ml-auto text-xs text-gray-400">
                                                 {currentSnapshot
                                                     ? (() => {
@@ -589,8 +632,9 @@ function PlaybackPage() {
                                                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
                                                 </div>
                                             ) : wordcloudError ? (
-                                                <div className="h-full flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
-                                                    ⚠️ {wordcloudError}
+                                                <div className="h-full flex items-center justify-center gap-2 bg-red-50 rounded-2xl border border-red-200 text-red-600">
+                                                    <ExclamationTriangleIcon className="w-5 h-5" />
+                                                    <span>{wordcloudError}</span>
                                                 </div>
                                             ) : (
                                                 <DynamicWordCloud
@@ -605,7 +649,8 @@ function PlaybackPage() {
                                     <div key="barrace" className="bg-white rounded-lg shadow-md overflow-hidden">
                                         <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
-                                            <h3 className="text-base font-bold text-gray-800">🏆 熱門詞彙排行</h3>
+                                            <TrophyIcon className="w-5 h-5 text-gray-700" />
+                                            <h3 className="text-base font-bold text-gray-800">熱門詞彙排行</h3>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
                                             {wordcloudLoading && !wordcloudSnapshots.length ? (
@@ -613,8 +658,9 @@ function PlaybackPage() {
                                                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500"></div>
                                                 </div>
                                             ) : wordcloudError ? (
-                                                <div className="h-full flex items-center justify-center bg-red-50 rounded-2xl border border-red-200 text-red-600">
-                                                    ⚠️ {wordcloudError}
+                                                <div className="h-full flex items-center justify-center gap-2 bg-red-50 rounded-2xl border border-red-200 text-red-600">
+                                                    <ExclamationTriangleIcon className="w-5 h-5" />
+                                                    <span>{wordcloudError}</span>
                                                 </div>
                                             ) : (
                                                 <BarChartRace

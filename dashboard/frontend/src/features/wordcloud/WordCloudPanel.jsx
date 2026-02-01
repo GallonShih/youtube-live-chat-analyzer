@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import WordCloud from 'react-d3-cloud';
+import {
+    CloudIcon,
+    ArrowPathIcon,
+    ChartBarIcon,
+    XMarkIcon,
+    NoSymbolIcon,
+    ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline';
 import { useWordFrequency } from '../../hooks/useWordFrequency';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
@@ -236,10 +244,19 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
             )}
 
             <div className="flex flex-wrap justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-800">☁️ 文字雲</h2>
+                <h2 className="flex items-center gap-2 text-xl font-bold text-gray-800">
+                    <CloudIcon className="w-6 h-6" />
+                    <span>文字雲</span>
+                </h2>
                 <div className="flex gap-2">
-                    <button onClick={() => setSeed(Math.floor(Math.random() * 1000000))} className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700">🔄 重繪</button>
-                    <button onClick={() => getWordFrequency({ startTime, endTime, excludeWords, replacementWordlistId: selectedReplacementWordlistId })} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">🔃 重新載入</button>
+                    <button onClick={() => setSeed(Math.floor(Math.random() * 1000000))} className="flex items-center gap-1 bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 cursor-pointer">
+                        <ArrowPathIcon className="w-4 h-4" />
+                        <span>重繪</span>
+                    </button>
+                    <button onClick={() => getWordFrequency({ startTime, endTime, excludeWords, replacementWordlistId: selectedReplacementWordlistId })} className="flex items-center gap-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 cursor-pointer">
+                        <ArrowPathIcon className="w-4 h-4" />
+                        <span>重新載入</span>
+                    </button>
                 </div>
             </div>
 
@@ -253,13 +270,18 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                     )}
                 </div>
                 <div className="lg:col-span-1 border border-gray-200 rounded-lg bg-white p-3 max-h-[400px] overflow-y-auto">
-                    <div className="text-sm font-semibold mb-2">📊 詞頻排行</div>
+                    <div className="flex items-center gap-1 text-sm font-semibold mb-2">
+                        <ChartBarIcon className="w-4 h-4" />
+                        <span>詞頻排行</span>
+                    </div>
                     {displayWords.slice(0, 50).map((w, i) => (
                         <div key={w.text} className="flex justify-between text-sm hover:bg-gray-50 px-1 py-0.5 group">
                             <span style={{ color: fill(w) }}>{i + 1}. {w.text}</span>
                             <div className="flex items-center gap-1">
                                 <span className="text-xs text-gray-500">{w.value}</span>
-                                <button onClick={() => !excludeWords.includes(w.text) && setExcludeWords([...excludeWords, w.text])} className="opacity-0 group-hover:opacity-100 text-red-500" title="排除此詞">✕</button>
+                                <button onClick={() => !excludeWords.includes(w.text) && setExcludeWords([...excludeWords, w.text])} className="opacity-0 group-hover:opacity-100 text-red-500 cursor-pointer" title="排除此詞">
+                                    <XMarkIcon className="w-3 h-3" />
+                                </button>
                                 <button onClick={() => handleSetReplacementSource(w.text)} className="opacity-0 group-hover:opacity-100 text-blue-500 ml-1" title="設為取代來源">S</button>
                                 <button onClick={() => handleSetReplacementTarget(w.text)} className="opacity-0 group-hover:opacity-100 text-green-500 ml-1" title="設為取代目標">T</button>
                             </div>
@@ -282,16 +304,18 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                     {/* Config Tabs */}
                     <div className="flex gap-2 border-b mb-3">
                         <button
-                            className={`px-3 py-1 text-sm ${configTab === 'exclusion' ? 'border-b-2 border-blue-500 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex items-center gap-1 px-3 py-1 text-sm cursor-pointer ${configTab === 'exclusion' ? 'border-b-2 border-blue-500 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
                             onClick={() => setConfigTab('exclusion')}
                         >
-                            ⛔️ 排除詞彙
+                            <NoSymbolIcon className="w-4 h-4" />
+                            <span>排除詞彙</span>
                         </button>
                         <button
-                            className={`px-3 py-1 text-sm ${configTab === 'replacement' ? 'border-b-2 border-purple-500 text-purple-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex items-center gap-1 px-3 py-1 text-sm cursor-pointer ${configTab === 'replacement' ? 'border-b-2 border-purple-500 text-purple-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
                             onClick={() => setConfigTab('replacement')}
                         >
-                            🔀 取代規則
+                            <ArrowsRightLeftIcon className="w-4 h-4" />
+                            <span>取代規則</span>
                         </button>
                     </div>
 
@@ -300,8 +324,8 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                             <div className="flex justify-between mb-2 text-sm">
                                 <span>排除詞彙 {currentWordlistName && `(${currentWordlistName}${isModified ? '*' : ''})`}</span>
                                 <div className="flex gap-1">
-                                    <select value={selectedWordlistId || ''} onChange={(e) => handleLoadWordlist(e.target.value ? parseInt(e.target.value) : null)} className="border rounded px-1 text-sm max-w-[120px]">
-                                        <option value="">⛔️ 無</option>
+                                    <select value={selectedWordlistId || ''} onChange={(e) => handleLoadWordlist(e.target.value ? parseInt(e.target.value) : null)} className="border rounded px-1 text-sm max-w-[120px] cursor-pointer">
+                                        <option value="">無</option>
                                         {savedWordlists.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                                     </select>
                                     {selectedWordlistId && (
@@ -323,7 +347,12 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                             </div>
                             <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto">
                                 {excludeWords.map(w => (
-                                    <span key={w} className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center gap-1">{w} <button onClick={() => handleRemoveExcludeWord(w)} className="font-bold">✕</button></span>
+                                    <span key={w} className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm flex items-center gap-1">
+                                        {w}
+                                        <button onClick={() => handleRemoveExcludeWord(w)} className="cursor-pointer">
+                                            <XMarkIcon className="w-3 h-3" />
+                                        </button>
+                                    </span>
                                 ))}
                             </div>
                         </>

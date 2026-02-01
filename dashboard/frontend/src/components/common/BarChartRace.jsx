@@ -1,12 +1,13 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import { TrophyIcon } from '@heroicons/react/24/outline';
 
 /**
  * Bar Chart Race Component
- * 
+ *
  * Displays a ranked bar chart that animates smoothly when rankings change.
  * Uses CSS transitions for smooth position swapping animations.
  * Auto-resizes to fit container.
- * 
+ *
  * @param {Array} words - Array of { word: string, size: number }
  * @param {number} barLimit - Maximum number of bars to display (default: 10)
  */
@@ -122,7 +123,7 @@ function BarChartRace({ words = [], barLimit = 10 }) {
                 className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center h-full w-full"
             >
                 <div className="text-gray-400 text-center">
-                    <div className="text-4xl mb-2">🏆</div>
+                    <TrophyIcon className="w-16 h-16 mx-auto mb-2" />
                     <div>載入資料後顯示排行榜</div>
                 </div>
             </div>

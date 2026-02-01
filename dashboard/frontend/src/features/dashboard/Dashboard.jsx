@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Link } from 'react-router-dom';
+import {
+    ChartBarIcon,
+    PlayIcon,
+    ArrowTrendingUpIcon,
+    Cog6ToothIcon,
+    MagnifyingGlassIcon,
+    XMarkIcon,
+} from '@heroicons/react/24/outline';
 import { registerChartComponents, hourGridPlugin } from '../../utils/chartSetup';
 import { fetchViewersStats, fetchCommentsStats } from '../../api/stats';
 import { formatLocalHour } from '../../utils/formatters';
@@ -312,27 +320,31 @@ function Dashboard() {
                     <div className="flex gap-3">
                         <Link
                             to="/"
-                            className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📊 Dashboard
+                            <ChartBarIcon className="w-5 h-5" />
+                            <span>Dashboard</span>
                         </Link>
                         <Link
                             to="/playback"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ▶️ Playback
+                            <PlayIcon className="w-5 h-5" />
+                            <span>Playback</span>
                         </Link>
                         <Link
                             to="/trends"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            📈 Trends
+                            <ArrowTrendingUpIcon className="w-5 h-5" />
+                            <span>Trends</span>
                         </Link>
                         <Link
                             to="/admin"
-                            className="px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            ⚙️ Admin Panel
+                            <Cog6ToothIcon className="w-5 h-5" />
+                            <span>Admin Panel</span>
                         </Link>
                     </div>
                 </div>
@@ -373,9 +385,10 @@ function Dashboard() {
                         </button>
                         <button
                             onClick={handleFilter}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
+                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg cursor-pointer"
                         >
-                            🔍 篩選
+                            <MagnifyingGlassIcon className="w-4 h-4" />
+                            <span>篩選</span>
                         </button>
                         {(startDate || endDate) && (
                             <button
@@ -393,9 +406,10 @@ function Dashboard() {
                                         max: now.getTime(),
                                     });
                                 }}
-                                className="text-red-600 hover:text-red-700 text-sm font-medium underline transition-colors"
+                                className="flex items-center gap-1 text-red-600 hover:text-red-700 text-sm font-medium underline transition-colors cursor-pointer"
                             >
-                                ✕ 清除
+                                <XMarkIcon className="w-4 h-4" />
+                                <span>清除</span>
                             </button>
                         )}
                     </div>

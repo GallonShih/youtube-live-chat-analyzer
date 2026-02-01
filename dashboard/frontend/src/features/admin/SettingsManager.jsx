@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import API_BASE_URL from '../../api/client';
 
 const SettingsManager = () => {
@@ -92,7 +93,10 @@ const SettingsManager = () => {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-800">⚙️ 系統設定</h2>
+                <h2 className="flex items-center gap-2 text-xl font-semibold text-gray-800">
+                    <Cog6ToothIcon className="w-6 h-6" />
+                    <span>系統設定</span>
+                </h2>
             </div>
 
             {message && (
@@ -142,7 +146,7 @@ const SettingsManager = () => {
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 }`}
                         >
-                            {saving ? '儲存中...' : '💾 儲存設定'}
+                            {saving ? '儲存中...' : '儲存設定'}
                         </button>
                     </div>
                 </div>

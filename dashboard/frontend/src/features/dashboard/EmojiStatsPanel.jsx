@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FaceSmileIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useEmojiStats } from '../../hooks/useEmojiStats';
 
 const EmojiRow = ({ emoji }) => {
@@ -103,8 +104,16 @@ const EmojiStatsPanel = ({ startTime, endTime, hasTimeFilter = false }) => {
     return (
         <div className="mt-8 bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-800">😀 表情統計</h2>
-                {isRefreshing && <div className="text-sm text-blue-600 animate-pulse">🔄 更新中...</div>}
+                <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+                    <FaceSmileIcon className="w-7 h-7" />
+                    <span>表情統計</span>
+                </h2>
+                {isRefreshing && (
+                    <div className="flex items-center gap-1 text-sm text-blue-600 animate-pulse">
+                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                        <span>更新中...</span>
+                    </div>
+                )}
             </div>
 
             {/* Filter */}

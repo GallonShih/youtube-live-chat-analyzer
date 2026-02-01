@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import {
+    MagnifyingGlassIcon,
+    ExclamationTriangleIcon,
+    ArrowRightIcon,
+    ArrowLeftIcon,
+} from '@heroicons/react/24/outline';
 import DateTimeHourSelector from '../../components/common/DateTimeHourSelector';
 import { formatLocalHour } from '../../utils/formatters';
 import API_BASE_URL from '../../api/client';
@@ -73,13 +79,14 @@ const TextMining = () => {
     };
 
     const renderExtensionResults = (data, direction) => {
-        const icon = direction === 'forward' ? '➡️' : '⬅️';
+        const IconComponent = direction === 'forward' ? ArrowRightIcon : ArrowLeftIcon;
         const label = direction === 'forward' ? '向後延伸' : '向前延伸';
 
         return (
             <div className="mb-4">
                 <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                    <span>{icon}</span> {label}
+                    <IconComponent className="w-4 h-4" />
+                    <span>{label}</span>
                 </h4>
                 <div className="space-y-2">
                     {[1, 2, 3, 4, 5].map(length => {
@@ -125,7 +132,10 @@ const TextMining = () => {
 
     return (
         <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-4">🔍 文字探勘 Text Mining</h2>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-gray-800 mb-4">
+                <MagnifyingGlassIcon className="w-6 h-6" />
+                <span>文字探勘 Text Mining</span>
+            </h2>
             <p className="text-sm text-gray-600 mb-6">
                 輸入目標詞，分析該詞在訊息中前後延伸 1~5 個字的高頻組合。
             </p>
@@ -165,7 +175,7 @@ const TextMining = () => {
                             disabled={isLoading}
                             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all duration-200 hover:shadow-lg"
                         >
-                            {isLoading ? '分析中...' : '🔍 開始分析'}
+                            {isLoading ? '分析中...' : '開始分析'}
                         </button>
                     </div>
                 </div>
@@ -173,8 +183,9 @@ const TextMining = () => {
 
             {/* Error Display */}
             {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-                    ⚠️ {error}
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm flex items-center gap-2">
+                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                    <span>{error}</span>
                 </div>
             )}
 
@@ -210,7 +221,7 @@ const TextMining = () => {
             {/* Empty State */}
             {!results && !isLoading && !error && (
                 <div className="text-center py-12 text-gray-500">
-                    <div className="text-4xl mb-3">🔍</div>
+                    <MagnifyingGlassIcon className="w-16 h-16 mx-auto mb-3 text-gray-300" />
                     <p>請設定時間範圍和目標詞，然後點擊「開始分析」</p>
                 </div>
             )}

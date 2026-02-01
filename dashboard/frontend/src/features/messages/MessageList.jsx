@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -261,7 +262,12 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
         <div className="mt-8 bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold text-gray-800">訊息列表</h2>
-                {isRefreshing && <div className="text-sm text-blue-600 animate-pulse">🔄 更新中...</div>}
+                {isRefreshing && (
+                    <div className="flex items-center gap-1 text-sm text-blue-600 animate-pulse">
+                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                        <span>更新中...</span>
+                    </div>
+                )}
             </div>
 
             <div className="mb-4 p-4 bg-gray-50 rounded-lg space-y-3">
