@@ -17,6 +17,7 @@ import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import { formatMessageTime } from '../../utils/formatters';
+import AuthorStatsPanel from './AuthorStatsPanel';
 
 ChartJS.register(
     CategoryScale,
@@ -366,6 +367,16 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false }) => {
                             <Line data={chartData} options={chartOptions} />}
                 </div>
             </div>
+
+            {/* Top Authors Bar Chart */}
+            <AuthorStatsPanel
+                startTime={startTime}
+                endTime={endTime}
+                authorFilter={authorFilter}
+                messageFilter={messageFilter}
+                paidMessageFilter={paidMessageFilter}
+                hasTimeFilter={hasTimeFilter}
+            />
         </div>
     );
 };

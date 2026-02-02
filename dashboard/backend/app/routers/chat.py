@@ -147,3 +147,80 @@ def get_message_stats(
         logger.error(f"Error fetching message stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/top-authors")
+def get_top_authors(
+    start_time: datetime = None,
+    end_time: datetime = None,
+    author_filter: str = None,
+    message_filter: str = None,
+    paid_message_filter: str = 'all',
+    db: Session = Depends(get_db)
+):
+    """Get top 5 authors by message count with tie handling.
+    
+    Returns authors sorted by message count descending. If there are ties
+    at the 5th position, all authors with that count are included.
+    """
+    try:
+        video_id = get_current_video_id(db)
+        
+        # Default to last 12 hours if no time range specified
+        effective_start = start_time
+        if not effective_start and not end_time:
+            effective_start = datetime.utcnow() - timedelta(hours=12)
+        
+        # Group by author and count messages
+        query = db.query(
+            ChatMessage.author_name,
+            func.count().label('count')
+        )
+        
+        if video_id:
+            query = query.filter(ChatMessage.live_stream_id == video_id)
+        
+        if effective_start:
+            query = query.filter(ChatMessage.published_at >= effective_start)
+        if end_time:
+            query = query.filter(ChatMessage.published_at <= end_time)
+        
+        if author_filter:
+            query = query.filter(ChatMessage.author_name.ilike(f'%{author_filter}%'))
+        
+        if message_filter:
+            query = query.filter(ChatMessage.message.ilike(f'%{message_filter}%'))
+        
+        if paid_message_filter == 'paid_only':
+            query = query.filter(ChatMessage.message_type == 'paid_message')
+        elif paid_message_filter == 'non_paid_only':
+            query = query.filter(ChatMessage.message_type != 'paid_message')
+        
+        # Group and order by count descending
+        author_counts = query.group_by(
+            ChatMessage.author_name
+        ).order_by(
+            func.count().desc()
+        ).all()
+        
+        if not author_counts:
+            return []
+        
+        # Convert to list of dicts
+        sorted_authors = [
+            {"author": row.author_name or "Unknown", "count": row.count}
+            for row in author_counts
+        ]
+        
+        # Handle ties: include all authors with count >= 5th place count
+        if len(sorted_authors) > 5:
+            fifth_count = sorted_authors[4]['count']
+            top_authors = [a for a in sorted_authors if a['count'] >= fifth_count]
+        else:
+            top_authors = sorted_authors
+        
+        return top_authors
+        
+    except Exception as e:
+        logger.error(f"Error fetching top authors: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
