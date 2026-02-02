@@ -75,7 +75,7 @@ The system captures chat messages from live streams, processes them through NLP 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/hermes.git
+git clone https://github.com/GallonShih/hermes.git
 cd hermes
 
 # 2. Configure environment variables

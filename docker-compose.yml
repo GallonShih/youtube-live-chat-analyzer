@@ -71,6 +71,7 @@ services:
 
   hermes-worker:
     # To rebuild: docker build -t hermes-worker:v1.0.1 ./hermes_worker
+    build: ./hermes_worker
     image: hermes-worker:v1.0.1
     container_name: hermes-worker
     env_file:
@@ -289,28 +290,9 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-  # Metabase BI 工具 - 未來會加入
-  # metabase:
-  #   image: metabase/metabase:latest
-  #   container_name: hermes-metabase
-  #   environment:
-  #     MB_DB_TYPE: postgres
-  #     MB_DB_DBNAME: ${METABASE_DB:-hermes_metabase}
-  #     MB_DB_PORT: 5432
-  #     MB_DB_USER: ${POSTGRES_USER:-hermes}
-  #     MB_DB_PASS: ${POSTGRES_PASSWORD:-hermes}
-  #     MB_DB_HOST: postgres
-  #   ports:
-  #     - "${METABASE_PORT:-3000}:3000"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   networks:
-  #     - hermes-network
-  #   restart: unless-stopped
-
   dashboard-backend:
     build: ./dashboard/backend
+    image: hermes-dashboard-backend:v1.0.1
     container_name: hermes-dashboard-backend
     ports:
       - "8000:8000"
@@ -328,6 +310,7 @@ services:
 
   dashboard-frontend:
     build: ./dashboard/frontend
+    image: hermes-dashboard-frontend:v1.0.1
     container_name: hermes-dashboard-frontend
     env_file:
       - .env
