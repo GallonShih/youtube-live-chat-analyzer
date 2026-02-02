@@ -85,9 +85,7 @@ jobs:
           context: ./dashboard/backend
           file: ./dashboard/backend/Dockerfile
           push: false
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:latest
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:${{ github.sha }}
+          tags: ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:latest,${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -108,9 +106,7 @@ jobs:
           context: ./dashboard/frontend
           file: ./dashboard/frontend/Dockerfile
           push: false
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:latest
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:${{ github.sha }}
+          tags: ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:latest,${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -131,9 +127,7 @@ jobs:
           context: ./hermes_worker
           file: ./hermes_worker/Dockerfile
           push: false
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:latest
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:${{ github.sha }}
+          tags: ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:latest,${{ env.DOCKERHUB_USERNAME }}/hermes-worker:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -161,9 +155,9 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           if [ -z "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            echo "tags=latest,${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "TAGS=latest,${{ github.sha }}" >> $GITHUB_ENV
           else
-            echo "tags=latest,$VERSION,${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "TAGS=latest,$VERSION,${{ github.sha }}" >> $GITHUB_ENV
           fi
       
       - name: Build and push backend
@@ -173,7 +167,9 @@ jobs:
           file: ./dashboard/backend/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:${{ steps.tags.outputs.tags }}
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:latest
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:${{ github.sha }}
+            ${{ github.event.inputs.version != '' && github.event.inputs.version != 'latest' && format('{0}/hermes-dashboard-backend:{1}', env.DOCKERHUB_USERNAME, github.event.inputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -184,7 +180,9 @@ jobs:
           file: ./dashboard/frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:${{ steps.tags.outputs.tags }}
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:latest
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:${{ github.sha }}
+            ${{ github.event.inputs.version != '' && github.event.inputs.version != 'latest' && format('{0}/hermes-dashboard-frontend:{1}', env.DOCKERHUB_USERNAME, github.event.inputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -195,24 +193,10 @@ jobs:
           file: ./hermes_worker/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:${{ steps.tags.outputs.tags }}
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:latest
+            ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:${{ github.sha }}
+            ${{ github.event.inputs.version != '' && github.event.inputs.version != 'latest' && format('{0}/hermes-worker:{1}', env.DOCKERHUB_USERNAME, github.event.inputs.version) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
-      - name: Deployment summary
-        run: |
-          echo "## 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images pushed to DockerHub:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:${{ steps.tags.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:${{ steps.tags.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.DOCKERHUB_USERNAME }}/hermes-worker:${{ steps.tags.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull commands:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-backend:latest" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.DOCKERHUB_USERNAME }}/hermes-dashboard-frontend:latest" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.DOCKERHUB_USERNAME }}/hermes-worker:latest" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+
