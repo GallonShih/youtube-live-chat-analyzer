@@ -490,13 +490,32 @@ def save_discoveries(**context):
 
     # 儲存替換詞彙
     for item in filtered_replace:
+        # 計算近 7 天該 source_word 的實際出現次數（在當前直播）
+        count_sql = """
+            SELECT COUNT(*) 
+            FROM chat_messages 
+            WHERE message LIKE %s
+            AND published_at > NOW() - INTERVAL '7 days'
+            AND live_stream_id = (
+                SELECT live_stream_id
+                FROM chat_messages
+                ORDER BY published_at DESC
+                LIMIT 1
+            )
+        """
+        like_pattern = f"%{item['source']}%"
+        result = pg_hook.get_first(count_sql, parameters=(like_pattern,))
+        occurrence_count_7d = result[0] if result else 0
+        
+        print(f"Replace word '{item['source']}' → '{item['target']}': {occurrence_count_7d} occurrences in last 7 days")
+        
         upsert_sql = """
             INSERT INTO pending_replace_words
                 (source_word, target_word, confidence_score, example_messages, occurrence_count)
-            VALUES (%s, %s, %s, %s, 1)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (source_word, target_word)
             DO UPDATE SET
-                occurrence_count = pending_replace_words.occurrence_count + 1,
+                occurrence_count = EXCLUDED.occurrence_count,
                 example_messages = ARRAY(
                     SELECT DISTINCT unnest(
                         pending_replace_words.example_messages || EXCLUDED.example_messages
@@ -511,7 +530,8 @@ def save_discoveries(**context):
                 item['source'],
                 item['target'],
                 item.get('confidence', 0.8),
-                item.get('examples', [])[:5]
+                item.get('examples', [])[:5],
+                occurrence_count_7d
             )
         )
         saved_count += 1
@@ -533,15 +553,26 @@ def save_discoveries(**context):
         # 找出該詞及其所有來源（同義詞/變體）
         synonyms = [word] + target_to_sources.get(word, [])
         
-        # 計算歷史出現次數
+        # 計算近 7 天的出現次數（在當前直播，包含所有同義詞/變體）
         # 使用 LIKE ANY (ARRAY['%word1%', '%word2%', ...]) 來一次查詢多個關鍵字
-        count_sql = "SELECT COUNT(*) FROM chat_messages WHERE message LIKE ANY(%s)"
+        count_sql = """
+            SELECT COUNT(*) 
+            FROM chat_messages 
+            WHERE message LIKE ANY(%s)
+            AND published_at > NOW() - INTERVAL '7 days'
+            AND live_stream_id = (
+                SELECT live_stream_id
+                FROM chat_messages
+                ORDER BY published_at DESC
+                LIMIT 1
+            )
+        """
         like_patterns = [f"%{s}%" for s in synonyms]
         
         result = pg_hook.get_first(count_sql, parameters=(like_patterns,))
-        historical_count = result[0] if result else 0
+        occurrence_count_7d = result[0] if result else 0
         
-        print(f"Calculated historical count for '{word}' (synonyms: {synonyms}): {historical_count}")
+        print(f"Special word '{word}' (synonyms: {synonyms}): {occurrence_count_7d} occurrences in last 7 days")
 
         upsert_sql = """
             INSERT INTO pending_special_words
@@ -565,7 +596,7 @@ def save_discoveries(**context):
                 item.get('type', 'unknown'),
                 item.get('confidence', 0.8),
                 item.get('examples', [])[:5],
-                historical_count
+                occurrence_count_7d
             )
         )
         saved_count += 1
