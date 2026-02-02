@@ -313,37 +313,37 @@ function Dashboard() {
     }), [timeAxisConfig, commentData, viewData, endDate, barFlash]);
 
     return (
-        <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
+        <div className="min-h-screen font-sans text-gray-900">
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 {/* Header with Title and Navigation */}
-                <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-4 md:mb-0">Hermes 監控儀表板</h1>
+                <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-white mb-4 md:mb-0 drop-shadow-lg">Hermes 監控儀表板</h1>
 
                     <div className="flex gap-3">
                         <Link
                             to="/"
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-200 hover:shadow-lg cursor-pointer"
+                            className="flex items-center gap-2 px-4 py-2 bg-white/90 text-indigo-700 font-semibold rounded-xl shadow-lg hover:bg-white hover:shadow-xl transition-all duration-200 cursor-pointer backdrop-blur-sm border border-white/50"
                         >
                             <ChartBarIcon className="w-5 h-5" />
                             <span>Dashboard</span>
                         </Link>
                         <Link
                             to="/playback"
-                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
+                            className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer"
                         >
                             <PlayIcon className="w-5 h-5" />
                             <span>Playback</span>
                         </Link>
                         <Link
                             to="/trends"
-                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
+                            className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer"
                         >
                             <ArrowTrendingUpIcon className="w-5 h-5" />
                             <span>Trends</span>
                         </Link>
                         <Link
                             to="/admin"
-                            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-all duration-200 hover:shadow-lg cursor-pointer"
+                            className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer"
                         >
                             <Cog6ToothIcon className="w-5 h-5" />
                             <span>Admin Panel</span>
@@ -352,7 +352,7 @@ function Dashboard() {
                 </div>
 
                 {/* Time Filter Section */}
-                <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+                <div className="glass-card p-4 rounded-2xl mb-6">
                     <div className="flex flex-wrap items-center gap-3">
                         <label className="text-sm font-semibold text-gray-700">時間範圍:</label>
                         <button
@@ -417,7 +417,7 @@ function Dashboard() {
                     </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-md h-[80vh] flex flex-col relative group">
+                <div className="glass-card p-6 rounded-2xl h-[80vh] flex flex-col relative group">
                     {/* Digital Clock */}
                     <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10 transition-opacity duration-300 opacity-100 pointer-events-none">
                         <div className="bg-white/90 backdrop-blur-sm px-6 py-2 rounded-2xl shadow-[0_0_15px_rgba(0,0,0,0.1)] border border-gray-100">

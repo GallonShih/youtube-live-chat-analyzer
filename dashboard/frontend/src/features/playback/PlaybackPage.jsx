@@ -344,28 +344,28 @@ function PlaybackPage() {
 
 
     return (
-        <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
+        <div className="min-h-screen font-sans text-gray-900">
             <div className="max-w-7xl mx-auto p-4 md:p-8">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-                    <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-800 mb-4 md:mb-0">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+                    <h1 className="flex items-center gap-2 text-3xl font-bold text-white drop-shadow-lg mb-4 md:mb-0">
                         <PlayIcon className="w-8 h-8" />
                         <span>Playback Mode</span>
                     </h1>
                     <div className="flex gap-3">
-                        <Link to="/" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                        <Link to="/" className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer">
                             <ChartBarIcon className="w-5 h-5" />
                             <span>Dashboard</span>
                         </Link>
-                        <Link to="/playback" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg cursor-pointer">
+                        <Link to="/playback" className="flex items-center gap-2 px-4 py-2 bg-white/90 text-indigo-700 font-semibold rounded-xl shadow-lg hover:bg-white hover:shadow-xl transition-all duration-200 cursor-pointer backdrop-blur-sm border border-white/50">
                             <PlayIcon className="w-5 h-5" />
                             <span>Playback</span>
                         </Link>
-                        <Link to="/trends" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                        <Link to="/trends" className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer">
                             <ArrowTrendingUpIcon className="w-5 h-5" />
                             <span>Trends</span>
                         </Link>
-                        <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 hover:shadow-lg cursor-pointer">
+                        <Link to="/admin" className="flex items-center gap-2 px-4 py-2 glass-button text-gray-700 font-semibold rounded-xl cursor-pointer">
                             <Cog6ToothIcon className="w-5 h-5" />
                             <span>Admin Panel</span>
                         </Link>
@@ -373,7 +373,7 @@ function PlaybackPage() {
                 </div>
 
                 {/* Configuration Panel */}
-                <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+                <div className="glass-card p-6 rounded-2xl mb-6">
                     <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-800 mb-4">
                         <PlayIcon className="w-5 h-5" />
                         <span>回放設定</span>
@@ -524,8 +524,8 @@ function PlaybackPage() {
                                     margin={[16, 16]}
                                 >
                                     {/* Controls / Time Player */}
-                                    <div key="controls" className="bg-white rounded-lg shadow-md overflow-hidden">
-                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                    <div key="controls" className="glass-card rounded-2xl overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-white/50 border-b border-white/30">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <ClockIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">時間播放器</h3>
@@ -554,9 +554,9 @@ function PlaybackPage() {
                                                             max={snapshots.length - 1}
                                                             value={currentIndex}
                                                             onChange={(e) => { setCurrentIndex(Number(e.target.value)); setIsPlaying(false); }}
-                                                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                                            className="w-full h-3 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 shadow-inner"
                                                         />
-                                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                                        <div className="flex justify-between text-xs text-gray-700 font-medium mt-1">
                                                             <span>{formatTimestamp(snapshots[0]?.timestamp)}</span>
                                                             <span>{formatTimestamp(snapshots[snapshots.length - 1]?.timestamp)}</span>
                                                         </div>
@@ -568,27 +568,27 @@ function PlaybackPage() {
                                     </div>
 
                                     {/* Stats Cards */}
-                                    <div key="stats" className="bg-white rounded-lg shadow-md overflow-hidden">
-                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                    <div key="stats" className="glass-card rounded-2xl overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-white/50 border-b border-white/30">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <ArrowTrendingUpIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">即時統計</h3>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
                                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full">
-                                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200 flex flex-col justify-center">
-                                                    <div className="text-xs font-medium text-blue-700 mb-1">� 觀看人數</div>
+                                                <div className="glass-stat-blue rounded-xl p-3 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-blue-700 mb-1">觀看人數</div>
                                                     <div className="text-2xl font-bold text-blue-900">{formatNumber(currentSnapshot?.viewer_count)}</div>
                                                 </div>
-                                                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200 flex flex-col justify-center">
-                                                    <div className="text-xs font-medium text-green-700 mb-1">� 每小時留言</div>
+                                                <div className="glass-stat-green rounded-xl p-3 flex flex-col justify-center">
+                                                    <div className="text-xs font-medium text-green-700 mb-1">每小時留言</div>
                                                     <div className="text-2xl font-bold text-green-900">{formatNumber(currentSnapshot?.hourly_messages)}</div>
                                                 </div>
-                                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200 flex flex-col justify-center">
+                                                <div className="glass-stat-purple rounded-xl p-3 flex flex-col justify-center">
                                                     <div className="text-xs font-medium text-purple-700 mb-1">SC 數量</div>
                                                     <div className="text-2xl font-bold text-purple-900">{formatNumber(currentSnapshot?.paid_message_count)}</div>
                                                 </div>
-                                                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200 flex flex-col justify-center">
+                                                <div className="glass-stat-amber rounded-xl p-3 flex flex-col justify-center">
                                                     <div className="text-xs font-medium text-amber-700 mb-1">營收 (TWD)</div>
                                                     <div className="text-2xl font-bold text-amber-900">{formatCurrency(currentSnapshot?.revenue_twd)}</div>
                                                 </div>
@@ -597,8 +597,8 @@ function PlaybackPage() {
                                     </div>
 
                                     {/* Main Chart */}
-                                    <div key="chart" className="bg-white rounded-lg shadow-md overflow-hidden">
-                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                    <div key="chart" className="glass-card rounded-2xl overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-white/50 border-b border-white/30">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <ArrowTrendingUpIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">觀看人數與留言趨勢</h3>
@@ -609,8 +609,8 @@ function PlaybackPage() {
                                     </div>
 
                                     {/* Dynamic Word Cloud */}
-                                    <div key="wordcloud" className="bg-white rounded-lg shadow-md overflow-visible">
-                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                    <div key="wordcloud" className="glass-card rounded-2xl overflow-visible">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-white/50 border-b border-white/30">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <CloudIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">動態文字雲</h3>
@@ -646,8 +646,8 @@ function PlaybackPage() {
                                     </div>
 
                                     {/* Bar Chart Race */}
-                                    <div key="barrace" className="bg-white rounded-lg shadow-md overflow-hidden">
-                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                                    <div key="barrace" className="glass-card rounded-2xl overflow-hidden">
+                                        <div className="drag-handle cursor-move flex items-center gap-2 px-4 py-3 bg-white/50 border-b border-white/30">
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <TrophyIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">熱門詞彙排行</h3>

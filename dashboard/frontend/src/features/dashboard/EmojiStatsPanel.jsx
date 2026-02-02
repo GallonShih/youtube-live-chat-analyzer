@@ -95,14 +95,14 @@ const EmojiStatsPanel = ({ startTime, endTime, hasTimeFilter = false }) => {
     const totalPages = Math.ceil(total / limit);
 
     if (loading && total === 0) {
-        return <div className="mt-8 bg-white rounded-lg shadow p-6 flex justify-center py-8">載入中...</div>;
+        return <div className="mt-8 glass-card rounded-2xl p-6 flex justify-center py-8">載入中...</div>;
     }
     if (error) {
-        return <div className="mt-8 bg-white rounded-lg shadow p-6 flex justify-center py-8 text-red-500">錯誤: {error}</div>;
+        return <div className="mt-8 glass-card rounded-2xl p-6 flex justify-center py-8 text-red-500">錯誤: {error}</div>;
     }
 
     return (
-        <div className="mt-8 bg-white rounded-lg shadow p-6">
+        <div className="mt-8 glass-card rounded-2xl p-6">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
                     <FaceSmileIcon className="w-7 h-7" />
@@ -117,7 +117,7 @@ const EmojiStatsPanel = ({ startTime, endTime, hasTimeFilter = false }) => {
             </div>
 
             {/* Filter */}
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg space-y-3">
+            <div className="mb-4 p-4 glass rounded-xl space-y-3">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2 flex-1 min-w-[200px]">
                         <label className="text-sm font-medium whitespace-nowrap">搜尋：</label>
@@ -165,7 +165,7 @@ const EmojiStatsPanel = ({ startTime, endTime, hasTimeFilter = false }) => {
             </div>
 
             {/* Auto-refresh controls */}
-            <div className="flex items-center gap-4 mt-4 p-3 bg-gray-50 rounded">
+            <div className="flex items-center gap-4 mt-4 p-3 glass rounded-xl">
                 <label className="flex items-center gap-2">
                     <input
                         type="checkbox"

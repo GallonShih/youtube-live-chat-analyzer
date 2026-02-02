@@ -262,7 +262,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
 
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+        <div className="glass-card p-6 rounded-2xl mt-8">
             {showSaveModal && (
                 <div
                     className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"

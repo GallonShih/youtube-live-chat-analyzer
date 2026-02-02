@@ -44,11 +44,12 @@ const ToastItem = ({ toast, onDismiss }) => {
     return (
         <div
             className={`
-                flex items-start gap-3 p-4 rounded-lg border shadow-lg backdrop-blur-sm
+                flex items-start gap-3 p-4 rounded-xl border shadow-xl backdrop-blur-md
                 ${config.bgColor} ${config.borderColor}
                 animate-slide-in
                 max-w-sm w-full
             `}
+            style={{ background: `rgba(255, 255, 255, 0.9)` }}
             role="alert"
         >
             <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${config.iconColor}`} />

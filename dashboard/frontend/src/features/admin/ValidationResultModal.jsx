@@ -23,7 +23,7 @@ const ValidationResultModal = ({ isOpen, isValid, conflicts, onClose }) => {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-overlay"
             role="dialog"
             aria-modal="true"
             aria-labelledby="validation-result-title"
@@ -31,7 +31,7 @@ const ValidationResultModal = ({ isOpen, isValid, conflicts, onClose }) => {
                 if (e.target === e.currentTarget) onClose();
             }}
         >
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full overflow-hidden transform transition-all">
+            <div className="glass-modal rounded-2xl max-w-2xl w-full overflow-hidden transform transition-all">
                 <div className="p-6">
                     {/* Header */}
                     <div className="flex items-center mb-4">

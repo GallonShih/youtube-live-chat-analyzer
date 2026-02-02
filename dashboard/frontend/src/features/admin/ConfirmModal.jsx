@@ -35,7 +35,7 @@ const ConfirmModal = ({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-overlay"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -47,7 +47,7 @@ const ConfirmModal = ({
         >
             <div
                 ref={modalRef}
-                className="bg-white rounded-lg shadow-xl max-w-md w-full overflow-hidden transform transition-all"
+                className="glass-modal rounded-2xl max-w-md w-full overflow-hidden transform transition-all"
             >
                 <div className="p-6">
                     <h3

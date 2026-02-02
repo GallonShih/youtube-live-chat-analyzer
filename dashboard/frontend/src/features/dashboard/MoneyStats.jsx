@@ -36,34 +36,34 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
     }, [startTime, endTime, hasTimeFilter]);
 
     if (loading && !stats) {
-        return <div className="mt-8 bg-white rounded-lg shadow p-6 text-center text-gray-500">Loading money statistics...</div>;
+        return <div className="mt-8 glass-card rounded-2xl p-6 text-center text-gray-500">Loading money statistics...</div>;
     }
 
     if (error) {
-        return <div className="mt-8 bg-white rounded-lg shadow p-6 text-center text-red-500">Error: {error}</div>;
+        return <div className="mt-8 glass-card rounded-2xl p-6 text-center text-red-500">Error: {error}</div>;
     }
 
     if (!stats) return null;
 
     return (
         <div className="mt-8 space-y-4">
-            <h2 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
+            <h2 className="flex items-center gap-2 text-2xl font-bold text-white drop-shadow-lg">
                 <CurrencyDollarIcon className="w-7 h-7" />
                 <span>Money Statistics</span>
             </h2>
             {stats.unknown_currencies?.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-800 flex items-start gap-2">
+                <div className="glass-stat-amber rounded-2xl p-4">
+                    <p className="text-sm text-amber-800 flex items-start gap-2">
                         <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
                         <span>Some currencies don't have exchange rates set: <strong>{stats.unknown_currencies.join(', ')}</strong></span>
                         <br />
-                        <a href="/admin" className="underline hover:text-yellow-900">Go to Admin Panel</a>
+                        <a href="/admin" className="underline hover:text-amber-900">Go to Admin Panel</a>
                     </p>
                 </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow-md p-6 border border-green-200">
+                <div className="glass-stat-green rounded-2xl p-6">
                     <h3 className="text-lg font-semibold text-green-800 mb-4">Total Revenue</h3>
                     <div className="space-y-3">
                         <div>
@@ -83,7 +83,7 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <div className="glass-card rounded-2xl p-6">
                     <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-800 mb-4">
                         <TrophyIcon className="w-5 h-5" />
                         <span>Top 5 Contributors</span>
