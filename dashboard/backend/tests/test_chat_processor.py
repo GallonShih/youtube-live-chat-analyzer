@@ -4,8 +4,13 @@ import json
 from sqlalchemy import create_engine, text
 from app.etl.processors.chat_processor import ChatProcessor
 
-# Use the test database URL directly
-TEST_DB_URL = "postgresql://hermes:hermes@postgres:5432/hermes_test"
+import os
+
+# Use the environment variable if available, otherwise fallback (common for local/CI)
+TEST_DB_URL = os.environ.get(
+    "DATABASE_URL", 
+    "postgresql://hermes:hermes@localhost:5432/hermes_test"
+)
 
 @pytest.fixture
 def setup_integration_data():
