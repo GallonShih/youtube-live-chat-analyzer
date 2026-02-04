@@ -297,6 +297,8 @@ services:
     ports:
       - "8000:8000"
     environment:
+      APP_ENV: ${APP_ENV:-prod}
+      APP_WORKERS: ${APP_WORKERS:-4}
       DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ENABLE_ETL_SCHEDULER: ${ENABLE_ETL_SCHEDULER:-true}
@@ -320,6 +322,8 @@ services:
     container_name: youtube-chat-analyzer-frontend
     env_file:
       - .env
+    environment:
+      APP_ENV: ${APP_ENV:-prod}
     ports:
       - "3000:3000"
     volumes:
