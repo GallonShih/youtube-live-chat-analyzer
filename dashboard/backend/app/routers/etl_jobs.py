@@ -87,70 +87,79 @@ def get_job_detail(job_id: str) -> Dict[str, Any]:
 
 @router.post("/jobs/{job_id}/trigger")
 async def trigger_job_endpoint(
-    job_id: str
+    job_id: str,
+    db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    手動觸發任務（使用 APScheduler，受並發限制保護）
+    手動觸發任務
+    
+    1. 創建 'queued' 狀態記錄到 etl_execution_log
+    2. 在背景執行任務，傳入 etl_log_id
+    3. 任務執行時會更新狀態為 'running' -> 'completed'/'failed'
 
     Args:
         job_id: 任務 ID
+        db: 資料庫連線
 
     Returns:
-        觸發結果
+        觸發結果，包含 etl_log_id
     """
     try:
         # 檢查任務是否存在於註冊表
         if job_id not in TASK_REGISTRY:
             raise HTTPException(status_code=404, detail=f"Task '{job_id}' not found")
 
-        # 使用 APScheduler 觸發（受 max_instances=1 保護）
-        from app.etl.scheduler import trigger_job
+        # 1. 創建 queued 狀態記錄
+        from app.etl.tasks import create_etl_log, update_etl_log_status
         
-        success = trigger_job(job_id)
+        etl_log_id = create_etl_log(job_id, status='queued')
+        if not etl_log_id:
+            raise HTTPException(status_code=500, detail="Failed to create ETL log")
         
-        if not success:
-            # APScheduler job 不存在，改用直接執行
-            logger.warning(f"Job '{job_id}' not found in scheduler, executing directly")
-            from concurrent.futures import ThreadPoolExecutor
-            
-            # 檢查是否已經在執行
-            if hasattr(trigger_job_endpoint, '_running_jobs'):
-                running_jobs = trigger_job_endpoint._running_jobs
-            else:
-                trigger_job_endpoint._running_jobs = set()
-                running_jobs = trigger_job_endpoint._running_jobs
-            
-            if job_id in running_jobs:
-                return {
-                    "success": False,
-                    "status": "already_running",
-                    "job_id": job_id,
-                    "message": f"任務 '{job_id}' 已經在執行中，請稍候再試"
-                }
-            
-            # 標記為執行中
-            running_jobs.add(job_id)
-            
-            # 在背景執行
-            executor = ThreadPoolExecutor(max_workers=1)
-            task_func = TASK_REGISTRY[job_id]
-            
-            def wrapped_task():
-                try:
-                    task_func()
-                finally:
-                    running_jobs.discard(job_id)
-            
-            executor.submit(wrapped_task)
+        logger.info(f"Created queued ETL log: {job_id} (etl_log_id={etl_log_id})")
 
-        logger.info(f"Task '{job_id}' triggered manually")
+        # 2. 檢查是否已經在執行
+        if hasattr(trigger_job_endpoint, '_running_jobs'):
+            running_jobs = trigger_job_endpoint._running_jobs
+        else:
+            trigger_job_endpoint._running_jobs = set()
+            running_jobs = trigger_job_endpoint._running_jobs
+        
+        if job_id in running_jobs:
+            update_etl_log_status(etl_log_id, 'failed', error_message='Task already running')
+            return {
+                "success": False,
+                "status": "already_running",
+                "job_id": job_id,
+                "etl_log_id": etl_log_id,
+                "message": f"任務 '{job_id}' 已經在執行中，請稍候再試"
+            }
+        
+        # 3. 直接在背景執行，傳入 etl_log_id
+        # 注意：不使用 APScheduler 觸發，因為它無法傳遞 etl_log_id 參數
+        from concurrent.futures import ThreadPoolExecutor
+        
+        running_jobs.add(job_id)
+        executor = ThreadPoolExecutor(max_workers=1)
+        task_func = TASK_REGISTRY[job_id]
+        
+        def wrapped_task():
+            try:
+                task_func(etl_log_id=etl_log_id)
+            finally:
+                running_jobs.discard(job_id)
+        
+        executor.submit(wrapped_task)
+
+        logger.info(f"Task '{job_id}' triggered manually (etl_log_id={etl_log_id})")
 
         return {
             "success": True,
-            "status": "triggered",
+            "status": "queued",
             "job_id": job_id,
+            "etl_log_id": etl_log_id,
             "triggered_at": datetime.now().isoformat(),
-            "message": f"任務 '{job_id}' 已觸發，將在背景執行"
+            "message": f"任務 '{job_id}' 已加入佇列，將在背景執行"
         }
     except HTTPException:
         raise
@@ -229,10 +238,12 @@ def get_execution_logs(
 ) -> Dict[str, Any]:
     """
     取得 ETL 執行記錄
+    
+    所有任務狀態（queued, running, completed, failed）都記錄在 etl_execution_log
 
     Args:
         job_id: 篩選特定任務
-        status: 篩選狀態 (running, completed, failed)
+        status: 篩選狀態 (queued, running, completed, failed)
         limit: 返回數量
 
     Returns:
@@ -240,7 +251,7 @@ def get_execution_logs(
     """
     try:
         query = """
-            SELECT id, job_id, job_name, status, started_at, completed_at,
+            SELECT id, job_id, job_name, status, queued_at, started_at, completed_at,
                    duration_seconds, records_processed, error_message
             FROM etl_execution_log
             WHERE 1=1
@@ -255,7 +266,7 @@ def get_execution_logs(
             query += " AND status = :status"
             params["status"] = status
 
-        query += " ORDER BY started_at DESC LIMIT :limit"
+        query += " ORDER BY COALESCE(started_at, queued_at) DESC LIMIT :limit"
 
         result = db.execute(text(query), params)
         rows = result.fetchall()
@@ -267,11 +278,12 @@ def get_execution_logs(
                 "job_id": row[1],
                 "job_name": row[2],
                 "status": row[3],
-                "started_at": row[4].isoformat() if row[4] else None,
-                "completed_at": row[5].isoformat() if row[5] else None,
-                "duration_seconds": row[6],
-                "records_processed": row[7],
-                "error_message": row[8]
+                "queued_at": row[4].isoformat() if row[4] else None,
+                "started_at": row[5].isoformat() if row[5] else None,
+                "completed_at": row[6].isoformat() if row[6] else None,
+                "duration_seconds": row[7],
+                "records_processed": row[8],
+                "error_message": row[9]
             })
 
         return {"logs": logs, "total": len(logs)}

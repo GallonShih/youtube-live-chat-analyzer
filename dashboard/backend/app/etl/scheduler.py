@@ -248,7 +248,7 @@ def trigger_job(job_id: str) -> bool:
 
     job = _scheduler.get_job(job_id)
     if job:
-        job.modify(next_run_time=datetime.now())
+        job.modify(next_run_time=datetime.now(_scheduler.timezone))
         logger.info(f"Job triggered: {job_id}")
         return True
     return False

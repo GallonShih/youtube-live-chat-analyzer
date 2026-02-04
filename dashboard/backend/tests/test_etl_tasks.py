@@ -1,72 +1,318 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 from datetime import datetime
-from app.etl.tasks import log_execution, run_process_chat_messages, run_import_dicts
+from app.etl.tasks import (
+    create_etl_log, update_etl_log_status, 
+    run_process_chat_messages, run_import_dicts, run_discover_new_words,
+    JOB_NAMES, TASK_REGISTRY, MANUAL_TASKS
+)
 
-def test_log_execution_no_engine():
-    """Test logging execution when no database engine is available."""
-    with patch('app.etl.config.ETLConfig.get_engine', return_value=None):
-        # Should not raise exception
-        log_execution('test_job', 'Test Job', {'status': 'completed'})
+# ============ Helper Function Tests ============
 
 @patch('app.etl.config.ETLConfig.get_engine')
-def test_log_execution_success(mock_get_engine):
-    """Test successful logging of execution results."""
+def test_create_etl_log_success_queued(mock_get_engine):
+    """Test creating a queued ETL log."""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.execute.return_value.scalar.return_value = 123  # returning ID
+    
+    log_id = create_etl_log('test_job', status='queued')
+    
+    assert log_id == 123
+    mock_conn.execute.assert_called_once()
+    # Check if 'queued' is in the SQL or parameters
+    call_args = mock_conn.execute.call_args
+    assert "queued" in str(call_args) or call_args[0][0].text.find('queued') != -1
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_create_etl_log_success_running(mock_get_engine):
+    """Test creating a running ETL log."""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+    mock_conn.execute.return_value.scalar.return_value = 456
+    
+    log_id = create_etl_log('test_job', status='running')
+    
+    assert log_id == 456
+    mock_conn.execute.assert_called_once()
+    # Check "running" status logic
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_update_etl_log_status_success(mock_get_engine):
+    """Test updating ETL log status."""
     mock_engine = MagicMock()
     mock_conn = MagicMock()
     mock_get_engine.return_value = mock_engine
     mock_engine.connect.return_value.__enter__.return_value = mock_conn
     
-    result = {
-        'status': 'completed',
-        'total_processed': 100,
-        'execution_time_seconds': 10,
-        'started_at': datetime.now()
-    }
+    success = update_etl_log_status(123, 'completed', records_processed=50)
     
-    log_execution('test_job', 'Test Job', result)
-    
+    assert success is True
     mock_conn.execute.assert_called_once()
-    mock_conn.commit.assert_called_once()
+
+# ============ Task Function Tests ============
 
 @patch('app.etl.processors.chat_processor.ChatProcessor')
-@patch('app.etl.tasks.log_execution')
-def test_run_process_chat_messages(mock_log, mock_processor_class):
-    """Test running process chat messages task."""
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_process_chat_messages_scheduled(mock_create, mock_update, mock_processor_class):
+    """Test scheduled execution (no etl_log_id provided)."""
     mock_processor = MagicMock()
     mock_processor_class.return_value = mock_processor
     mock_processor.run.return_value = {'status': 'completed', 'total_processed': 10}
+    mock_create.return_value = 100
     
     result = run_process_chat_messages()
     
     assert result['status'] == 'completed'
-    mock_processor.run.assert_called_once()
-    mock_log.assert_called_once()
-
-@patch('app.etl.processors.dict_importer.DictImporter')
-@patch('app.etl.tasks.log_execution')
-def test_run_import_dicts(mock_log, mock_importer_class):
-    """Test running import dicts task."""
-    mock_importer = MagicMock()
-    mock_importer_class.return_value = mock_importer
-    mock_importer.run.return_value = {'status': 'completed'}
-    
-    result = run_import_dicts()
-    
-    assert result['status'] == 'completed'
-    mock_importer.run.assert_called_once()
-    mock_log.assert_called_once()
+    # Should create new log
+    mock_create.assert_called_once_with('process_chat_messages', 'running')
+    # Should update log to completed
+    mock_update.assert_called_once_with(100, 'completed', records_processed=10)
 
 @patch('app.etl.processors.chat_processor.ChatProcessor')
-@patch('app.etl.tasks.log_execution')
-def test_run_process_chat_messages_failure(mock_log, mock_processor_class):
-    """Test task failure handling."""
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_process_chat_messages_manual(mock_create, mock_update, mock_processor_class):
+    """Test manual execution (etl_log_id provided)."""
+    mock_processor = MagicMock()
+    mock_processor_class.return_value = mock_processor
+    mock_processor.run.return_value = {'status': 'completed', 'total_processed': 10}
+    
+    etl_log_id = 999
+    result = run_process_chat_messages(etl_log_id=etl_log_id)
+    
+    assert result['status'] == 'completed'
+    # Should NOT create new log
+    mock_create.assert_not_called()
+    # Should update twice: running -> completed
+    assert mock_update.call_count == 2
+    mock_update.assert_any_call(999, 'running')
+    mock_update.assert_any_call(999, 'completed', records_processed=10)
+
+@patch('app.etl.processors.chat_processor.ChatProcessor')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_process_chat_messages_failure(mock_create, mock_update, mock_processor_class):
+    """Test task failure handling (scheduled)."""
     mock_processor = MagicMock()
     mock_processor_class.return_value = mock_processor
     mock_processor.run.side_effect = Exception("Task failed")
+    mock_create.return_value = 100
     
     result = run_process_chat_messages()
     
     assert result['status'] == 'failed'
     assert 'Task failed' in result['error']
-    mock_log.assert_called_once()
+    mock_update.assert_called_with(100, 'failed', error_message='Task failed')
+
+
+# ============ run_discover_new_words Tests ============
+
+@patch('app.etl.processors.word_discovery.WordDiscoveryProcessor')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_discover_new_words_scheduled(mock_create, mock_update, mock_processor_class):
+    """Test scheduled execution of discover_new_words."""
+    mock_processor = MagicMock()
+    mock_processor_class.return_value = mock_processor
+    mock_processor.run.return_value = {'status': 'completed', 'messages_analyzed': 100}
+    mock_create.return_value = 200
+    
+    result = run_discover_new_words()
+    
+    assert result['status'] == 'completed'
+    mock_create.assert_called_once_with('discover_new_words', 'running')
+    mock_update.assert_called_once_with(
+        200, 'completed', records_processed=100, error_message=None
+    )
+
+
+@patch('app.etl.processors.word_discovery.WordDiscoveryProcessor')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_discover_new_words_manual(mock_create, mock_update, mock_processor_class):
+    """Test manual execution of discover_new_words."""
+    mock_processor = MagicMock()
+    mock_processor_class.return_value = mock_processor
+    mock_processor.run.return_value = {'status': 'completed', 'messages_analyzed': 50}
+    
+    result = run_discover_new_words(etl_log_id=888)
+    
+    assert result['status'] == 'completed'
+    mock_create.assert_not_called()
+    assert mock_update.call_count == 2
+
+
+@patch('app.etl.processors.word_discovery.WordDiscoveryProcessor')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_discover_new_words_failure(mock_create, mock_update, mock_processor_class):
+    """Test discover_new_words failure handling."""
+    mock_processor = MagicMock()
+    mock_processor_class.return_value = mock_processor
+    mock_processor.run.side_effect = Exception("AI service unavailable")
+    mock_create.return_value = 200
+    
+    result = run_discover_new_words()
+    
+    assert result['status'] == 'failed'
+    assert 'AI service unavailable' in result['error']
+    mock_update.assert_called_with(200, 'failed', error_message='AI service unavailable')
+
+
+# ============ run_import_dicts Tests ============
+
+@patch('app.etl.processors.dict_importer.DictImporter')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_import_dicts_scheduled(mock_create, mock_update, mock_importer_class):
+    """Test scheduled execution of import_dicts."""
+    mock_importer = MagicMock()
+    mock_importer_class.return_value = mock_importer
+    mock_importer.run.return_value = {'status': 'completed', 'total_processed': 500}
+    mock_create.return_value = 300
+    
+    result = run_import_dicts()
+    
+    assert result['status'] == 'completed'
+    mock_create.assert_called_once_with('import_dicts', 'running')
+    mock_update.assert_called_once_with(300, 'completed', records_processed=500)
+
+
+@patch('app.etl.processors.dict_importer.DictImporter')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_import_dicts_manual(mock_create, mock_update, mock_importer_class):
+    """Test manual execution of import_dicts."""
+    mock_importer = MagicMock()
+    mock_importer_class.return_value = mock_importer
+    mock_importer.run.return_value = {'status': 'completed', 'total_processed': 250}
+    
+    result = run_import_dicts(etl_log_id=777)
+    
+    assert result['status'] == 'completed'
+    mock_create.assert_not_called()
+    assert mock_update.call_count == 2
+
+
+@patch('app.etl.processors.dict_importer.DictImporter')
+@patch('app.etl.tasks.update_etl_log_status')
+@patch('app.etl.tasks.create_etl_log')
+def test_run_import_dicts_failure(mock_create, mock_update, mock_importer_class):
+    """Test import_dicts failure handling."""
+    mock_importer = MagicMock()
+    mock_importer_class.return_value = mock_importer
+    mock_importer.run.side_effect = Exception("File not found")
+    mock_create.return_value = 300
+    
+    result = run_import_dicts()
+    
+    assert result['status'] == 'failed'
+    assert 'File not found' in result['error']
+    mock_update.assert_called_with(300, 'failed', error_message='File not found')
+
+
+# ============ ETL Log Edge Cases ============
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_create_etl_log_no_engine(mock_get_engine):
+    """Test create_etl_log when engine is not initialized."""
+    mock_get_engine.return_value = None
+    
+    log_id = create_etl_log('test_job')
+    
+    assert log_id is None
+
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_create_etl_log_exception(mock_get_engine):
+    """Test create_etl_log when database operation fails."""
+    mock_engine = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.side_effect = Exception("Connection failed")
+    
+    log_id = create_etl_log('test_job')
+    
+    assert log_id is None
+
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_update_etl_log_status_no_engine(mock_get_engine):
+    """Test update_etl_log_status when engine is not initialized."""
+    mock_get_engine.return_value = None
+    
+    success = update_etl_log_status(123, 'completed')
+    
+    assert success is False
+
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_update_etl_log_status_running(mock_get_engine):
+    """Test update_etl_log_status with running status."""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+    
+    success = update_etl_log_status(123, 'running')
+    
+    assert success is True
+    mock_conn.execute.assert_called_once()
+
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_update_etl_log_status_failed(mock_get_engine):
+    """Test update_etl_log_status with failed status."""
+    mock_engine = MagicMock()
+    mock_conn = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+    
+    success = update_etl_log_status(123, 'failed', error_message='Test error')
+    
+    assert success is True
+    mock_conn.execute.assert_called_once()
+
+
+@patch('app.etl.config.ETLConfig.get_engine')
+def test_update_etl_log_status_exception(mock_get_engine):
+    """Test update_etl_log_status when database operation fails."""
+    mock_engine = MagicMock()
+    mock_get_engine.return_value = mock_engine
+    mock_engine.connect.side_effect = Exception("Connection failed")
+    
+    success = update_etl_log_status(123, 'completed')
+    
+    assert success is False
+
+
+# ============ Registry and Constants Tests ============
+
+def test_job_names_registry():
+    """Test JOB_NAMES contains expected jobs."""
+    assert 'process_chat_messages' in JOB_NAMES
+    assert 'discover_new_words' in JOB_NAMES
+    assert 'import_dicts' in JOB_NAMES
+
+
+def test_task_registry():
+    """Test TASK_REGISTRY contains callable tasks."""
+    assert 'process_chat_messages' in TASK_REGISTRY
+    assert 'discover_new_words' in TASK_REGISTRY
+    assert 'import_dicts' in TASK_REGISTRY
+    
+    for task_func in TASK_REGISTRY.values():
+        assert callable(task_func)
+
+
+def test_manual_tasks_list():
+    """Test MANUAL_TASKS contains expected manual task."""
+    assert len(MANUAL_TASKS) >= 1
+    import_dict_task = next((t for t in MANUAL_TASKS if t['id'] == 'import_dicts'), None)
+    assert import_dict_task is not None
+    assert import_dict_task['type'] == 'manual'

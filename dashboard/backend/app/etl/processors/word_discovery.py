@@ -130,14 +130,16 @@ class WordDiscoveryProcessor:
     4. 儲存到待審核表
     """
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, etl_log_id: Optional[int] = None):
         """
         初始化處理器
 
         Args:
             database_url: 資料庫連線字串
+            etl_log_id: ETL 執行記錄 ID（用於關聯 etl_execution_log）
         """
         self.database_url = database_url or ETLConfig.get('DATABASE_URL')
+        self.etl_log_id = etl_log_id
         self._engine: Optional[Engine] = None
 
     def get_engine(self) -> Engine:
@@ -223,7 +225,32 @@ class WordDiscoveryProcessor:
             }
 
         except Exception as e:
-            logger.error(f"discover_new_words failed: {e}")
+            logger.error(f"discover_new_words failed: {e}", exc_info=True)
+            
+            # Update word_analysis_log status to 'failed'
+            try:
+                engine = self.get_engine()
+                with engine.connect() as conn:
+                    conn.execute(
+                        text("""
+                            UPDATE word_analysis_log
+                            SET status = 'failed',
+                                error_message = :error,
+                                analysis_end_time = :end_time,
+                                execution_time_seconds = :exec_time
+                            WHERE run_id = :run_id;
+                        """),
+                        {
+                            "error": str(e)[:500],
+                            "end_time": datetime.now(),
+                            "exec_time": int((datetime.now() - start_time).total_seconds()),
+                            "run_id": run_id
+                        }
+                    )
+                    conn.commit()
+            except Exception as update_error:
+                logger.error(f"Failed to update error status: {update_error}")
+            
             return {
                 'status': 'failed',
                 'run_id': run_id,
@@ -271,6 +298,7 @@ class WordDiscoveryProcessor:
         CREATE TABLE IF NOT EXISTS word_analysis_log (
             id SERIAL PRIMARY KEY,
             run_id VARCHAR(100) NOT NULL,
+            etl_log_id INTEGER REFERENCES etl_execution_log(id),
             analysis_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
             analysis_end_time TIMESTAMP WITH TIME ZONE,
             messages_analyzed INTEGER DEFAULT 0,
@@ -315,22 +343,28 @@ class WordDiscoveryProcessor:
         logger.info("Word discovery tables created or already exist")
 
     def _initialize_analysis(self, run_id: str) -> int:
-        """初始化分析任務"""
+        """初始化分析任務，創建 word_analysis_log 記錄並關聯 etl_log_id"""
         engine = self.get_engine()
 
         with engine.connect() as conn:
+            # 創建 word_analysis_log 記錄，包含 etl_log_id 外鍵
             result = conn.execute(
                 text("""
-                    INSERT INTO word_analysis_log (run_id, analysis_start_time, status)
-                    VALUES (:run_id, :start_time, 'running')
+                    INSERT INTO word_analysis_log (run_id, etl_log_id, analysis_start_time, status)
+                    VALUES (:run_id, :etl_log_id, :start_time, 'running')
                     RETURNING id;
                 """),
-                {"run_id": run_id, "start_time": datetime.now()}
+                {
+                    "run_id": run_id, 
+                    "etl_log_id": self.etl_log_id,
+                    "start_time": datetime.now()
+                }
             )
             log_id = result.scalar()
             conn.commit()
+            
+            logger.info(f"Created analysis record: {run_id} (log_id={log_id}, etl_log_id={self.etl_log_id})")
 
-        logger.info(f"Analysis initialized: {run_id} (log_id: {log_id})")
         return log_id
 
     def _fetch_new_messages_info(self) -> Tuple[datetime, int]:
@@ -546,8 +580,27 @@ class WordDiscoveryProcessor:
 
 
         try:
-            response = model.generate_content(prompt)
+            # Add timeout to prevent infinite waiting
+            logger.info("Calling Gemini API for word discovery...")
+            
+            # Configure retry strategy: total timeout includes retries
+            from google.api_core import retry
+            retry_policy = retry.Retry(
+                initial=1.0, 
+                maximum=10.0, 
+                multiplier=2.0, 
+                timeout=60.0  # Total deadline for all retries
+            )
+            
+            response = model.generate_content(
+                prompt,
+                request_options={
+                    'timeout': 60,  # Per-request timeout
+                    'retry': retry_policy
+                }
+            )
             response_text = response.text
+            logger.info("Gemini API call completed successfully")
 
             # 清理 JSON
             if response_text.startswith('```json'):

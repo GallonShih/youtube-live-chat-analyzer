@@ -239,8 +239,9 @@ class ETLExecutionLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(String(100), nullable=False)
     job_name = Column(String(255), nullable=False)
-    status = Column(String(20), default='running')  # running, completed, failed
-    started_at = Column(DateTime(timezone=True), nullable=False, default=func.current_timestamp())
+    status = Column(String(20), default='running')  # queued, running, completed, failed
+    queued_at = Column(DateTime(timezone=True))
+    started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True))
     duration_seconds = Column(Integer)
     records_processed = Column(Integer, default=0)

@@ -70,3 +70,29 @@ def test_invalid_key_too_long(client):
         "value": "value"
     })
     assert response.status_code == 400
+
+
+def test_delete_setting_success(client):
+    """Test successful deletion of a setting."""
+    # Create first
+    client.post("/api/admin/settings", json={
+        "key": "delete_me",
+        "value": "will_be_deleted"
+    })
+    
+    # Delete
+    response = client.delete("/api/admin/settings/delete_me")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] == True
+    assert "deleted" in data["message"]
+    
+    # Verify deletion
+    get_response = client.get("/api/admin/settings/delete_me")
+    assert get_response.json()["value"] is None
+
+
+def test_delete_setting_not_found(client):
+    """Test deletion of non-existent setting returns 404."""
+    response = client.delete("/api/admin/settings/nonexistent_key")
+    assert response.status_code == 404

@@ -33,6 +33,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='completed',
+            queued_at=now - timedelta(hours=1, minutes=5),
             started_at=now - timedelta(hours=1),
             completed_at=now - timedelta(minutes=55),
             records_processed=100
@@ -41,6 +42,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='failed',
+            queued_at=now - timedelta(hours=2, minutes=5),
             started_at=now - timedelta(hours=2),
             completed_at=now - timedelta(hours=1, minutes=55),
             error_message='Test error'
@@ -48,13 +50,15 @@ def sample_execution_logs(db):
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
-            status='running',
-            started_at=now - timedelta(minutes=10)
+            status='queued',
+            queued_at=now - timedelta(minutes=10),
+            started_at=None  # Test nullable started_at
         ),
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
             status='completed',
+            queued_at=None, # Scheduled task might have null queued_at (simulated)
             started_at=now - timedelta(hours=3),
             completed_at=now - timedelta(hours=2, minutes=50),
             records_processed=50
@@ -117,18 +121,26 @@ def test_get_job_detail_not_found(mock_get_job, client, db):
 
 # ============ Job Trigger Tests ============
 
-@patch('app.routers.etl_jobs.trigger_job')
 @patch('app.routers.etl_jobs.TASK_REGISTRY')
-def test_trigger_job_success(mock_task_registry, mock_trigger_job, client, db):
+@patch('app.etl.tasks.create_etl_log')
+@patch('concurrent.futures.ThreadPoolExecutor')
+def test_trigger_job_success(mock_executor, mock_create_log, mock_task_registry, client, db):
     """Test triggering a job successfully."""
+    # Setup mock registry
     mock_task_registry.__contains__ = Mock(return_value=True)
     mock_task_registry.__getitem__ = Mock(return_value=Mock())
-    mock_trigger_job.return_value = True
+    
+    # Setup mock create_log
+    mock_create_log.return_value = 123
     
     response = client.post("/api/admin/etl/jobs/test_job/trigger")
+    
     assert response.status_code == 200
     data = response.json()
-    assert data['status'] == 'triggered'
+    assert data['status'] == 'queued'
+    assert data['etl_log_id'] == 123
+    mock_create_log.assert_called_once_with('test_job', status='queued')
+    mock_executor.return_value.submit.assert_called_once()
 
 
 @patch('app.routers.etl_jobs.TASK_REGISTRY')

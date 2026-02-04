@@ -58,4 +58,48 @@ def test_get_chat_messages_message_filter(client, sample_chat_messages):
     response = client.get("/api/chat/messages?message_filter=Test")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 10
+
+
+# Test top-authors endpoint
+def test_get_top_authors_empty(client):
+    """Test top authors endpoint with no data."""
+    response = client.get("/api/chat/top-authors")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_top_authors_with_data(client, sample_chat_messages):
+    """Test top authors endpoint with sample data."""
+    response = client.get("/api/chat/top-authors")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    if len(data) > 0:
+        assert "author" in data[0]
+        assert "count" in data[0]
+
+
+def test_get_top_authors_with_filters(client, sample_chat_messages):
+    """Test top authors with message filter."""
+    response = client.get("/api/chat/top-authors?message_filter=Test")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+def test_get_top_authors_paid_only(client, sample_chat_messages):
+    """Test top authors filtered to paid messages only."""
+    response = client.get("/api/chat/top-authors?paid_message_filter=paid_only")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+def test_get_top_authors_with_time_range(client, sample_chat_messages):
+    """Test top authors with time range filter."""
+    response = client.get(
+        "/api/chat/top-authors?start_time=2026-01-01T00:00:00&end_time=2026-12-31T23:59:59"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)

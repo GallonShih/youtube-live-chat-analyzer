@@ -59,3 +59,21 @@ def test_get_message_stats_combined_filters(client, sample_chat_messages):
     data = response.json()
     assert len(data) == 1
     assert data[0]["count"] == 5
+
+
+def test_get_message_stats_with_time_range(client, sample_chat_messages):
+    """Test message stats with explicit time range."""
+    response = client.get(
+        "/api/chat/message-stats?start_time=2026-01-01T00:00:00&end_time=2026-12-31T23:59:59"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+def test_get_message_stats_with_since(client, sample_chat_messages):
+    """Test message stats with 'since' parameter for incremental updates."""
+    response = client.get("/api/chat/message-stats?since=2026-01-12T10:00:00")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
