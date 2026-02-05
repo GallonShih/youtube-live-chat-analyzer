@@ -110,14 +110,14 @@ def test_get_word_group_not_found(client, db):
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_create_word_group(client, db):
+def test_create_word_group(admin_client, db):
     """Test creating a new word group."""
     data = {
         "name": "New Group",
         "words": ["test1", "test2", "test3"],
         "color": "#AABBCC"
     }
-    response = client.post("/api/word-trends/groups", json=data)
+    response = admin_client.post("/api/word-trends/groups", json=data)
     assert response.status_code == 201
     result = response.json()
     assert result["name"] == "New Group"
@@ -127,47 +127,47 @@ def test_create_word_group(client, db):
     assert "created_at" in result
 
 
-def test_create_word_group_default_color(client, db):
+def test_create_word_group_default_color(admin_client, db):
     """Test creating a word group with default color."""
     data = {
         "name": "Default Color Group",
         "words": ["word1"]
     }
-    response = client.post("/api/word-trends/groups", json=data)
+    response = admin_client.post("/api/word-trends/groups", json=data)
     assert response.status_code == 201
     result = response.json()
     assert result["color"] == "#5470C6"  # Default color
 
 
-def test_create_word_group_duplicate_name(client, sample_word_groups):
+def test_create_word_group_duplicate_name(admin_client, sample_word_groups):
     """Test creating a word group with duplicate name."""
     data = {
         "name": "Group 1",  # Already exists
         "words": ["test"]
     }
-    response = client.post("/api/word-trends/groups", json=data)
+    response = admin_client.post("/api/word-trends/groups", json=data)
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"].lower()
 
 
-def test_create_word_group_invalid_data(client, db):
+def test_create_word_group_invalid_data(admin_client, db):
     """Test creating a word group with invalid data."""
     # Empty name
-    response = client.post("/api/word-trends/groups", json={
+    response = admin_client.post("/api/word-trends/groups", json={
         "name": "",
         "words": ["test"]
     })
     assert response.status_code == 422
-    
+
     # Empty words list
-    response = client.post("/api/word-trends/groups", json={
+    response = admin_client.post("/api/word-trends/groups", json={
         "name": "Test",
         "words": []
     })
     assert response.status_code == 422
 
 
-def test_update_word_group(client, sample_word_groups):
+def test_update_word_group(admin_client, sample_word_groups):
     """Test updating a word group."""
     group_id = sample_word_groups[0]["id"]
     update_data = {
@@ -175,7 +175,7 @@ def test_update_word_group(client, sample_word_groups):
         "words": ["new1", "new2"],
         "color": "#FFFFFF"
     }
-    response = client.put(f"/api/word-trends/groups/{group_id}", json=update_data)
+    response = admin_client.put(f"/api/word-trends/groups/{group_id}", json=update_data)
     assert response.status_code == 200
     result = response.json()
     assert result["name"] == "Updated Group"
@@ -183,12 +183,12 @@ def test_update_word_group(client, sample_word_groups):
     assert result["color"] == "#FFFFFF"
 
 
-def test_update_word_group_partial(client, sample_word_groups):
+def test_update_word_group_partial(admin_client, sample_word_groups):
     """Test partial update of a word group."""
     group_id = sample_word_groups[0]["id"]
-    
+
     # Only update name
-    response = client.put(f"/api/word-trends/groups/{group_id}", json={
+    response = admin_client.put(f"/api/word-trends/groups/{group_id}", json={
         "name": "Partially Updated"
     })
     assert response.status_code == 200
@@ -198,39 +198,39 @@ def test_update_word_group_partial(client, sample_word_groups):
     assert result["color"] == "#FF0000"  # Unchanged
 
 
-def test_update_word_group_not_found(client, db):
+def test_update_word_group_not_found(admin_client, db):
     """Test updating a non-existent word group."""
-    response = client.put("/api/word-trends/groups/99999", json={
+    response = admin_client.put("/api/word-trends/groups/99999", json={
         "name": "Test"
     })
     assert response.status_code == 404
 
 
-def test_update_word_group_duplicate_name(client, sample_word_groups):
+def test_update_word_group_duplicate_name(admin_client, sample_word_groups):
     """Test updating to a duplicate name."""
     group_id = sample_word_groups[0]["id"]
-    response = client.put(f"/api/word-trends/groups/{group_id}", json={
+    response = admin_client.put(f"/api/word-trends/groups/{group_id}", json={
         "name": "Group 2"  # Name of another group
     })
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"].lower()
 
 
-def test_delete_word_group(client, sample_word_groups):
+def test_delete_word_group(admin_client, sample_word_groups):
     """Test deleting a word group."""
     group_id = sample_word_groups[0]["id"]
-    response = client.delete(f"/api/word-trends/groups/{group_id}")
+    response = admin_client.delete(f"/api/word-trends/groups/{group_id}")
     assert response.status_code == 200
     assert response.json()["message"] == "Word group deleted successfully"
-    
+
     # Verify it's deleted
-    response = client.get(f"/api/word-trends/groups/{group_id}")
+    response = admin_client.get(f"/api/word-trends/groups/{group_id}")
     assert response.status_code == 404
 
 
-def test_delete_word_group_not_found(client, db):
+def test_delete_word_group_not_found(admin_client, db):
     """Test deleting a non-existent word group."""
-    response = client.delete("/api/word-trends/groups/99999")
+    response = admin_client.delete("/api/word-trends/groups/99999")
     assert response.status_code == 404
 
 

@@ -21,7 +21,8 @@ const Navigation = () => {
     const [showRoleMenu, setShowRoleMenu] = useState(false);
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
-    
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const roleMenuRef = useRef(null);
 
     // Close role menu when clicking outside
@@ -45,15 +46,26 @@ const Navigation = () => {
 
     const isActive = (path) => location.pathname === path;
 
-    const handleLogin = () => {
-        const result = login(password);
-        if (result.success) {
-            setShowLoginModal(false);
-            setPassword('');
-            setLoginError('');
-            setShowRoleMenu(false);
-        } else {
-            setLoginError(result.error);
+    const handleLogin = async () => {
+        if (isSubmitting) return;
+
+        setIsSubmitting(true);
+        setLoginError('');
+
+        try {
+            const result = await login(password);
+            if (result.success) {
+                setShowLoginModal(false);
+                setPassword('');
+                setLoginError('');
+                setShowRoleMenu(false);
+            } else {
+                setLoginError(result.error);
+            }
+        } catch (err) {
+            setLoginError('登入失敗，請稍後再試');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -68,7 +80,7 @@ const Navigation = () => {
     };
 
     const handleKeyPress = (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !isSubmitting) {
             handleLogin();
         }
     };
@@ -270,15 +282,17 @@ const Navigation = () => {
                                     setPassword('');
                                     setLoginError('');
                                 }}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+                                disabled={isSubmitting}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 取消
                             </button>
                             <button
                                 onClick={handleLogin}
-                                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors cursor-pointer"
+                                disabled={isSubmitting}
+                                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                登入
+                                {isSubmitting ? '登入中...' : '登入'}
                             </button>
                         </div>
                     </div>

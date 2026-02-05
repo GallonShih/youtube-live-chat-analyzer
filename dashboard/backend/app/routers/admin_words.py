@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 from app.models import (
     PendingReplaceWord, PendingSpecialWord,
     ReplaceWord, SpecialWord
@@ -180,7 +181,7 @@ def validate_pending_special_word(
         logger.error(f"Error validating special word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/approve-replace-word/{word_id}")
+@router.post("/approve-replace-word/{word_id}", dependencies=[Depends(require_admin)])
 def approve_replace_word(
     word_id: int,
     reviewed_by: str = Body('admin'),
@@ -244,7 +245,7 @@ def approve_replace_word(
         logger.error(f"Error approving replace word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/approve-special-word/{word_id}")
+@router.post("/approve-special-word/{word_id}", dependencies=[Depends(require_admin)])
 def approve_special_word(
     word_id: int,
     reviewed_by: str = Body('admin'),
@@ -300,7 +301,7 @@ def approve_special_word(
         logger.error(f"Error approving special word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/reject-replace-word/{word_id}")
+@router.post("/reject-replace-word/{word_id}", dependencies=[Depends(require_admin)])
 def reject_replace_word(
     word_id: int,
     reviewed_by: str = Body('admin'),
@@ -338,7 +339,7 @@ def reject_replace_word(
         logger.error(f"Error rejecting replace word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/reject-special-word/{word_id}")
+@router.post("/reject-special-word/{word_id}", dependencies=[Depends(require_admin)])
 def reject_special_word(
     word_id: int,
     reviewed_by: str = Body('admin'),
@@ -375,7 +376,7 @@ def reject_special_word(
         logger.error(f"Error rejecting special word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/batch-approve-replace-words")
+@router.post("/batch-approve-replace-words", dependencies=[Depends(require_admin)])
 def batch_approve_replace_words(
     ids: List[int] = Body(...),
     reviewed_by: str = Body('admin'),
@@ -447,7 +448,7 @@ def batch_approve_replace_words(
         logger.error(f"Error batch approving replace words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/batch-reject-replace-words")
+@router.post("/batch-reject-replace-words", dependencies=[Depends(require_admin)])
 def batch_reject_replace_words(
     ids: List[int] = Body(...),
     reviewed_by: str = Body('admin'),
@@ -492,7 +493,7 @@ def batch_reject_replace_words(
         logger.error(f"Error batch rejecting replace words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/clear-pending-replace-words")
+@router.post("/clear-pending-replace-words", dependencies=[Depends(require_admin)])
 def clear_pending_replace_words(
     reviewed_by: str = Body('admin'),
     notes: str = Body(''),
@@ -572,7 +573,7 @@ def get_admin_statistics(db: Session = Depends(get_db)):
         logger.error(f"Error fetching statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/batch-approve-special-words")
+@router.post("/batch-approve-special-words", dependencies=[Depends(require_admin)])
 def batch_approve_special_words(
     ids: List[int] = Body(...),
     reviewed_by: str = Body('admin'),
@@ -638,7 +639,7 @@ def batch_approve_special_words(
         logger.error(f"Error batch approving special words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/batch-reject-special-words")
+@router.post("/batch-reject-special-words", dependencies=[Depends(require_admin)])
 def batch_reject_special_words(
     ids: List[int] = Body(...),
     reviewed_by: str = Body('admin'),
@@ -683,7 +684,7 @@ def batch_reject_special_words(
         logger.error(f"Error batch rejecting special words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/clear-pending-special-words")
+@router.post("/clear-pending-special-words", dependencies=[Depends(require_admin)])
 def clear_pending_special_words(
     reviewed_by: str = Body('admin'),
     notes: str = Body(''),
@@ -712,7 +713,7 @@ def clear_pending_special_words(
         logger.error(f"Error clearing pending special words: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/add-replace-word")
+@router.post("/add-replace-word", dependencies=[Depends(require_admin)])
 def add_replace_word(
     source_word: str = Body(...),
     target_word: str = Body(...),
@@ -765,7 +766,7 @@ def add_replace_word(
         logger.error(f"Error adding replace word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/add-special-word")
+@router.post("/add-special-word", dependencies=[Depends(require_admin)])
 def add_special_word(
     word: str = Body(..., embed=True),
     db: Session = Depends(get_db)

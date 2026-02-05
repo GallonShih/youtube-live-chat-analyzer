@@ -73,14 +73,14 @@ def test_get_template_not_found(client, db):
 
 # ============ Create Template Tests ============
 
-def test_create_template(client, db):
+def test_create_template(admin_client, db):
     """Test creating a new prompt template."""
     data = {
         "name": "New Template",
         "description": "A new test template",
         "template": "Process: {input}"
     }
-    response = client.post("/api/admin/etl/prompt-templates", json=data)
+    response = admin_client.post("/api/admin/etl/prompt-templates", json=data)
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
@@ -93,13 +93,13 @@ def test_create_template(client, db):
     assert "created_at" in template
 
 
-def test_create_template_minimal(client, db):
+def test_create_template_minimal(admin_client, db):
     """Test creating a template with minimal data."""
     data = {
         "name": "Minimal Template",
         "template": "Simple template"
     }
-    response = client.post("/api/admin/etl/prompt-templates", json=data)
+    response = admin_client.post("/api/admin/etl/prompt-templates", json=data)
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
@@ -109,35 +109,35 @@ def test_create_template_minimal(client, db):
     assert template["template"] == "Simple template"
 
 
-def test_create_template_duplicate_name(client, sample_prompt_templates):
+def test_create_template_duplicate_name(admin_client, sample_prompt_templates):
     """Test creating a template with duplicate name."""
     data = {
         "name": "Template 1",  # Already exists
         "template": "Test template"
     }
-    response = client.post("/api/admin/etl/prompt-templates", json=data)
+    response = admin_client.post("/api/admin/etl/prompt-templates", json=data)
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"].lower()
 
 
-def test_create_template_invalid_data(client, db):
+def test_create_template_invalid_data(admin_client, db):
     """Test creating a template with invalid data."""
     # Empty name
-    response = client.post("/api/admin/etl/prompt-templates", json={
+    response = admin_client.post("/api/admin/etl/prompt-templates", json={
         "name": "",
         "template": "test"
     })
     assert response.status_code == 422
-    
+
     # Empty template
-    response = client.post("/api/admin/etl/prompt-templates", json={
+    response = admin_client.post("/api/admin/etl/prompt-templates", json={
         "name": "Test",
         "template": ""
     })
     assert response.status_code == 422
-    
+
     # Missing required fields
-    response = client.post("/api/admin/etl/prompt-templates", json={
+    response = admin_client.post("/api/admin/etl/prompt-templates", json={
         "name": "Test"
     })
     assert response.status_code == 422
@@ -145,7 +145,7 @@ def test_create_template_invalid_data(client, db):
 
 # ============ Update Template Tests ============
 
-def test_update_template(client, sample_prompt_templates):
+def test_update_template(admin_client, client, sample_prompt_templates):
     """Test updating a prompt template."""
     template_id = sample_prompt_templates[0]["id"]
     update_data = {
@@ -153,12 +153,12 @@ def test_update_template(client, sample_prompt_templates):
         "description": "Updated description",
         "template": "Updated: {content}"
     }
-    response = client.put(f"/api/admin/etl/prompt-templates/{template_id}", json=update_data)
+    response = admin_client.put(f"/api/admin/etl/prompt-templates/{template_id}", json=update_data)
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
     assert result["template_id"] == template_id
-    
+
     # Check DB update
     response = client.get(f"/api/admin/etl/prompt-templates/{template_id}")
     data = response.json()
@@ -167,18 +167,18 @@ def test_update_template(client, sample_prompt_templates):
     assert data["template"] == "Updated: {content}"
 
 
-def test_update_template_partial(client, sample_prompt_templates):
+def test_update_template_partial(admin_client, client, sample_prompt_templates):
     """Test partial update of a template."""
     template_id = sample_prompt_templates[0]["id"]
-    
+
     # Only update name
-    response = client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
+    response = admin_client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
         "name": "Partially Updated"
     })
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
-    
+
     # Check DB update
     response = client.get(f"/api/admin/etl/prompt-templates/{template_id}")
     data = response.json()
@@ -186,11 +186,11 @@ def test_update_template_partial(client, sample_prompt_templates):
     assert data["template"] == "Prompt: {context}"  # Unchanged
 
 
-def test_delete_template(client, sample_prompt_templates):
+def test_delete_template(admin_client, client, sample_prompt_templates):
     """Test deleting a prompt template."""
     # Delete an inactive template
     template_id = sample_prompt_templates[1]["id"]
-    response = client.delete(f"/api/admin/etl/prompt-templates/{template_id}")
+    response = admin_client.delete(f"/api/admin/etl/prompt-templates/{template_id}")
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
@@ -201,21 +201,21 @@ def test_delete_template(client, sample_prompt_templates):
     assert response.status_code == 404
 
 
-def test_activate_template(client, sample_prompt_templates):
+def test_activate_template(admin_client, client, sample_prompt_templates):
     """Test activating a template."""
     # Activate Template 2 (currently inactive)
     template_id = sample_prompt_templates[1]["id"]
-    response = client.post(f"/api/admin/etl/prompt-templates/{template_id}/activate")
+    response = admin_client.post(f"/api/admin/etl/prompt-templates/{template_id}/activate")
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
     assert "activated successfully" in result["message"].lower()
-    
+
     # Verify it's now active
     response = client.get(f"/api/admin/etl/prompt-templates/{template_id}")
     assert response.status_code == 200
     assert response.json()["is_active"] is True
-    
+
     # Verify previous active template is now inactive
     old_active_id = sample_prompt_templates[0]["id"]
     response = client.get(f"/api/admin/etl/prompt-templates/{old_active_id}")
@@ -223,14 +223,14 @@ def test_activate_template(client, sample_prompt_templates):
     assert response.json()["is_active"] is False
 
 
-def test_activate_already_active_template(client, sample_prompt_templates):
+def test_activate_already_active_template(admin_client, client, sample_prompt_templates):
     """Test activating an already active template."""
     template_id = sample_prompt_templates[0]["id"]  # Already active
-    response = client.post(f"/api/admin/etl/prompt-templates/{template_id}/activate")
+    response = admin_client.post(f"/api/admin/etl/prompt-templates/{template_id}/activate")
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
-    
+
     # Verify it's still active
     response = client.get(f"/api/admin/etl/prompt-templates/{template_id}")
     assert response.status_code == 200
@@ -264,28 +264,28 @@ def test_get_active_template_none_active(client, db):
 
 # ============ Edge Cases ============
 
-def test_create_template_long_name(client, db):
+def test_create_template_long_name(admin_client, db):
     """Test creating a template with very long name."""
     data = {
         "name": "A" * 256,  # Exceeds max length (255)
         "template": "Test"
     }
-    response = client.post("/api/admin/etl/prompt-templates", json=data)
+    response = admin_client.post("/api/admin/etl/prompt-templates", json=data)
     assert response.status_code == 422
 
 
-def test_update_template_empty_fields(client, sample_prompt_templates):
+def test_update_template_empty_fields(admin_client, sample_prompt_templates):
     """Test updating with empty optional fields."""
     template_id = sample_prompt_templates[0]["id"]
-    
+
     # Try to update with empty name (should fail)
-    response = client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
+    response = admin_client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
         "name": ""
     })
     assert response.status_code == 422
-    
+
     # Try to update with empty template (should fail)
-    response = client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
+    response = admin_client.put(f"/api/admin/etl/prompt-templates/{template_id}", json={
         "template": ""
     })
     assert response.status_code == 422

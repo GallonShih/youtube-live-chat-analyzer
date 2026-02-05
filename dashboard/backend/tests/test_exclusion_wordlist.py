@@ -53,9 +53,9 @@ class TestGetWordlist:
 class TestCreateWordlist:
     """Tests for POST /api/exclusion-wordlists endpoint."""
 
-    def test_create_success(self, client):
+    def test_create_success(self, admin_client):
         """Test creating a new wordlist."""
-        response = client.post(
+        response = admin_client.post(
             "/api/exclusion-wordlists",
             json={"name": "新清單", "words": ["詞A", "詞B"]}
         )
@@ -66,9 +66,9 @@ class TestCreateWordlist:
         assert "id" in data
         assert "created_at" in data
 
-    def test_create_empty_words(self, client):
+    def test_create_empty_words(self, admin_client):
         """Test creating a wordlist with empty words array."""
-        response = client.post(
+        response = admin_client.post(
             "/api/exclusion-wordlists",
             json={"name": "空清單", "words": []}
         )
@@ -76,30 +76,30 @@ class TestCreateWordlist:
         data = response.json()
         assert data["words"] == []
 
-    def test_create_duplicate_name(self, client, db):
+    def test_create_duplicate_name(self, admin_client, db):
         """Test creating a wordlist with duplicate name fails."""
         wl = ExclusionWordlist(name="已存在", words=[])
         db.add(wl)
         db.flush()
 
-        response = client.post(
+        response = admin_client.post(
             "/api/exclusion-wordlists",
             json={"name": "已存在", "words": ["新詞"]}
         )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
 
-    def test_create_empty_name(self, client):
+    def test_create_empty_name(self, admin_client):
         """Test creating a wordlist with empty name fails."""
-        response = client.post(
+        response = admin_client.post(
             "/api/exclusion-wordlists",
             json={"name": "", "words": ["詞"]}
         )
         assert response.status_code == 422  # Validation error
 
-    def test_create_name_too_long(self, client):
+    def test_create_name_too_long(self, admin_client):
         """Test creating a wordlist with too long name fails."""
-        response = client.post(
+        response = admin_client.post(
             "/api/exclusion-wordlists",
             json={"name": "x" * 101, "words": []}
         )
@@ -109,13 +109,13 @@ class TestCreateWordlist:
 class TestUpdateWordlist:
     """Tests for PUT /api/exclusion-wordlists/{id} endpoint."""
 
-    def test_update_words(self, client, db):
+    def test_update_words(self, admin_client, db):
         """Test updating wordlist words."""
         wl = ExclusionWordlist(name="更新測試", words=["舊詞"])
         db.add(wl)
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/exclusion-wordlists/{wl.id}",
             json={"words": ["新詞1", "新詞2"]}
         )
@@ -124,13 +124,13 @@ class TestUpdateWordlist:
         assert data["words"] == ["新詞1", "新詞2"]
         assert data["name"] == "更新測試"  # Name unchanged
 
-    def test_update_name(self, client, db):
+    def test_update_name(self, admin_client, db):
         """Test updating wordlist name."""
         wl = ExclusionWordlist(name="舊名", words=["詞"])
         db.add(wl)
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/exclusion-wordlists/{wl.id}",
             json={"name": "新名"}
         )
@@ -138,22 +138,22 @@ class TestUpdateWordlist:
         data = response.json()
         assert data["name"] == "新名"
 
-    def test_update_duplicate_name(self, client, db):
+    def test_update_duplicate_name(self, admin_client, db):
         """Test updating to a duplicate name fails."""
         wl1 = ExclusionWordlist(name="清單1", words=[])
         wl2 = ExclusionWordlist(name="清單2", words=[])
         db.add_all([wl1, wl2])
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/exclusion-wordlists/{wl2.id}",
             json={"name": "清單1"}
         )
         assert response.status_code == 400
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, admin_client):
         """Test updating a non-existent wordlist."""
-        response = client.put(
+        response = admin_client.put(
             "/api/exclusion-wordlists/999",
             json={"words": ["詞"]}
         )
@@ -163,21 +163,21 @@ class TestUpdateWordlist:
 class TestDeleteWordlist:
     """Tests for DELETE /api/exclusion-wordlists/{id} endpoint."""
 
-    def test_delete_success(self, client, db):
+    def test_delete_success(self, admin_client, db):
         """Test deleting a wordlist."""
         wl = ExclusionWordlist(name="待刪除", words=["詞"])
         db.add(wl)
         db.flush()
         wl_id = wl.id
 
-        response = client.delete(f"/api/exclusion-wordlists/{wl_id}")
+        response = admin_client.delete(f"/api/exclusion-wordlists/{wl_id}")
         assert response.status_code == 200
         assert response.json()["id"] == wl_id
 
         # Verify deletion
         assert db.query(ExclusionWordlist).filter(ExclusionWordlist.id == wl_id).first() is None
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, admin_client):
         """Test deleting a non-existent wordlist."""
-        response = client.delete("/api/exclusion-wordlists/999")
+        response = admin_client.delete("/api/exclusion-wordlists/999")
         assert response.status_code == 404

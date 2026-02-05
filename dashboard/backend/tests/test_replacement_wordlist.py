@@ -63,9 +63,9 @@ class TestGetReplacementWordlist:
 class TestCreateReplacementWordlist:
     """Tests for POST /api/replacement-wordlists endpoint."""
 
-    def test_create_success(self, client):
+    def test_create_success(self, admin_client):
         """Test creating a new wordlist."""
-        response = client.post(
+        response = admin_client.post(
             "/api/replacement-wordlists",
             json={
                 "name": "新清單",
@@ -82,9 +82,9 @@ class TestCreateReplacementWordlist:
         assert "id" in data
         assert "created_at" in data
 
-    def test_create_empty_replacements(self, client):
+    def test_create_empty_replacements(self, admin_client):
         """Test creating a wordlist with empty replacements array."""
-        response = client.post(
+        response = admin_client.post(
             "/api/replacement-wordlists",
             json={"name": "空清單", "replacements": []}
         )
@@ -92,30 +92,30 @@ class TestCreateReplacementWordlist:
         data = response.json()
         assert data["replacements"] == []
 
-    def test_create_duplicate_name(self, client, db):
+    def test_create_duplicate_name(self, admin_client, db):
         """Test creating a wordlist with duplicate name fails."""
         wl = ReplacementWordlist(name="已存在", replacements=[])
         db.add(wl)
         db.flush()
 
-        response = client.post(
+        response = admin_client.post(
             "/api/replacement-wordlists",
             json={"name": "已存在", "replacements": [{"source": "a", "target": "b"}]}
         )
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
 
-    def test_create_empty_name(self, client):
+    def test_create_empty_name(self, admin_client):
         """Test creating a wordlist with empty name fails."""
-        response = client.post(
+        response = admin_client.post(
             "/api/replacement-wordlists",
             json={"name": "", "replacements": []}
         )
         assert response.status_code == 422  # Validation error
 
-    def test_create_name_too_long(self, client):
+    def test_create_name_too_long(self, admin_client):
         """Test creating a wordlist with too long name fails."""
-        response = client.post(
+        response = admin_client.post(
             "/api/replacement-wordlists",
             json={"name": "x" * 101, "replacements": []}
         )
@@ -125,7 +125,7 @@ class TestCreateReplacementWordlist:
 class TestUpdateReplacementWordlist:
     """Tests for PUT /api/replacement-wordlists/{id} endpoint."""
 
-    def test_update_replacements(self, client, db):
+    def test_update_replacements(self, admin_client, db):
         """Test updating wordlist replacements."""
         wl = ReplacementWordlist(
             name="更新測試",
@@ -134,7 +134,7 @@ class TestUpdateReplacementWordlist:
         db.add(wl)
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/replacement-wordlists/{wl.id}",
             json={"replacements": [{"source": "新詞", "target": "新目標"}]}
         )
@@ -144,13 +144,13 @@ class TestUpdateReplacementWordlist:
         assert data["replacements"][0]["source"] == "新詞"
         assert data["name"] == "更新測試"  # Name unchanged
 
-    def test_update_name(self, client, db):
+    def test_update_name(self, admin_client, db):
         """Test updating wordlist name."""
         wl = ReplacementWordlist(name="舊名", replacements=[])
         db.add(wl)
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/replacement-wordlists/{wl.id}",
             json={"name": "新名"}
         )
@@ -158,22 +158,22 @@ class TestUpdateReplacementWordlist:
         data = response.json()
         assert data["name"] == "新名"
 
-    def test_update_duplicate_name(self, client, db):
+    def test_update_duplicate_name(self, admin_client, db):
         """Test updating to a duplicate name fails."""
         wl1 = ReplacementWordlist(name="清單1", replacements=[])
         wl2 = ReplacementWordlist(name="清單2", replacements=[])
         db.add_all([wl1, wl2])
         db.flush()
 
-        response = client.put(
+        response = admin_client.put(
             f"/api/replacement-wordlists/{wl2.id}",
             json={"name": "清單1"}
         )
         assert response.status_code == 400
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, admin_client):
         """Test updating a non-existent wordlist."""
-        response = client.put(
+        response = admin_client.put(
             "/api/replacement-wordlists/999",
             json={"replacements": [{"source": "a", "target": "b"}]}
         )
@@ -183,7 +183,7 @@ class TestUpdateReplacementWordlist:
 class TestDeleteReplacementWordlist:
     """Tests for DELETE /api/replacement-wordlists/{id} endpoint."""
 
-    def test_delete_success(self, client, db):
+    def test_delete_success(self, admin_client, db):
         """Test deleting a wordlist."""
         wl = ReplacementWordlist(
             name="待刪除",
@@ -193,14 +193,14 @@ class TestDeleteReplacementWordlist:
         db.flush()
         wl_id = wl.id
 
-        response = client.delete(f"/api/replacement-wordlists/{wl_id}")
+        response = admin_client.delete(f"/api/replacement-wordlists/{wl_id}")
         assert response.status_code == 200
         assert response.json()["id"] == wl_id
 
         # Verify deletion
         assert db.query(ReplacementWordlist).filter(ReplacementWordlist.id == wl_id).first() is None
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, admin_client):
         """Test deleting a non-existent wordlist."""
-        response = client.delete("/api/replacement-wordlists/999")
+        response = admin_client.delete("/api/replacement-wordlists/999")
         assert response.status_code == 404

@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 from app.etl.scheduler import (
     get_scheduler,
     get_all_jobs,
@@ -85,7 +86,7 @@ def get_job_detail(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/jobs/{job_id}/trigger")
+@router.post("/jobs/{job_id}/trigger", dependencies=[Depends(require_admin)])
 async def trigger_job_endpoint(
     job_id: str,
     db: Session = Depends(get_db)
@@ -168,7 +169,7 @@ async def trigger_job_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/jobs/{job_id}/pause")
+@router.post("/jobs/{job_id}/pause", dependencies=[Depends(require_admin)])
 def pause_job_endpoint(job_id: str) -> Dict[str, Any]:
     """
     暫停排程任務
@@ -196,7 +197,7 @@ def pause_job_endpoint(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/jobs/{job_id}/resume")
+@router.post("/jobs/{job_id}/resume", dependencies=[Depends(require_admin)])
 def resume_job_endpoint(job_id: str) -> Dict[str, Any]:
     """
     恢復排程任務
@@ -343,7 +344,7 @@ def get_etl_settings(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/settings/{key}")
+@router.put("/settings/{key}", dependencies=[Depends(require_admin)])
 def update_etl_setting(
     key: str,
     value: str,

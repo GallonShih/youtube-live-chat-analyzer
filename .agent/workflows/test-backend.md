@@ -8,14 +8,11 @@ Execute unit tests for the dashboard backend using Docker container with Postgre
 
 ## Steps
 
-1. Navigate to the backend directory
+// turbo
+1. Run tests using the existing service image with PostgreSQL
 ```bash
 cd dashboard/backend
-```
 
-// turbo
-2. Run tests using the existing service image with PostgreSQL
-```bash
 # Verify network name first as it might vary by compose project name (default: hermes_analyzer-network)
 NETWORK_NAME=$(docker network ls --filter name=analyzer-network --format "{{.Name}}")
 [ -z "$NETWORK_NAME" ] && echo "Error: analyzer-network not found. Please run 'docker-compose up -d' first." && exit 1

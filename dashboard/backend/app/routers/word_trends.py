@@ -14,6 +14,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.settings import get_current_video_id
+from app.core.dependencies import require_admin
 from app.models import WordTrendGroup, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -113,7 +114,7 @@ def get_word_group(group_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/groups", response_model=WordGroupResponse, status_code=201)
+@router.post("/groups", response_model=WordGroupResponse, status_code=201, dependencies=[Depends(require_admin)])
 def create_word_group(data: WordGroupCreate, db: Session = Depends(get_db)):
     """Create a new word group."""
     try:
@@ -153,7 +154,7 @@ def create_word_group(data: WordGroupCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/groups/{group_id}", response_model=WordGroupResponse)
+@router.put("/groups/{group_id}", response_model=WordGroupResponse, dependencies=[Depends(require_admin)])
 def update_word_group(group_id: int, data: WordGroupUpdate, db: Session = Depends(get_db)):
     """Update an existing word group."""
     try:
@@ -200,7 +201,7 @@ def update_word_group(group_id: int, data: WordGroupUpdate, db: Session = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/groups/{group_id}")
+@router.delete("/groups/{group_id}", dependencies=[Depends(require_admin)])
 def delete_word_group(group_id: int, db: Session = Depends(get_db)):
     """Delete a word group."""
     try:
