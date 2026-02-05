@@ -42,6 +42,7 @@ The system captures chat messages from live streams, processes them through NLP 
 | 📊 **Interactive Dashboard** | React-based dashboard with word cloud, playback timeline, and admin management |
 | 📈 **Word Trend Analysis** | Track specific word usage trends over time with customizable word groups |
 | 🛠️ **Admin Panel** | Approve/reject AI-discovered words, manage dictionaries, configure settings |
+| 🔐 **Role-based Access** | JWT-based authentication with Admin/Guest roles for secure admin operations |
 
 ## 📸 Gallery
 
@@ -85,15 +86,21 @@ cp .env.example .env
 # - YOUTUBE_API_KEY: Your YouTube Data API Key
 # - GEMINI_API_KEY: Your Google AI API Key (for discovery DAG)
 # - YOUTUBE_URL: The full URL (or ID) of the live stream you want to track
+# - ADMIN_PASSWORD: Password for admin access
+# - JWT_SECRET_KEY: Secure random key for JWT tokens
 
-# 3. Start all services
+# 3. Generate a secure JWT secret key
+python3 -c "import secrets; print(secrets.token_hex(32))"
+# Copy the output to JWT_SECRET_KEY in .env
+
+# 4. Start all services
 docker-compose up -d
 
-# 4. Access the dashboard
+# 5. Access the dashboard
 open http://localhost:3000
 ```
 
-> 📖 **First-time setup?** See [docs/SETUP.md](docs/SETUP.md) for detailed configuration. ETL tasks are automatically managed via the Dashboard Admin panel.
+> 📖 **First-time setup?** See [docs/SETUP.md](docs/SETUP.md) for detailed configuration including authentication setup. ETL tasks are automatically managed via the Dashboard Admin panel.
 
 ---
 

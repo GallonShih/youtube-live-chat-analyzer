@@ -8,6 +8,7 @@ Detailed setup instructions for first-time installation.
 
 - [Prerequisites](#prerequisites)
 - [Environment Variables](#environment-variables)
+- [User Roles & Authentication](#user-roles--authentication)
 - [ETL Configuration](#etl-configuration)
 - [Initial Setup](#initial-setup)
 - [Troubleshooting](#troubleshooting)
@@ -41,6 +42,33 @@ cp .env.example .env
 | `YOUTUBE_URL` | Target live stream URL | `https://www.youtube.com/watch?v=xxxxx` |
 | `GEMINI_API_KEY` | Google Gemini API key | `AIzaSy...` |
 
+### Authentication Variables (Required for Production)
+
+| Variable | Description | How to Generate |
+|----------|-------------|-----------------|
+| `ADMIN_PASSWORD` | Password for admin login | Choose a strong password |
+| `JWT_SECRET_KEY` | Secret key for JWT signing | See below |
+
+**Generate a secure JWT_SECRET_KEY:**
+
+```bash
+# Option 1: Using Python
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Option 2: Using OpenSSL
+openssl rand -hex 32
+
+# Option 3: Using /dev/urandom (Linux/macOS)
+head -c 32 /dev/urandom | xxd -p -c 64
+```
+
+Copy the generated key to your `.env` file:
+```bash
+JWT_SECRET_KEY=your_generated_64_character_hex_string_here
+```
+
+> ⚠️ **Security Note**: Never use the default values in production. Always generate a unique `JWT_SECRET_KEY` and choose a strong `ADMIN_PASSWORD`.
+
 ### Optional Variables
 
 | Variable | Default | Description |
@@ -49,6 +77,44 @@ cp .env.example .env
 | `CHAT_WATCHDOG_TIMEOUT` | `1800` | Restart chat collector if hung (seconds) |
 | `POSTGRES_PASSWORD` | `hermes` | Database password |
 | `ENABLE_ETL_SCHEDULER` | `true` | Enable built-in ETL scheduler |
+| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access token expiry time |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token expiry time |
+
+---
+
+## User Roles & Authentication
+
+The system supports two user roles with different access levels:
+
+### User Roles
+
+| Role | Description | Access Level |
+|------|-------------|--------------|
+| **Guest** | Default role (no login required) | Read-only access to Dashboard, Playback, Trends |
+| **Admin** | Authenticated administrator | Full access including Admin panel and all write operations |
+
+### Admin Login
+
+1. Open Dashboard: http://localhost:3000
+2. Click the user icon in the navigation bar
+3. Select "切換為管理員" (Switch to Admin)
+4. Enter the admin password configured in `.env`
+
+### Protected Features (Admin Only)
+
+- **Admin Panel**: ETL jobs management, settings, word approval
+- **Word Management**: Approve/reject discovered words, manage dictionaries
+- **Settings**: Configure ETL parameters, currency rates
+- **Write Operations**: Create/update/delete word groups, wordlists, etc.
+
+### Token Lifecycle
+
+| Token Type | Default Expiry | Purpose |
+|------------|----------------|---------|
+| Access Token | 15 minutes | API authentication |
+| Refresh Token | 7 days | Obtain new access tokens |
+
+The frontend automatically refreshes tokens before expiry. If both tokens expire, users must login again.
 
 ---
 
@@ -176,6 +242,33 @@ Via Dashboard:
 Via API:
 ```bash
 curl http://localhost:8000/api/admin/etl/logs
+```
+
+### Admin Login Not Working
+
+**Symptoms:** Password changed in `.env` but old password still works, or new password doesn't work.
+
+**Solution:** The backend container needs to be recreated to pick up new environment variables:
+
+```bash
+# Restart backend with updated environment
+docker-compose up -d dashboard-backend
+
+# Verify environment variable is loaded
+docker exec youtube-chat-analyzer-backend printenv | grep ADMIN_PASSWORD
+```
+
+### JWT Token Errors
+
+**Symptoms:** "Token expired" or "Invalid token" errors.
+
+**Solution:**
+1. Clear browser localStorage: Open DevTools → Application → Local Storage → Clear
+2. Login again with admin password
+
+If issues persist, verify `JWT_SECRET_KEY` is set correctly:
+```bash
+docker exec youtube-chat-analyzer-backend printenv | grep JWT_SECRET_KEY
 ```
 
 ---
