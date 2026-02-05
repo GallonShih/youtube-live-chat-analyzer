@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/etl/prompt-templates", tags=["prompt-templates"])
@@ -122,7 +123,7 @@ def get_template(template_id: int, db: Session = Depends(get_db)) -> PromptTempl
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(require_admin)])
 def create_template(
     data: PromptTemplateCreate,
     db: Session = Depends(get_db)
@@ -185,7 +186,7 @@ def create_template(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/{template_id}")
+@router.put("/{template_id}", dependencies=[Depends(require_admin)])
 def update_template(
     template_id: int,
     data: PromptTemplateUpdate,
@@ -266,7 +267,7 @@ def update_template(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/{template_id}")
+@router.delete("/{template_id}", dependencies=[Depends(require_admin)])
 def delete_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     刪除提示詞範本
@@ -318,7 +319,7 @@ def delete_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{template_id}/activate")
+@router.post("/{template_id}/activate", dependencies=[Depends(require_admin)])
 def activate_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     啟用提示詞範本（同時停用其他範本）

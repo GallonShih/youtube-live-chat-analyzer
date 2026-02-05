@@ -7,6 +7,7 @@ import {
     ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import Navigation from '../../components/common/Navigation';
+import { useAuth } from '../../contexts/AuthContext';
 import WordGroupCard from './WordGroupCard';
 import TrendChart from './TrendChart';
 import {
@@ -19,6 +20,8 @@ import {
 import { formatLocalHour } from '../../utils/formatters';
 
 const TrendsPage = () => {
+    const { isAdmin } = useAuth();
+
     // Word Groups state
     const [groups, setGroups] = useState([]);
     const [isAddingNew, setIsAddingNew] = useState(false);
@@ -289,13 +292,15 @@ const TrendsPage = () => {
                         <div className="glass-card rounded-2xl p-3 sm:p-4">
                             <div className="flex items-center justify-between mb-3 sm:mb-4">
                                 <h2 className="text-base sm:text-lg font-semibold text-gray-800">詞彙組管理</h2>
-                                <button
-                                    onClick={() => setIsAddingNew(true)}
-                                    disabled={isAddingNew}
-                                    className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                                >
-                                    + 新增
-                                </button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => setIsAddingNew(true)}
+                                        disabled={isAddingNew}
+                                        className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                    >
+                                        + 新增
+                                    </button>
+                                )}
                             </div>
 
                             {loadingGroups ? (
@@ -312,6 +317,7 @@ const TrendsPage = () => {
                                             onSave={handleSaveGroup}
                                             onCancel={() => setIsAddingNew(false)}
                                             isVisible={true}
+                                            isAdmin={isAdmin}
                                         />
                                     )}
 
@@ -324,13 +330,14 @@ const TrendsPage = () => {
                                             onDelete={handleDeleteGroup}
                                             isVisible={visibleGroups.has(group.id)}
                                             onToggleVisibility={handleToggleVisibility}
+                                            isAdmin={isAdmin}
                                         />
                                     ))}
 
                                     {groups.length === 0 && !isAddingNew && (
                                         <div className="text-center text-gray-500 py-8">
                                             <p className="mb-2">尚無詞彙組</p>
-                                            <p className="text-sm">點擊「+ 新增」建立第一個詞彙組</p>
+                                            {isAdmin && <p className="text-sm">點擊「+ 新增」建立第一個詞彙組</p>}
                                         </div>
                                     )}
                                 </>

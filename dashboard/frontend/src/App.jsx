@@ -1,23 +1,47 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastProvider } from './components/common/Toast';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './features/dashboard/Dashboard';
 import AdminPanel from './features/admin/AdminPanel';
 import PlaybackPage from './features/playback/PlaybackPage';
 import TrendsPage from './features/trends/TrendsPage';
 
+// Protected Route component for admin-only pages
+const ProtectedRoute = ({ children }) => {
+    const { isAdmin } = useAuth();
+    
+    if (!isAdmin) {
+        return <Navigate to="/" replace />;
+    }
+    
+    return children;
+};
+
+function AppRoutes() {
+    return (
+        <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/admin" element={
+                <ProtectedRoute>
+                    <AdminPanel />
+                </ProtectedRoute>
+            } />
+            <Route path="/playback" element={<PlaybackPage />} />
+            <Route path="/trends" element={<TrendsPage />} />
+        </Routes>
+    );
+}
+
 function App() {
     return (
-        <ToastProvider>
-            <BrowserRouter>
-                <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/admin" element={<AdminPanel />} />
-                    <Route path="/playback" element={<PlaybackPage />} />
-                    <Route path="/trends" element={<TrendsPage />} />
-                </Routes>
-            </BrowserRouter>
-        </ToastProvider>
+        <AuthProvider>
+            <ToastProvider>
+                <BrowserRouter>
+                    <AppRoutes />
+                </BrowserRouter>
+            </ToastProvider>
+        </AuthProvider>
     );
 }
 

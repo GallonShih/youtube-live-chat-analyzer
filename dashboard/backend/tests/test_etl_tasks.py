@@ -10,36 +10,36 @@ from app.etl.tasks import (
 # ============ Helper Function Tests ============
 
 @patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_success_queued(mock_get_engine):
-    """Test creating a queued ETL log."""
+def test_create_etl_log_success_scheduled(mock_get_engine):
+    """Test creating an ETL log with scheduled trigger."""
     mock_engine = MagicMock()
     mock_conn = MagicMock()
     mock_get_engine.return_value = mock_engine
     mock_engine.connect.return_value.__enter__.return_value = mock_conn
     mock_conn.execute.return_value.scalar.return_value = 123  # returning ID
     
-    log_id = create_etl_log('test_job', status='queued')
+    log_id = create_etl_log('test_job', trigger_type='scheduled')
     
     assert log_id == 123
     mock_conn.execute.assert_called_once()
-    # Check if 'queued' is in the SQL or parameters
     call_args = mock_conn.execute.call_args
-    assert "queued" in str(call_args) or call_args[0][0].text.find('queued') != -1
+    assert "scheduled" in str(call_args)
 
 @patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_success_running(mock_get_engine):
-    """Test creating a running ETL log."""
+def test_create_etl_log_success_manual(mock_get_engine):
+    """Test creating an ETL log with manual trigger."""
     mock_engine = MagicMock()
     mock_conn = MagicMock()
     mock_get_engine.return_value = mock_engine
     mock_engine.connect.return_value.__enter__.return_value = mock_conn
     mock_conn.execute.return_value.scalar.return_value = 456
     
-    log_id = create_etl_log('test_job', status='running')
+    log_id = create_etl_log('test_job', trigger_type='manual')
     
     assert log_id == 456
     mock_conn.execute.assert_called_once()
-    # Check "running" status logic
+    call_args = mock_conn.execute.call_args
+    assert "manual" in str(call_args)
 
 @patch('app.etl.config.ETLConfig.get_engine')
 def test_update_etl_log_status_success(mock_get_engine):
@@ -69,8 +69,8 @@ def test_run_process_chat_messages_scheduled(mock_create, mock_update, mock_proc
     result = run_process_chat_messages()
     
     assert result['status'] == 'completed'
-    # Should create new log
-    mock_create.assert_called_once_with('process_chat_messages', 'running')
+    # Should create new log with 'scheduled' trigger type
+    mock_create.assert_called_once_with('process_chat_messages', 'scheduled')
     # Should update log to completed
     mock_update.assert_called_once_with(100, 'completed', records_processed=10)
 
@@ -89,10 +89,8 @@ def test_run_process_chat_messages_manual(mock_create, mock_update, mock_process
     assert result['status'] == 'completed'
     # Should NOT create new log
     mock_create.assert_not_called()
-    # Should update twice: running -> completed
-    assert mock_update.call_count == 2
-    mock_update.assert_any_call(999, 'running')
-    mock_update.assert_any_call(999, 'completed', records_processed=10)
+    # Should update to completed only
+    mock_update.assert_called_once_with(999, 'completed', records_processed=10)
 
 @patch('app.etl.processors.chat_processor.ChatProcessor')
 @patch('app.etl.tasks.update_etl_log_status')
@@ -126,7 +124,7 @@ def test_run_discover_new_words_scheduled(mock_create, mock_update, mock_process
     result = run_discover_new_words()
     
     assert result['status'] == 'completed'
-    mock_create.assert_called_once_with('discover_new_words', 'running')
+    mock_create.assert_called_once_with('discover_new_words', 'scheduled')
     mock_update.assert_called_once_with(
         200, 'completed', records_processed=100, error_message=None
     )
@@ -145,7 +143,7 @@ def test_run_discover_new_words_manual(mock_create, mock_update, mock_processor_
     
     assert result['status'] == 'completed'
     mock_create.assert_not_called()
-    assert mock_update.call_count == 2
+    mock_update.assert_called_once()
 
 
 @patch('app.etl.processors.word_discovery.WordDiscoveryProcessor')
@@ -180,7 +178,8 @@ def test_run_import_dicts_scheduled(mock_create, mock_update, mock_importer_clas
     result = run_import_dicts()
     
     assert result['status'] == 'completed'
-    mock_create.assert_called_once_with('import_dicts', 'running')
+    # import_dicts is a manual-only task
+    mock_create.assert_called_once_with('import_dicts', 'manual')
     mock_update.assert_called_once_with(300, 'completed', records_processed=500)
 
 
@@ -197,7 +196,7 @@ def test_run_import_dicts_manual(mock_create, mock_update, mock_importer_class):
     
     assert result['status'] == 'completed'
     mock_create.assert_not_called()
-    assert mock_update.call_count == 2
+    mock_update.assert_called_once()
 
 
 @patch('app.etl.processors.dict_importer.DictImporter')
@@ -249,20 +248,6 @@ def test_update_etl_log_status_no_engine(mock_get_engine):
     success = update_etl_log_status(123, 'completed')
     
     assert success is False
-
-
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_update_etl_log_status_running(mock_get_engine):
-    """Test update_etl_log_status with running status."""
-    mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.return_value.__enter__.return_value = mock_conn
-    
-    success = update_etl_log_status(123, 'running')
-    
-    assert success is True
-    mock_conn.execute.assert_called_once()
 
 
 @patch('app.etl.config.ETLConfig.get_engine')

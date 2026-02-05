@@ -12,6 +12,7 @@ import { useWordFrequency } from '../../hooks/useWordFrequency';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
 import { useToast } from '../../components/common/Toast';
+import { useAuth } from '../../contexts/AuthContext';
 import ConfirmModal from '../admin/ConfirmModal';
 import { LoadingOverlay } from '../../components/common/Spinner';
 
@@ -19,6 +20,7 @@ import ReplacementWordlistPanel from './ReplacementWordlistPanel';
 
 function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
     const toast = useToast();
+    const { isAdmin } = useAuth();
 
     // Local State for Config Tab
     const [configTab, setConfigTab] = useState('exclusion'); // 'exclusion' | 'replacement'
@@ -380,7 +382,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                                         <option value="">無</option>
                                         {savedWordlists.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                                     </select>
-                                    {selectedWordlistId && (
+                                    {isAdmin && selectedWordlistId && (
                                         <button
                                             onClick={handleUpdateWordlist}
                                             className={`${updateSuccess ? 'bg-gray-500' : 'bg-green-500 hover:bg-green-600'} text-white px-2 rounded text-xs transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2`}
@@ -389,8 +391,8 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                                             {updateSuccess ? '已更新!' : '更新'}
                                         </button>
                                     )}
-                                    <button onClick={() => setShowSaveModal(true)} className="bg-blue-500 text-white px-2 rounded text-xs cursor-pointer hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">另存</button>
-                                    {selectedWordlistId && <button onClick={confirmDeleteWordlist} className="text-red-600 border border-red-200 px-2 rounded text-xs cursor-pointer">刪除</button>}
+                                    {isAdmin && <button onClick={() => setShowSaveModal(true)} className="bg-blue-500 text-white px-2 rounded text-xs cursor-pointer hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">另存</button>}
+                                    {isAdmin && selectedWordlistId && <button onClick={confirmDeleteWordlist} className="text-red-600 border border-red-200 px-2 rounded text-xs cursor-pointer">刪除</button>}
                                 </div>
                             </div>
                             <div className="flex gap-2 mb-2">
@@ -440,6 +442,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                             onSourceChange={setReplacementSource}
                             target={replacementTarget}
                             onTargetChange={setReplacementTarget}
+                            isAdmin={isAdmin}
                         />
                     )}
                 </div>

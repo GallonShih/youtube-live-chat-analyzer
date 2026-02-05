@@ -33,7 +33,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='completed',
-            queued_at=now - timedelta(hours=1, minutes=5),
+            trigger_type='manual',
             started_at=now - timedelta(hours=1),
             completed_at=now - timedelta(minutes=55),
             records_processed=100
@@ -42,7 +42,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='failed',
-            queued_at=now - timedelta(hours=2, minutes=5),
+            trigger_type='manual',
             started_at=now - timedelta(hours=2),
             completed_at=now - timedelta(hours=1, minutes=55),
             error_message='Test error'
@@ -50,15 +50,15 @@ def sample_execution_logs(db):
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
-            status='queued',
-            queued_at=now - timedelta(minutes=10),
-            started_at=None  # Test nullable started_at
+            status='running',
+            trigger_type='manual',
+            started_at=now - timedelta(minutes=10)
         ),
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
             status='completed',
-            queued_at=None, # Scheduled task might have null queued_at (simulated)
+            trigger_type='scheduled',
             started_at=now - timedelta(hours=3),
             completed_at=now - timedelta(hours=2, minutes=50),
             records_processed=50
@@ -124,73 +124,73 @@ def test_get_job_detail_not_found(mock_get_job, client, db):
 @patch('app.routers.etl_jobs.TASK_REGISTRY')
 @patch('app.etl.tasks.create_etl_log')
 @patch('concurrent.futures.ThreadPoolExecutor')
-def test_trigger_job_success(mock_executor, mock_create_log, mock_task_registry, client, db):
+def test_trigger_job_success(mock_executor, mock_create_log, mock_task_registry, admin_client, db):
     """Test triggering a job successfully."""
     # Setup mock registry
     mock_task_registry.__contains__ = Mock(return_value=True)
     mock_task_registry.__getitem__ = Mock(return_value=Mock())
-    
+
     # Setup mock create_log
     mock_create_log.return_value = 123
-    
-    response = client.post("/api/admin/etl/jobs/test_job/trigger")
-    
+
+    response = admin_client.post("/api/admin/etl/jobs/test_job/trigger")
+
     assert response.status_code == 200
     data = response.json()
-    assert data['status'] == 'queued'
+    assert data['status'] == 'running'
     assert data['etl_log_id'] == 123
-    mock_create_log.assert_called_once_with('test_job', status='queued')
+    mock_create_log.assert_called_once_with('test_job', trigger_type='manual')
     mock_executor.return_value.submit.assert_called_once()
 
 
 @patch('app.routers.etl_jobs.TASK_REGISTRY')
-def test_trigger_job_not_found(mock_task_registry, client, db):
+def test_trigger_job_not_found(mock_task_registry, admin_client, db):
     """Test triggering non-existent job."""
     mock_task_registry.__contains__ = Mock(return_value=False)
-    
-    response = client.post("/api/admin/etl/jobs/non_existent/trigger")
+
+    response = admin_client.post("/api/admin/etl/jobs/non_existent/trigger")
     assert response.status_code == 404
 
 
 # ============ Job Pause/Resume Tests ============
 
 @patch('app.routers.etl_jobs.pause_job')
-def test_pause_job_success(mock_pause_job, client, db):
+def test_pause_job_success(mock_pause_job, admin_client, db):
     """Test pausing a job."""
     mock_pause_job.return_value = True
-    
-    response = client.post("/api/admin/etl/jobs/test_job/pause")
+
+    response = admin_client.post("/api/admin/etl/jobs/test_job/pause")
     assert response.status_code == 200
     data = response.json()
     assert data['status'] == 'paused'
 
 
 @patch('app.routers.etl_jobs.pause_job')
-def test_pause_job_not_found(mock_pause_job, client, db):
+def test_pause_job_not_found(mock_pause_job, admin_client, db):
     """Test pausing non-existent job."""
     mock_pause_job.return_value = False
-    
-    response = client.post("/api/admin/etl/jobs/non_existent/pause")
+
+    response = admin_client.post("/api/admin/etl/jobs/non_existent/pause")
     assert response.status_code == 404
 
 
 @patch('app.routers.etl_jobs.resume_job')
-def test_resume_job_success(mock_resume_job, client, db):
+def test_resume_job_success(mock_resume_job, admin_client, db):
     """Test resuming a job."""
     mock_resume_job.return_value = True
-    
-    response = client.post("/api/admin/etl/jobs/test_job/resume")
+
+    response = admin_client.post("/api/admin/etl/jobs/test_job/resume")
     assert response.status_code == 200
     data = response.json()
     assert data['status'] == 'resumed'
 
 
 @patch('app.routers.etl_jobs.resume_job')
-def test_resume_job_not_found(mock_resume_job, client, db):
+def test_resume_job_not_found(mock_resume_job, admin_client, db):
     """Test resuming non-existent job."""
     mock_resume_job.return_value = False
-    
-    response = client.post("/api/admin/etl/jobs/non_existent/resume")
+
+    response = admin_client.post("/api/admin/etl/jobs/non_existent/resume")
     assert response.status_code == 404
 
 
@@ -271,14 +271,14 @@ def test_get_etl_settings_by_category(client, sample_etl_settings):
     assert settings[0]['key'] == 'test_api_key'
 
 
-def test_update_etl_setting_success(client, sample_etl_settings):
+def test_update_etl_setting_success(admin_client, client, sample_etl_settings):
     """Test updating an ETL setting."""
     key = "test_api_key"
-    response = client.put(f"/api/admin/etl/settings/{key}?value=new_value")
+    response = admin_client.put(f"/api/admin/etl/settings/{key}?value=new_value")
     assert response.status_code == 200
     result = response.json()
     assert result["success"] is True
-    
+
     # Verify update
     response = client.get(f"/api/admin/etl/settings?category=api")
     data = response.json()
@@ -286,9 +286,9 @@ def test_update_etl_setting_success(client, sample_etl_settings):
     assert setting["value"] == "new_value"
 
 
-def test_update_etl_setting_not_found(client, db):
+def test_update_etl_setting_not_found(admin_client, db):
     """Test updating non-existent setting."""
-    response = client.put("/api/admin/etl/settings/non_existent?value=test")
+    response = admin_client.put("/api/admin/etl/settings/non_existent?value=test")
     assert response.status_code == 404
 
 

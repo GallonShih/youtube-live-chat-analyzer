@@ -304,6 +304,11 @@ services:
       ENABLE_ETL_SCHEDULER: ${ENABLE_ETL_SCHEDULER:-true}
       TEXT_ANALYSIS_DIR: /app/text_analysis
       STOPWORDS_FILE: /app/text_analysis/cn_stopwords.txt
+      # Authentication
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
     volumes:
       # Mount source code for development (hot reload)
       - ./dashboard/backend:/app

@@ -100,6 +100,12 @@ All configuration is managed through `.env` file (copy from `.env.example`):
 - `GEMINI_API_KEY`: Required for AI word discovery DAG
 - `VITE_API_BASE_URL`: Frontend API endpoint (default: `http://localhost:8000`)
 
+### Authentication Variables
+- `ADMIN_PASSWORD`: Password for admin login (required for production)
+- `JWT_SECRET_KEY`: Secret key for JWT token signing (must be secure random string)
+- `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`: Access token expiry (default: 15)
+- `JWT_REFRESH_TOKEN_EXPIRE_DAYS`: Refresh token expiry (default: 7)
+
 ### Worker Configuration
 - `POLL_INTERVAL`: Stats polling interval in seconds (default: 60)
 - `CHAT_WATCHDOG_TIMEOUT`: Restart chat collector if hung for N seconds (default: 1800)
@@ -176,6 +182,7 @@ Entry point: `dashboard/backend/main.py`
 Structure:
 - `app/models.py`: SQLAlchemy ORM models
 - `app/routers/`: API endpoints organized by feature
+  - `auth.py`: Authentication endpoints (login, logout, refresh, me)
   - `chat.py`: Chat message queries
   - `stats.py`: Stream statistics
   - `word_trends.py`: Word trend analysis endpoints
@@ -185,10 +192,60 @@ Structure:
   - `etl_jobs.py`: ETL task management API
   - `prompt_templates.py`: Gemini prompt template management
 - `app/etl/`: Built-in ETL scheduler and processors
-- `app/core/`: Configuration and database connection
+- `app/core/`: Configuration, database connection, and authentication
+  - `auth_config.py`: Authentication settings
+  - `security.py`: JWT token creation and verification
+  - `dependencies.py`: FastAPI dependencies for auth
 - `app/services/`: Business logic layer
 
 API follows RESTful conventions. All endpoints return JSON. See `/docs` for Swagger documentation.
+
+#### Authentication & Authorization
+
+The system uses JWT-based authentication with two user roles:
+
+| Role | Description | Access |
+|------|-------------|--------|
+| **Admin** | Authenticated administrator | Full access to all features |
+| **Guest** | Unauthenticated visitor | Read-only access to dashboard, playback, trends |
+
+**Protected Endpoints** (require Admin role):
+- All write operations (POST, PUT, DELETE) on:
+  - ETL jobs (`/api/admin/etl/*`)
+  - Settings (`/api/admin/settings/*`)
+  - Word approval (`/api/admin/words/*`)
+  - Currency rates (`/api/admin/currency-rates`)
+  - Word groups (`/api/word-groups/*` write operations)
+  - Wordlists (`/api/admin/exclusion-wordlist/*`, `/api/admin/replacement-wordlist/*`)
+  - Prompt templates (`/api/admin/etl/prompt-templates/*`)
+
+**Auth Endpoints**:
+```bash
+# Login (returns access_token and refresh_token)
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"password": "your_admin_password"}'
+
+# Get current user info
+curl http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer <access_token>"
+
+# Refresh access token
+curl -X POST http://localhost:8000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "your_refresh_token"}'
+
+# Logout
+curl -X POST http://localhost:8000/api/auth/logout \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Using Protected Endpoints**:
+```bash
+# Example: Trigger ETL job (requires admin)
+curl -X POST http://localhost:8000/api/admin/etl/jobs/process_chat_messages/trigger \
+  -H "Authorization: Bearer <access_token>"
+```
 
 ### Dashboard Frontend (React + Vite)
 
@@ -210,7 +267,13 @@ Uses:
 - React Router for navigation
 - TailwindCSS for styling
 - Chart.js (via react-chartjs-2) for visualizations
-- React hooks for state management (no Redux/Context needed yet)
+- React Context for authentication state (`AuthContext`)
+
+**Authentication in Frontend**:
+- `src/contexts/AuthContext.jsx`: Manages auth state, tokens, and API calls
+- `useAuth()` hook provides: `isAdmin`, `login()`, `logout()`, `getAuthHeaders()`
+- Admin-only UI elements are conditionally rendered based on `isAdmin`
+- Navigation shows role indicator (Admin/Guest) with login/logout options
 
 ### Database Migrations
 

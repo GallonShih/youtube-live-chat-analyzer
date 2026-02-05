@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 from app.models import ExclusionWordlist
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ def get_wordlist(wordlist_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("", response_model=WordlistResponse, status_code=201)
+@router.post("", response_model=WordlistResponse, status_code=201, dependencies=[Depends(require_admin)])
 def create_wordlist(data: WordlistCreate, db: Session = Depends(get_db)):
     """Create a new exclusion wordlist."""
     try:
@@ -110,7 +111,7 @@ def create_wordlist(data: WordlistCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/{wordlist_id}", response_model=WordlistResponse)
+@router.put("/{wordlist_id}", response_model=WordlistResponse, dependencies=[Depends(require_admin)])
 def update_wordlist(wordlist_id: int, data: WordlistUpdate, db: Session = Depends(get_db)):
     """Update an existing wordlist."""
     try:
@@ -150,7 +151,7 @@ def update_wordlist(wordlist_id: int, data: WordlistUpdate, db: Session = Depend
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/{wordlist_id}")
+@router.delete("/{wordlist_id}", dependencies=[Depends(require_admin)])
 def delete_wordlist(wordlist_id: int, db: Session = Depends(get_db)):
     """Delete a wordlist."""
     try:

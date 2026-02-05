@@ -22,13 +22,13 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
     job_id VARCHAR(100) NOT NULL,
     job_name VARCHAR(255) NOT NULL,
     status VARCHAR(20) DEFAULT 'running',  -- running, completed, failed
-    started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    trigger_type VARCHAR(20) DEFAULT 'scheduled',  -- scheduled, manual
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP WITH TIME ZONE,
     duration_seconds INTEGER,
     records_processed INTEGER DEFAULT 0,
     error_message TEXT,
-    metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    metadata JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_job_id ON etl_execution_log(job_id);

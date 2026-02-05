@@ -86,11 +86,19 @@ class DictImporter:
 
             execution_time = int((datetime.now() - start_time).total_seconds())
 
+            # 計算總共處理的詞彙數
+            total_processed = (
+                meaningless_result.get('total', 0) +
+                replace_result.get('total', 0) +
+                special_result.get('total', 0)
+            )
+
             result = {
                 'status': 'completed',
                 'meaningless_words': meaningless_result,
                 'replace_words': replace_result,
                 'special_words': special_result,
+                'total_processed': total_processed,
                 'execution_time_seconds': execution_time
             }
 

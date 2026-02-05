@@ -2,7 +2,8 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master ]
+    branches:
+      - '**'  # 所有分支都觸發
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -43,6 +44,9 @@ jobs:
   test-backend:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # 只在 backend 有變更時執行測試
+    if: needs.detect-changes.outputs.backend == 'true'
     
     services:
       postgres:
@@ -95,11 +99,12 @@ jobs:
     name: Build Backend Image
     runs-on: ubuntu-latest
     needs: [detect-changes, test-backend]
-    # 只在 PR/Push 且 backend 有變更時 build（手動部署由 deploy job 處理）
+    # 只在 master 分支且 backend 有變更且測試成功時 build（手動部署由 deploy job 處理）
     if: |
       always() &&
       needs.test-backend.result == 'success' &&
       github.event_name != 'workflow_dispatch' &&
+      github.ref == 'refs/heads/master' &&
       needs.detect-changes.outputs.backend == 'true'
     
     steps:
@@ -123,9 +128,10 @@ jobs:
     name: Build Frontend Image
     runs-on: ubuntu-latest
     needs: detect-changes
-    # 只在 PR/Push 且 frontend 有變更時 build（手動部署由 deploy job 處理）
+    # 只在 master 分支且 frontend 有變更時 build（手動部署由 deploy job 處理）
     if: |
       github.event_name != 'workflow_dispatch' &&
+      github.ref == 'refs/heads/master' &&
       needs.detect-changes.outputs.frontend == 'true'
     
     steps:
@@ -149,9 +155,10 @@ jobs:
     name: Build Worker Image
     runs-on: ubuntu-latest
     needs: detect-changes
-    # 只在 PR/Push 且 worker 有變更時 build（手動部署由 deploy job 處理）
+    # 只在 master 分支且 worker 有變更時 build（手動部署由 deploy job 處理）
     if: |
       github.event_name != 'workflow_dispatch' &&
+      github.ref == 'refs/heads/master' &&
       needs.detect-changes.outputs.worker == 'true'
     
     steps:

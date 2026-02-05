@@ -21,13 +21,13 @@ JOB_NAMES = {
 }
 
 
-def create_etl_log(job_id: str, status: str = 'running') -> Optional[int]:
+def create_etl_log(job_id: str, trigger_type: str = 'scheduled') -> Optional[int]:
     """
     創建 ETL 執行記錄
     
     Args:
         job_id: 任務 ID
-        status: 初始狀態 ('queued' or 'running')
+        trigger_type: 觸發類型 ('scheduled' or 'manual')
     
     Returns:
         etl_log_id or None if failed
@@ -40,29 +40,18 @@ def create_etl_log(job_id: str, status: str = 'running') -> Optional[int]:
     try:
         job_name = JOB_NAMES.get(job_id, job_id)
         with engine.connect() as conn:
-            if status == 'queued':
-                result = conn.execute(
-                    text("""
-                        INSERT INTO etl_execution_log
-                            (job_id, job_name, status, queued_at)
-                        VALUES (:job_id, :job_name, 'queued', NOW())
-                        RETURNING id;
-                    """),
-                    {"job_id": job_id, "job_name": job_name}
-                )
-            else:
-                result = conn.execute(
-                    text("""
-                        INSERT INTO etl_execution_log
-                            (job_id, job_name, status, started_at)
-                        VALUES (:job_id, :job_name, 'running', NOW())
-                        RETURNING id;
-                    """),
-                    {"job_id": job_id, "job_name": job_name}
-                )
+            result = conn.execute(
+                text("""
+                    INSERT INTO etl_execution_log
+                        (job_id, job_name, status, trigger_type, started_at)
+                    VALUES (:job_id, :job_name, 'running', :trigger_type, NOW())
+                    RETURNING id;
+                """),
+                {"job_id": job_id, "job_name": job_name, "trigger_type": trigger_type}
+            )
             log_id = result.scalar()
             conn.commit()
-            logger.info(f"Created ETL log: {job_id} (id={log_id}, status={status})")
+            logger.info(f"Created ETL log: {job_id} (id={log_id}, trigger={trigger_type})")
             return log_id
     except Exception as e:
         logger.error(f"Failed to create ETL log: {e}")
@@ -80,7 +69,7 @@ def update_etl_log_status(
     
     Args:
         etl_log_id: ETL 記錄 ID
-        status: 新狀態 ('running', 'completed', 'failed')
+        status: 新狀態 ('completed', 'failed')
         records_processed: 處理的記錄數
         error_message: 錯誤訊息（僅用於 failed 狀態）
     
@@ -94,23 +83,14 @@ def update_etl_log_status(
     
     try:
         with engine.connect() as conn:
-            if status == 'running':
-                conn.execute(
-                    text("""
-                        UPDATE etl_execution_log
-                        SET status = 'running', started_at = NOW()
-                        WHERE id = :id;
-                    """),
-                    {"id": etl_log_id}
-                )
-            elif status == 'completed':
+            if status == 'completed':
                 conn.execute(
                     text("""
                         UPDATE etl_execution_log
                         SET status = 'completed',
                             completed_at = NOW(),
                             records_processed = :records,
-                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - COALESCE(started_at, queued_at)))::INTEGER
+                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
                         WHERE id = :id;
                     """),
                     {"id": etl_log_id, "records": records_processed}
@@ -123,7 +103,7 @@ def update_etl_log_status(
                         SET status = 'failed',
                             completed_at = NOW(),
                             error_message = :error,
-                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - COALESCE(started_at, queued_at)))::INTEGER
+                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
                         WHERE id = :id;
                     """),
                     {"id": etl_log_id, "error": error_msg}
@@ -149,13 +129,10 @@ def run_process_chat_messages(etl_log_id: Optional[int] = None) -> Dict[str, Any
     logger.info("Running task: process_chat_messages")
     logger.info("=" * 60)
 
-    # Create or update ETL log
+    # Create ETL log if not provided
     if etl_log_id is None:
         # Scheduled task: create new log
-        etl_log_id = create_etl_log('process_chat_messages', 'running')
-    else:
-        # Manual trigger: update existing queued record
-        update_etl_log_status(etl_log_id, 'running')
+        etl_log_id = create_etl_log('process_chat_messages', 'scheduled')
 
     try:
         from app.etl.processors.chat_processor import ChatProcessor
@@ -191,13 +168,10 @@ def run_discover_new_words(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     logger.info("Running task: discover_new_words")
     logger.info("=" * 60)
 
-    # Create or update ETL log
+    # Create ETL log if not provided
     if etl_log_id is None:
         # Scheduled task: create new log
-        etl_log_id = create_etl_log('discover_new_words', 'running')
-    else:
-        # Manual trigger: update existing queued record
-        update_etl_log_status(etl_log_id, 'running')
+        etl_log_id = create_etl_log('discover_new_words', 'scheduled')
 
     try:
         from app.etl.processors.word_discovery import WordDiscoveryProcessor
@@ -234,11 +208,10 @@ def run_import_dicts(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     logger.info("Running task: import_dicts")
     logger.info("=" * 60)
 
-    # Create or update ETL log
+    # Create ETL log if not provided
     if etl_log_id is None:
-        etl_log_id = create_etl_log('import_dicts', 'running')
-    else:
-        update_etl_log_status(etl_log_id, 'running')
+        # This is a manual-only task
+        etl_log_id = create_etl_log('import_dicts', 'manual')
 
     try:
         from app.etl.processors.dict_importer import DictImporter

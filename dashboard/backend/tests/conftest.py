@@ -14,6 +14,7 @@ from app.models import (
     ProcessedChatMessage, ProcessedChatCheckpoint
 )
 from app.core.database import get_db
+from app.core.security import create_access_token
 from main import app
 
 # Use environment variable for DATABASE_URL
@@ -113,6 +114,26 @@ def db(setup_database):
 def client(db):
     """Provide test client."""
     yield TestClient(app)
+
+
+@pytest.fixture
+def admin_token():
+    """Generate a valid admin JWT token for testing."""
+    return create_access_token({"role": "admin"})
+
+
+@pytest.fixture
+def admin_headers(admin_token):
+    """Provide Authorization headers with admin token."""
+    return {"Authorization": f"Bearer {admin_token}"}
+
+
+@pytest.fixture
+def admin_client(db, admin_headers):
+    """Provide authenticated test client with admin token."""
+    test_client = TestClient(app)
+    test_client.headers.update(admin_headers)
+    return test_client
 
 
 @pytest.fixture

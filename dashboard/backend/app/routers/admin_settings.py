@@ -5,6 +5,7 @@ from typing import Optional
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 from app.models import SystemSetting
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def get_setting(key: str, db: Session = Depends(get_db)):
         logger.error(f"Error fetching setting {key}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/settings")
+@router.post("/settings", dependencies=[Depends(require_admin)])
 def upsert_setting(
     key: str = Body(...),
     value: str = Body(...),
@@ -107,7 +108,7 @@ def upsert_setting(
         logger.error(f"Error upserting setting: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/settings/{key}")
+@router.delete("/settings/{key}", dependencies=[Depends(require_admin)])
 def delete_setting(key: str, db: Session = Depends(get_db)):
     try:
         setting = db.query(SystemSetting).filter(

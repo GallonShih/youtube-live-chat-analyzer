@@ -18,9 +18,10 @@ The pipeline (`.github/workflows/ci.yml`) automates:
 
 | Trigger | Behavior |
 |---------|----------|
-| `push` to `master` | Run tests and build (no push) |
-| `pull_request` to `master` | Run tests and build (no push) |
-| `workflow_dispatch` | Manual deployment to Docker Hub |
+| `push` to **任何分支** | 偵測變更，backend 有變更時執行測試 |
+| `push` to `master` | 測試通過後 build images |
+| `pull_request` to `master` | 偵測變更，backend 有變更時執行測試 |
+| `workflow_dispatch` | 手動部署到 Docker Hub |
 
 ---
 
@@ -36,7 +37,7 @@ Identifies which components have changed:
 
 ### 2. test-backend
 
-Runs pytest with coverage:
+Runs pytest with coverage (只在 backend 有變更時執行):
 
 ```bash
 pytest --cov=app --cov-report=term-missing --cov-report=html
@@ -50,6 +51,7 @@ pytest --cov=app --cov-report=term-missing --cov-report=html
 
 Builds Docker images using `docker/build-push-action`:
 
+- **只在 master 分支執行**
 - Only runs if corresponding component has changes
 - Uses GitHub Actions cache for faster builds
 - Does NOT push to registry (PR/push only)

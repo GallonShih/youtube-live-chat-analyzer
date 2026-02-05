@@ -4,6 +4,7 @@ from sqlalchemy import func, text
 import logging
 
 from app.core.database import get_db
+from app.core.dependencies import require_admin
 from app.models import CurrencyRate
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def get_currency_rates(db: Session = Depends(get_db)):
         logger.error(f"Error fetching currency rates: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/currency-rates")
+@router.post("/currency-rates", dependencies=[Depends(require_admin)])
 def upsert_currency_rate(
     currency: str = Body(...),
     rate_to_twd: float = Body(...),

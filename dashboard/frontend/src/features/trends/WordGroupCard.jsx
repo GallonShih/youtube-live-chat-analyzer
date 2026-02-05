@@ -17,7 +17,8 @@ const WordGroupCard = ({
     onDelete,
     onCancel,
     isVisible = true,
-    onToggleVisibility
+    onToggleVisibility,
+    isAdmin = false
 }) => {
     const [name, setName] = useState(group?.name || '');
     const [words, setWords] = useState(group?.words || []);
@@ -143,22 +144,26 @@ const WordGroupCard = ({
                             >
                                 {isVisible ? <EyeIcon className="w-5 h-5" /> : <EyeSlashIcon className="w-5 h-5" />}
                             </button>
-                            <button
-                                onClick={() => setIsEditing(true)}
-                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                title="編輯"
-                                aria-label="編輯詞彙組"
-                            >
-                                <PencilIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={handleDelete}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                                title="刪除"
-                                aria-label="刪除詞彙組"
-                            >
-                                <TrashIcon className="w-5 h-5" />
-                            </button>
+                            {isAdmin && (
+                                <button
+                                    onClick={() => setIsEditing(true)}
+                                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    title="編輯"
+                                    aria-label="編輯詞彙組"
+                                >
+                                    <PencilIcon className="w-5 h-5" />
+                                </button>
+                            )}
+                            {isAdmin && (
+                                <button
+                                    onClick={handleDelete}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                    title="刪除"
+                                    aria-label="刪除詞彙組"
+                                >
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            )}
                         </>
                     )}
                 </div>

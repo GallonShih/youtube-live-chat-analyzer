@@ -10,7 +10,7 @@ from app.routers import (
     stats, chat, admin_words, admin_currency, admin_settings,
     wordcloud, playback, exclusion_wordlist, playback_wordcloud,
     text_mining, replacement_wordlist, emojis, word_trends, word_detail,
-    etl_jobs, prompt_templates
+    etl_jobs, prompt_templates, auth
 )
 from app.etl import init_scheduler, shutdown_scheduler, ETLConfig
 from app.etl.scheduler import register_jobs, start_scheduler
@@ -87,6 +87,7 @@ def health_check():
 
 
 # 註冊路由
+app.include_router(auth.router)
 app.include_router(stats.router)
 app.include_router(chat.router)
 app.include_router(admin_words.router)

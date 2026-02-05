@@ -14,8 +14,8 @@ def test_get_currency_rates_with_data(client, sample_currency_rates):
     assert "JPY" in currencies
     assert "TWD" in currencies
 
-def test_upsert_currency_rate_create(client):
-    response = client.post("/api/admin/currency-rates", json={
+def test_upsert_currency_rate_create(admin_client):
+    response = admin_client.post("/api/admin/currency-rates", json={
         "currency": "EUR",
         "rate_to_twd": 35.5,
         "notes": "歐元"
@@ -26,8 +26,8 @@ def test_upsert_currency_rate_create(client):
     assert data["currency"] == "EUR"
     assert data["rate_to_twd"] == 35.5
 
-def test_upsert_currency_rate_update(client, sample_currency_rates):
-    response = client.post("/api/admin/currency-rates", json={
+def test_upsert_currency_rate_update(admin_client, sample_currency_rates):
+    response = admin_client.post("/api/admin/currency-rates", json={
         "currency": "USD",
         "rate_to_twd": 32.0,
         "notes": "美元更新"
@@ -37,22 +37,22 @@ def test_upsert_currency_rate_update(client, sample_currency_rates):
     assert data["success"] == True
     assert "updated" in data["message"]
 
-def test_upsert_currency_rate_invalid_currency(client):
-    response = client.post("/api/admin/currency-rates", json={
+def test_upsert_currency_rate_invalid_currency(admin_client):
+    response = admin_client.post("/api/admin/currency-rates", json={
         "currency": "VERYLONGCURRENCY",
         "rate_to_twd": 1.0
     })
     assert response.status_code == 400
 
-def test_upsert_currency_rate_negative_rate(client):
-    response = client.post("/api/admin/currency-rates", json={
+def test_upsert_currency_rate_negative_rate(admin_client):
+    response = admin_client.post("/api/admin/currency-rates", json={
         "currency": "TEST",
         "rate_to_twd": -1.0
     })
     assert response.status_code == 400
 
-def test_upsert_currency_rate_uppercase(client):
-    response = client.post("/api/admin/currency-rates", json={
+def test_upsert_currency_rate_uppercase(admin_client):
+    response = admin_client.post("/api/admin/currency-rates", json={
         "currency": "gbp",
         "rate_to_twd": 40.0
     })
