@@ -33,7 +33,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='completed',
-            queued_at=now - timedelta(hours=1, minutes=5),
+            trigger_type='manual',
             started_at=now - timedelta(hours=1),
             completed_at=now - timedelta(minutes=55),
             records_processed=100
@@ -42,7 +42,7 @@ def sample_execution_logs(db):
             job_id='test_job_1',
             job_name='Test Job 1',
             status='failed',
-            queued_at=now - timedelta(hours=2, minutes=5),
+            trigger_type='manual',
             started_at=now - timedelta(hours=2),
             completed_at=now - timedelta(hours=1, minutes=55),
             error_message='Test error'
@@ -50,15 +50,15 @@ def sample_execution_logs(db):
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
-            status='queued',
-            queued_at=now - timedelta(minutes=10),
-            started_at=None  # Test nullable started_at
+            status='running',
+            trigger_type='manual',
+            started_at=now - timedelta(minutes=10)
         ),
         ETLExecutionLog(
             job_id='test_job_2',
             job_name='Test Job 2',
             status='completed',
-            queued_at=None, # Scheduled task might have null queued_at (simulated)
+            trigger_type='scheduled',
             started_at=now - timedelta(hours=3),
             completed_at=now - timedelta(hours=2, minutes=50),
             records_processed=50
@@ -137,9 +137,9 @@ def test_trigger_job_success(mock_executor, mock_create_log, mock_task_registry,
     
     assert response.status_code == 200
     data = response.json()
-    assert data['status'] == 'queued'
+    assert data['status'] == 'running'
     assert data['etl_log_id'] == 123
-    mock_create_log.assert_called_once_with('test_job', status='queued')
+    mock_create_log.assert_called_once_with('test_job', trigger_type='manual')
     mock_executor.return_value.submit.assert_called_once()
 
 

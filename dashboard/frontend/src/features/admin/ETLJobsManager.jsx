@@ -352,6 +352,9 @@ const ETLJobsManager = () => {
                                             Task
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Trigger
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Status
                                         </th>
                                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -374,6 +377,15 @@ const ETLJobsManager = () => {
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap">
+                                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                                    log.trigger_type === 'manual' 
+                                                        ? 'bg-purple-100 text-purple-800' 
+                                                        : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {log.trigger_type === 'manual' ? '手動' : '排程'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap">
                                                 <StatusBadge status={log.status} />
                                             </td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -389,7 +401,7 @@ const ETLJobsManager = () => {
                                     ))}
                                     {logs.length === 0 && (
                                         <tr>
-                                            <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                                            <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
                                                 No execution logs yet
                                             </td>
                                         </tr>

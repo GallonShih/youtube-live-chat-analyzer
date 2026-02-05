@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS pending_special_words (
 CREATE TABLE IF NOT EXISTS word_analysis_log (
     id SERIAL PRIMARY KEY,
     run_id VARCHAR(100) NOT NULL,
+    etl_log_id INTEGER REFERENCES etl_execution_log(id),  -- 關聯到 ETL 執行記錄
     analysis_start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     analysis_end_time TIMESTAMP WITH TIME ZONE,
     messages_analyzed INTEGER DEFAULT 0,

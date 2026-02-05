@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, JSON, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, Text, BigInteger, DateTime, JSON, Numeric, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -16,11 +16,11 @@ class ChatMessage(Base):
     published_at = Column(DateTime(timezone=True), nullable=False)
     author_name = Column(String(255), nullable=False)
     author_id = Column(String(255), nullable=False)
-    author_images = Column(JSON)
-    emotes = Column(JSON)
+    author_images = Column(JSONB)
+    emotes = Column(JSONB)
     message_type = Column(String(50))
     action_type = Column(String(50))
-    raw_data = Column(JSON)
+    raw_data = Column(JSONB)
     created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
 
     @classmethod
@@ -58,7 +58,7 @@ class StreamStats(Base):
     scheduled_start_time = Column(DateTime(timezone=True))
     active_live_chat_id = Column(String(255))
     etag = Column(String(255))
-    raw_response = Column(JSON)
+    raw_response = Column(JSONB)
     collected_at = Column(DateTime(timezone=True), default=func.current_timestamp())
 
     @classmethod
@@ -120,13 +120,16 @@ class SpecialWord(Base):
 
 class PendingReplaceWord(Base):
     __tablename__ = 'pending_replace_words'
+    __table_args__ = (
+        UniqueConstraint('source_word', 'target_word', name='uq_pending_replace_words_source_target'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_word = Column(String(255), nullable=False)
     target_word = Column(String(255), nullable=False)
     confidence_score = Column(Numeric(3, 2))
     occurrence_count = Column(Integer, default=1)
-    example_messages = Column(JSON)
+    example_messages = Column(ARRAY(Text))  # TEXT[] in PostgreSQL
     discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     status = Column(String(20), default='pending')
     reviewed_at = Column(DateTime(timezone=True))
@@ -143,7 +146,7 @@ class PendingSpecialWord(Base):
     word = Column(String(255), nullable=False, unique=True)
     confidence_score = Column(Numeric(3, 2))
     occurrence_count = Column(Integer, default=1)
-    example_messages = Column(JSON)
+    example_messages = Column(ARRAY(Text))  # TEXT[] in PostgreSQL
     word_type = Column(String(50))
     discovered_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     status = Column(String(20), default='pending')
@@ -195,7 +198,7 @@ class ReplacementWordlist(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
-    replacements = Column(JSON, nullable=False)  # Array of {source, target} objects
+    replacements = Column(JSONB, nullable=False)  # Array of {source, target} objects
     created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())
 
@@ -239,18 +242,17 @@ class ETLExecutionLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(String(100), nullable=False)
     job_name = Column(String(255), nullable=False)
-    status = Column(String(20), default='running')  # queued, running, completed, failed
-    queued_at = Column(DateTime(timezone=True))
-    started_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default='running')  # running, completed, failed
+    trigger_type = Column(String(20), default='scheduled')  # scheduled, manual
+    started_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     completed_at = Column(DateTime(timezone=True))
     duration_seconds = Column(Integer)
     records_processed = Column(Integer, default=0)
     error_message = Column(Text)
-    log_metadata = Column('metadata', JSON)  # Map to 'metadata' column in DB
-    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    log_metadata = Column('metadata', JSONB)  # Map to 'metadata' column in DB
 
     def __repr__(self):
-        return f"<ETLExecutionLog(id={self.id}, job_id={self.job_id}, status={self.status})>"
+        return f"<ETLExecutionLog(id={self.id}, job_id={self.job_id}, status={self.status}, trigger={self.trigger_type})>"
 
 
 class PromptTemplate(Base):
@@ -297,3 +299,52 @@ class ProcessedChatCheckpoint(Base):
     last_processed_message_id = Column(String(255))
     last_processed_timestamp = Column(DateTime(timezone=True))
     updated_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+
+
+class MeaninglessWord(Base):
+    """無意義詞彙表，用於過濾無意義的詞彙（停用詞）"""
+    __tablename__ = 'meaningless_words'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    word = Column(String(255), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+    def __repr__(self):
+        return f"<MeaninglessWord(id={self.id}, word={self.word})>"
+
+
+class WordAnalysisLog(Base):
+    """詞彙分析執行記錄，記錄 AI 詞彙發現任務的執行狀態"""
+    __tablename__ = 'word_analysis_log'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String(100), nullable=False)
+    etl_log_id = Column(Integer)  # 關聯到 etl_execution_log
+    analysis_start_time = Column(DateTime(timezone=True), nullable=False)
+    analysis_end_time = Column(DateTime(timezone=True))
+    messages_analyzed = Column(Integer, default=0)
+    new_replace_words_found = Column(Integer, default=0)
+    new_special_words_found = Column(Integer, default=0)
+    api_calls_made = Column(Integer, default=0)
+    tokens_used = Column(Integer, default=0)
+    status = Column(String(20), default='running')  # running, completed, failed
+    error_message = Column(Text)
+    execution_time_seconds = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+
+    def __repr__(self):
+        return f"<WordAnalysisLog(id={self.id}, run_id={self.run_id}, status={self.status})>"
+
+
+class WordAnalysisCheckpoint(Base):
+    """詞彙分析檢查點，記錄 AI 詞彙發現已分析到的位置"""
+    __tablename__ = 'word_analysis_checkpoint'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    last_analyzed_message_id = Column(String(255))
+    last_analyzed_timestamp = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), default=func.current_timestamp())
+
+    def __repr__(self):
+        return f"<WordAnalysisCheckpoint(id={self.id}, last_analyzed_timestamp={self.last_analyzed_timestamp})>"

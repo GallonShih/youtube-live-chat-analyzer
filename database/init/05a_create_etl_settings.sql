@@ -21,21 +21,19 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
     id SERIAL PRIMARY KEY,
     job_id VARCHAR(100) NOT NULL,
     job_name VARCHAR(255) NOT NULL,
-    status VARCHAR(20) DEFAULT 'queued',  -- queued, running, completed, failed
-    queued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    started_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(20) DEFAULT 'running',  -- running, completed, failed
+    trigger_type VARCHAR(20) DEFAULT 'scheduled',  -- scheduled, manual
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP WITH TIME ZONE,
     duration_seconds INTEGER,
     records_processed INTEGER DEFAULT 0,
     error_message TEXT,
-    metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    metadata JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_job_id ON etl_execution_log(job_id);
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_status ON etl_execution_log(status);
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_started ON etl_execution_log(started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_etl_execution_log_queued ON etl_execution_log(queued_at DESC);
 
 -- 插入預設值（從 Airflow Variables 遷移）
 INSERT INTO etl_settings (key, value, value_type, description, category, is_sensitive) VALUES

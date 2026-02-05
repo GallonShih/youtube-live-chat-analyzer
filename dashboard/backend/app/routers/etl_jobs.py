@@ -93,9 +93,9 @@ async def trigger_job_endpoint(
     """
     手動觸發任務
     
-    1. 創建 'queued' 狀態記錄到 etl_execution_log
+    1. 創建 'running' 狀態記錄到 etl_execution_log（trigger_type='manual'）
     2. 在背景執行任務，傳入 etl_log_id
-    3. 任務執行時會更新狀態為 'running' -> 'completed'/'failed'
+    3. 任務完成時更新狀態為 'completed' 或 'failed'
 
     Args:
         job_id: 任務 ID
@@ -109,14 +109,14 @@ async def trigger_job_endpoint(
         if job_id not in TASK_REGISTRY:
             raise HTTPException(status_code=404, detail=f"Task '{job_id}' not found")
 
-        # 1. 創建 queued 狀態記錄
+        # 1. 創建 ETL 記錄
         from app.etl.tasks import create_etl_log, update_etl_log_status
         
-        etl_log_id = create_etl_log(job_id, status='queued')
+        etl_log_id = create_etl_log(job_id, trigger_type='manual')
         if not etl_log_id:
             raise HTTPException(status_code=500, detail="Failed to create ETL log")
         
-        logger.info(f"Created queued ETL log: {job_id} (etl_log_id={etl_log_id})")
+        logger.info(f"Created ETL log: {job_id} (etl_log_id={etl_log_id})")
 
         # 2. 檢查是否已經在執行
         if hasattr(trigger_job_endpoint, '_running_jobs'):
@@ -155,11 +155,11 @@ async def trigger_job_endpoint(
 
         return {
             "success": True,
-            "status": "queued",
+            "status": "running",
             "job_id": job_id,
             "etl_log_id": etl_log_id,
             "triggered_at": datetime.now().isoformat(),
-            "message": f"任務 '{job_id}' 已加入佇列，將在背景執行"
+            "message": f"任務 '{job_id}' 已開始在背景執行"
         }
     except HTTPException:
         raise
@@ -239,11 +239,11 @@ def get_execution_logs(
     """
     取得 ETL 執行記錄
     
-    所有任務狀態（queued, running, completed, failed）都記錄在 etl_execution_log
+    所有任務狀態（running, completed, failed）都記錄在 etl_execution_log
 
     Args:
         job_id: 篩選特定任務
-        status: 篩選狀態 (queued, running, completed, failed)
+        status: 篩選狀態 (running, completed, failed)
         limit: 返回數量
 
     Returns:
@@ -251,7 +251,7 @@ def get_execution_logs(
     """
     try:
         query = """
-            SELECT id, job_id, job_name, status, queued_at, started_at, completed_at,
+            SELECT id, job_id, job_name, status, trigger_type, started_at, completed_at,
                    duration_seconds, records_processed, error_message
             FROM etl_execution_log
             WHERE 1=1
@@ -266,7 +266,7 @@ def get_execution_logs(
             query += " AND status = :status"
             params["status"] = status
 
-        query += " ORDER BY COALESCE(started_at, queued_at) DESC LIMIT :limit"
+        query += " ORDER BY started_at DESC LIMIT :limit"
 
         result = db.execute(text(query), params)
         rows = result.fetchall()
@@ -278,7 +278,7 @@ def get_execution_logs(
                 "job_id": row[1],
                 "job_name": row[2],
                 "status": row[3],
-                "queued_at": row[4].isoformat() if row[4] else None,
+                "trigger_type": row[4] or "scheduled",
                 "started_at": row[5].isoformat() if row[5] else None,
                 "completed_at": row[6].isoformat() if row[6] else None,
                 "duration_seconds": row[7],
