@@ -1,52 +1,52 @@
 version: '3.8'
 
-x-airflow-common:
-  &airflow-common
-  # In order to add custom dependencies or upgrade provider packages you can use your extended image.
-  # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
-  # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
-  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.11.0}
-  # build: .
-  environment:
-    &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
-    AIRFLOW__CORE__FERNET_KEY: ''
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-    # yamllint disable rule:line-length
-    # Use simple http server on scheduler for health checks
-    # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
-    # yamllint enable rule:line-length
-    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    # WARNING: Use _PIP_ADDITIONAL_REQUIREMENTS option ONLY for a quick checks
-    # for other purpose (development, test and especially production usage) build/extend Airflow image.
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
-    # The following line can be used to set a custom config file, stored in the local config folder
-    # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
-    AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
-    # PostgreSQL connection
-    AIRFLOW_CONN_POSTGRES_CHAT_DB: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
-  volumes:
-    - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
-    - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
-    - ${AIRFLOW_PROJ_DIR:-./airflow}/config:/opt/airflow/config
-    - ${AIRFLOW_PROJ_DIR:-./airflow}/plugins:/opt/airflow/plugins
-    - ./text_analysis:/opt/airflow/text_analysis:ro
-  env_file:
-    - .env
-  user: "${AIRFLOW_UID:-50000}:0"
-  depends_on:
-    &airflow-common-depends-on
-    redis:
-      condition: service_healthy
-    postgres:
-      condition: service_healthy
-  networks:
-    - analyzer-network
+# x-airflow-common:
+#   &airflow-common
+#   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
+#   # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
+#   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
+#   image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.11.0}
+#   # build: .
+#   environment:
+#     &airflow-common-env
+#     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+#     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+#     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+#     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+#     AIRFLOW__CORE__FERNET_KEY: ''
+#     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+#     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+#     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+#     # yamllint disable rule:line-length
+#     # Use simple http server on scheduler for health checks
+#     # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
+#     # yamllint enable rule:line-length
+#     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+#     # WARNING: Use _PIP_ADDITIONAL_REQUIREMENTS option ONLY for a quick checks
+#     # for other purpose (development, test and especially production usage) build/extend Airflow image.
+#     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+#     # The following line can be used to set a custom config file, stored in the local config folder
+#     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
+#     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+#     # PostgreSQL connection
+#     AIRFLOW_CONN_POSTGRES_CHAT_DB: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+#   volumes:
+#     - ${AIRFLOW_PROJ_DIR:-./airflow}/dags:/opt/airflow/dags
+#     - ${AIRFLOW_PROJ_DIR:-./airflow}/logs:/opt/airflow/logs
+#     - ${AIRFLOW_PROJ_DIR:-./airflow}/config:/opt/airflow/config
+#     - ${AIRFLOW_PROJ_DIR:-./airflow}/plugins:/opt/airflow/plugins
+#     - ./text_analysis:/opt/airflow/text_analysis:ro
+#   env_file:
+#     - .env
+#   user: "${AIRFLOW_UID:-50000}:0"
+#   depends_on:
+#     &airflow-common-depends-on
+#     redis:
+#       condition: service_healthy
+#     postgres:
+#       condition: service_healthy
+#   networks:
+#     - analyzer-network
 
 services:
   postgres:
@@ -325,10 +325,9 @@ services:
     build: ./dashboard/frontend
     image: gallonshih/youtube-chat-analyzer-frontend:latest
     container_name: youtube-chat-analyzer-frontend
-    env_file:
-      - .env
     environment:
       APP_ENV: ${APP_ENV:-prod}
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     volumes:
