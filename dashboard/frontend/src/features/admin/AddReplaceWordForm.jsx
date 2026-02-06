@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import ValidationResultModal from './ValidationResultModal';
 import { useToast } from '../../components/common/Toast';
 import API_BASE_URL from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
     const toast = useToast();
+    const { getAuthHeaders } = useAuth();
     const [sourceWord, setSourceWord] = useState('');
     const [targetWord, setTargetWord] = useState('');
     const [isValidated, setIsValidated] = useState(false);
@@ -28,7 +30,10 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/admin/validate-replace-word`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     source_word: sourceWord.trim(),
                     target_word: targetWord.trim(),
@@ -66,7 +71,10 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/admin/add-replace-word`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...getAuthHeaders()
+                },
                 body: JSON.stringify({
                     source_word: sourceWord.trim(),
                     target_word: targetWord.trim()

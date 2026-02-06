@@ -3,8 +3,8 @@ from functools import lru_cache
 
 
 class AuthSettings(BaseSettings):
-    admin_password: str = "admin123"
-    jwt_secret_key: str = "your-secret-key-change-in-production"
+    admin_password: str
+    jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7

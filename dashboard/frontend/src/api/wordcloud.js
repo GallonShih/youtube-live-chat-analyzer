@@ -1,5 +1,10 @@
 import API_BASE_URL from './client';
 
+const getAuthHeaders = () => {
+    const token = localStorage.getItem('yt_chat_analyzer_access_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // Word Frequency
 export const fetchWordFrequency = async ({ startTime, endTime, limit, excludeWords, replacementWordlistId, replacements }) => {
     let url = `${API_BASE_URL}/api/wordcloud/word-frequency`;
@@ -18,20 +23,26 @@ export const fetchWordFrequency = async ({ startTime, endTime, limit, excludeWor
         params.append('replacement_wordlist_id', replacementWordlistId);
     }
 
-    const res = await fetch(`${url}?${params.toString()}`);
+    const res = await fetch(`${url}?${params.toString()}`, {
+        headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
 
 // Wordlists
 export const fetchWordlists = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists`);
+    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists`, {
+        headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error('Failed to fetch wordlists');
     return res.json();
 };
 
 export const fetchWordlist = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`);
+    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
+        headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error('Failed to load wordlist');
     return res.json();
 };
@@ -39,7 +50,10 @@ export const fetchWordlist = async (id) => {
 export const createWordlist = async ({ name, words }) => {
     const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
         body: JSON.stringify({ name, words })
     });
     if (!res.ok) {
@@ -52,7 +66,10 @@ export const createWordlist = async ({ name, words }) => {
 export const updateWordlist = async (id, { words }) => {
     const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
         body: JSON.stringify({ words })
     });
     if (!res.ok) throw new Error('Failed to update wordlist');
@@ -61,7 +78,8 @@ export const updateWordlist = async (id, { words }) => {
 
 export const deleteWordlist = async (id) => {
     const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error('Failed to delete wordlist');
     return true;

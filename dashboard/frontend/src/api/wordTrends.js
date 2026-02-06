@@ -1,13 +1,22 @@
 import API_BASE_URL from './client';
 
+const getAuthHeaders = () => {
+    const token = localStorage.getItem('yt_chat_analyzer_access_token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export const fetchWordTrendGroups = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/word-trends/groups`);
+    const res = await fetch(`${API_BASE_URL}/api/word-trends/groups`, {
+        headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error('Failed to fetch word trend groups');
     return res.json();
 };
 
 export const fetchWordTrendGroup = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/word-trends/groups/${id}`);
+    const res = await fetch(`${API_BASE_URL}/api/word-trends/groups/${id}`, {
+        headers: getAuthHeaders()
+    });
     if (!res.ok) throw new Error('Failed to load word trend group');
     return res.json();
 };
@@ -15,7 +24,10 @@ export const fetchWordTrendGroup = async (id) => {
 export const createWordTrendGroup = async ({ name, words, color }) => {
     const res = await fetch(`${API_BASE_URL}/api/word-trends/groups`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
         body: JSON.stringify({ name, words, color })
     });
     if (!res.ok) {
@@ -33,7 +45,10 @@ export const updateWordTrendGroup = async (id, { name, words, color }) => {
 
     const res = await fetch(`${API_BASE_URL}/api/word-trends/groups/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
         body: JSON.stringify(body)
     });
     if (!res.ok) {
@@ -45,7 +60,8 @@ export const updateWordTrendGroup = async (id, { name, words, color }) => {
 
 export const deleteWordTrendGroup = async (id) => {
     const res = await fetch(`${API_BASE_URL}/api/word-trends/groups/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error('Failed to delete word trend group');
     return true;
@@ -58,7 +74,10 @@ export const fetchTrendStats = async ({ groupIds, startTime, endTime }) => {
 
     const res = await fetch(`${API_BASE_URL}/api/word-trends/stats`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
         body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error('Failed to fetch trend stats');
