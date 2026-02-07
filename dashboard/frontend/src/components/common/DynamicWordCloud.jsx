@@ -289,25 +289,25 @@ function DynamicWordCloud({ words, wordLimit = 30 }) {
         { id: 'repulsion', label: '排斥力 (Repulsion)', min: 10, max: 150, step: 5 },
     ];
 
-    // Empty State
-    if (!words || words.length === 0) {
-        return (
-            <div className="relative bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden flex items-center justify-center h-full w-full">
-                <div className="text-gray-400 text-center">
-                    <CloudIcon className="w-16 h-16 mx-auto mb-2" />
-                    <div>載入資料後顯示動態文字雲</div>
-                </div>
-            </div>
-        )
-    }
+    const isEmpty = !words || words.length === 0;
 
     return (
         <div className="relative group h-full w-full overflow-visible">
-            {/* Canvas Container */}
+            {/* Canvas Container - always mounted so refs/effects stay alive */}
             <div
                 ref={containerRef}
                 className="bg-slate-50 rounded-2xl overflow-hidden shadow-inner border border-slate-200 h-full w-full"
             />
+
+            {/* Empty State Overlay */}
+            {isEmpty && (
+                <div className="absolute inset-0 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center z-10">
+                    <div className="text-gray-400 text-center">
+                        <CloudIcon className="w-16 h-16 mx-auto mb-2" />
+                        <div>載入資料後顯示動態文字雲</div>
+                    </div>
+                </div>
+            )}
 
             {/* Toggle Controls Button */}
             <button
