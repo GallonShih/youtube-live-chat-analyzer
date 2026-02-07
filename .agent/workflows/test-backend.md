@@ -21,12 +21,14 @@ docker run --rm --network $NETWORK_NAME \
   -v $(pwd):/app \
   -w /app \
   -e DATABASE_URL=postgresql://hermes:hermes@postgres:5432/hermes_test \
+  -e ADMIN_PASSWORD=admin123 \
+  -e JWT_SECRET_KEY=test_secret_key_for_testing \
   gallonshih/youtube-chat-analyzer-backend:latest \
   sh -c "pip install pytest pytest-cov httpx==0.25.2 -q && pytest"
 ```
 
 ## Expected Output
-- 62+ passed tests
+- 411+ passed tests
 - Coverage >= 70%
 - HTML coverage report generated in `htmlcov/`
 

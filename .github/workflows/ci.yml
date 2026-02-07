@@ -84,6 +84,8 @@ jobs:
         working-directory: dashboard/backend
         env:
           DATABASE_URL: postgresql://hermes:hermes@localhost:5432/hermes_test
+          ADMIN_PASSWORD: admin123
+          JWT_SECRET_KEY: test_secret_key_for_testing
         run: |
           pytest --cov=app --cov-report=term-missing --cov-report=html
       
