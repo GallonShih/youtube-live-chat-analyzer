@@ -145,6 +145,9 @@ class ChatCollector:
         self.is_running = True
         self.last_activity_time = time.time()  # Initialize heartbeat
 
+        # Create fresh downloader (previous one may have been closed by stop_collection)
+        self.chat_downloader = ChatDownloader()
+
         try:
             chat = self.chat_downloader.get_chat(url, message_groups=['all'])
 
@@ -198,6 +201,11 @@ class ChatCollector:
         """Stop chat collection"""
         logger.info("Stopping chat collection...")
         self.is_running = False
+        # Force close the chat downloader to interrupt blocking iterator
+        try:
+            self.chat_downloader.close()
+        except Exception as e:
+            logger.warning(f"Error closing chat downloader: {e}")
         # Flush any remaining buffered messages
         self._flush_buffer_sync()
 
@@ -215,6 +223,11 @@ class ChatCollector:
 
             except Exception as e:
                 logger.error(f"Collection attempt {attempt + 1} failed: {e}")
+
+                # If stop was called (e.g. URL change), don't retry
+                if not self.is_running:
+                    logger.info("Collection stopped, skipping retry")
+                    return
 
                 if attempt < max_retries - 1:
                     wait_time = backoff_seconds * (2 ** attempt)  # Exponential backoff

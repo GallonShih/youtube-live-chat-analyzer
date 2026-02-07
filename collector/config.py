@@ -37,22 +37,22 @@ class Config:
     def get_youtube_url_from_db(cls):
         """Fetch YouTube URL from database, fallback to env if not set"""
         try:
-            from sqlalchemy import create_engine, text
-            
+            from database import get_db_session
+            from sqlalchemy import text
+
             if not cls.DATABASE_URL:
                 return cls.YOUTUBE_URL
-            
-            engine = create_engine(cls.DATABASE_URL)
-            with engine.connect() as conn:
-                result = conn.execute(
+
+            with get_db_session() as session:
+                result = session.execute(
                     text("SELECT value FROM system_settings WHERE key = 'youtube_url'")
                 ).fetchone()
-                
+
                 if result and result[0]:
                     return result[0]
         except Exception as e:
             print(f"Warning: Could not fetch YouTube URL from database: {e}")
-        
+
         return cls.YOUTUBE_URL
 
     @classmethod

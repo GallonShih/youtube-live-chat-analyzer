@@ -279,7 +279,7 @@ function Dashboard() {
                     const { offsetLeft: positionX, offsetTop: positionY } = chart.canvas;
                     tooltipEl.style.opacity = 1;
                     tooltipEl.style.left = positionX + tooltip.caretX + 'px';
-                    tooltipEl.style.top = positionY + tooltip.caretY + 'px';
+                    tooltipEl.style.top = positionY + tooltip.caretY + 180 + 'px';
                 }
             },
         },

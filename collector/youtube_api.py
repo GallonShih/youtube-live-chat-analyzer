@@ -4,6 +4,8 @@ YouTube Data API integration for stream statistics
 
 import logging
 import time
+import threading
+from collections import namedtuple
 import requests
 from sqlalchemy.exc import SQLAlchemyError
 from models import StreamStats
@@ -11,6 +13,8 @@ from database import get_db_session
 from config import Config
 
 logger = logging.getLogger(__name__)
+
+CollectResult = namedtuple('CollectResult', ['stats', 'stream_ended', 'live_broadcast_content'])
 
 
 class YouTubeAPIClient:
@@ -25,7 +29,7 @@ class YouTubeAPIClient:
         """Get live streaming details and statistics for a video in a single API call"""
         url = f"{self.base_url}/videos"
         params = {
-            "part": "liveStreamingDetails,statistics",
+            "part": "snippet,liveStreamingDetails,statistics",
             "id": video_id
         }
         headers = {
@@ -46,9 +50,14 @@ class StatsCollector:
     def __init__(self, api_key=None):
         self.youtube_client = YouTubeAPIClient(api_key)
         self.is_running = False
+        self._stop_event = threading.Event()
 
     def collect_stats(self, video_id):
-        """Collect and save stream statistics"""
+        """Collect and save stream statistics.
+
+        Returns:
+            CollectResult with stats and stream_ended flag, or None on failure.
+        """
         try:
             # Get live streaming details
             live_data = self.youtube_client.get_live_stream_details(video_id)
@@ -56,6 +65,19 @@ class StatsCollector:
             if not live_data.get('items'):
                 logger.warning(f"No live streaming data found for video: {video_id}")
                 return None
+
+            item = live_data['items'][0]
+
+            # Detect stream ended via snippet.liveBroadcastContent or actualEndTime
+            snippet = item.get('snippet', {})
+            live_details = item.get('liveStreamingDetails', {})
+            live_broadcast_content = snippet.get('liveBroadcastContent', '')
+            actual_end_time = live_details.get('actualEndTime')
+            stream_ended = (live_broadcast_content == 'none') or (actual_end_time is not None)
+
+            if stream_ended:
+                logger.info(f"Stream ended detected for {video_id}: "
+                            f"liveBroadcastContent={live_broadcast_content}, actualEndTime={actual_end_time}")
 
             # Create StreamStats instance
             stats = StreamStats.from_youtube_api(live_data, video_id)
@@ -70,10 +92,10 @@ class StatsCollector:
                     session.add(stats)
 
                 logger.info(f"Saved stats for {video_id}: {concurrent_viewers} concurrent, {view_count} views")
-                return stats
+                return CollectResult(stats=stats, stream_ended=stream_ended, live_broadcast_content=live_broadcast_content)
             else:
                 logger.warning(f"Could not create stats object for video: {video_id}")
-                return None
+                return CollectResult(stats=None, stream_ended=stream_ended, live_broadcast_content=live_broadcast_content)
 
         except SQLAlchemyError as e:
             logger.error(f"Database error saving stats: {e}")
@@ -83,22 +105,46 @@ class StatsCollector:
             logger.error(f"Error collecting stats for {video_id}: {e}")
             raise
 
-    def start_polling(self, video_id, interval_seconds=60):
-        """Start polling for statistics at regular intervals"""
+    def start_polling(self, video_id, interval_seconds=60, on_stream_ended=None, on_status_change=None):
+        """Start polling for statistics at regular intervals.
+
+        Args:
+            video_id: YouTube video ID to poll.
+            interval_seconds: Polling interval in seconds.
+            on_stream_ended: Optional callback(video_id) invoked when stream end is detected.
+            on_status_change: Optional callback(video_id, live_broadcast_content) invoked
+                              when liveBroadcastContent changes between polls.
+        """
         logger.info(f"Starting stats polling for {video_id} every {interval_seconds} seconds")
 
         self.is_running = True
+        self._stop_event.clear()
+        last_status = None
 
         while self.is_running:
             try:
-                self.collect_stats(video_id)
+                result = self.collect_stats(video_id)
+
+                if result:
+                    # Notify on status transitions (upcoming→live, live→none, etc.)
+                    if result.live_broadcast_content != last_status:
+                        if on_status_change and last_status is not None:
+                            on_status_change(video_id, result.live_broadcast_content)
+                        last_status = result.live_broadcast_content
+
+                    if result.stream_ended:
+                        if on_stream_ended:
+                            on_stream_ended(video_id)
+                        break
 
             except Exception as e:
                 logger.error(f"Stats collection error: {e}")
                 # Continue polling even if one collection fails
 
             if self.is_running:
-                time.sleep(interval_seconds)
+                # Use event wait instead of sleep so stop_polling() can interrupt immediately
+                if self._stop_event.wait(timeout=interval_seconds):
+                    break
 
         logger.info("Stats polling stopped")
 
@@ -106,6 +152,7 @@ class StatsCollector:
         """Stop statistics polling"""
         logger.info("Stopping stats polling...")
         self.is_running = False
+        self._stop_event.set()
 
     def collect_with_retry(self, video_id, max_retries=3, backoff_seconds=5):
         """Collect stats with retry logic"""
