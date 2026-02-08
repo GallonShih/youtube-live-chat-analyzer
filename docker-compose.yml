@@ -302,6 +302,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hermes}:${POSTGRES_PASSWORD:-hermes}@postgres:5432/${POSTGRES_DB:-hermes}
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       ENABLE_ETL_SCHEDULER: ${ENABLE_ETL_SCHEDULER:-true}
       TEXT_ANALYSIS_DIR: /app/text_analysis
       STOPWORDS_FILE: /app/text_analysis/cn_stopwords.txt

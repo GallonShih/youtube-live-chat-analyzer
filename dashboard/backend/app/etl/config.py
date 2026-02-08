@@ -29,7 +29,7 @@ class ETLConfig:
     _cache_enabled: bool = False  # 預設停用快取，確保讀取最新設定
 
     # 敏感設定：優先從環境變數讀取
-    SENSITIVE_KEYS = {'GEMINI_API_KEY'}
+    SENSITIVE_KEYS = {'GEMINI_API_KEY', 'DISCORD_WEBHOOK_URL'}
 
     @classmethod
     def init_engine(cls, database_url: str):

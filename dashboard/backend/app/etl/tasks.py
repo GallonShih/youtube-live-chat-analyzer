@@ -18,6 +18,7 @@ JOB_NAMES = {
     'process_chat_messages': '處理聊天訊息',
     'discover_new_words': 'AI 詞彙發現',
     'import_dicts': '匯入字典',
+    'monitor_collector': '監控 Collector 狀態',
 }
 
 
@@ -234,11 +235,50 @@ def run_import_dicts(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
         return {'status': 'failed', 'error': str(e)}
 
 
+def run_monitor_collector(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
+    """
+    執行 Collector 監控任務
+
+    Args:
+        etl_log_id: 已存在的 ETL 記錄 ID（手動觸發時傳入）
+
+    排程時間：每 30 分鐘執行
+    """
+    logger.info("=" * 60)
+    logger.info("Running task: monitor_collector")
+    logger.info("=" * 60)
+
+    # Create ETL log if not provided
+    if etl_log_id is None:
+        etl_log_id = create_etl_log('monitor_collector', 'scheduled')
+
+    try:
+        from app.etl.processors.collector_monitor import CollectorMonitor
+
+        monitor = CollectorMonitor()
+        result = monitor.run()
+
+        if etl_log_id:
+            update_etl_log_status(
+                etl_log_id,
+                'completed',
+                records_processed=result.get('streams_checked', 0)
+            )
+
+        return result
+    except Exception as e:
+        logger.error(f"monitor_collector failed: {e}")
+        if etl_log_id:
+            update_etl_log_status(etl_log_id, 'failed', error_message=str(e))
+        return {'status': 'failed', 'error': str(e)}
+
+
 # Task registry - functions now accept optional etl_log_id
 TASK_REGISTRY: Dict[str, Callable[..., Dict[str, Any]]] = {
     'process_chat_messages': run_process_chat_messages,
     'discover_new_words': run_discover_new_words,
     'import_dicts': run_import_dicts,
+    'monitor_collector': run_monitor_collector,
 }
 
 # Manual tasks list

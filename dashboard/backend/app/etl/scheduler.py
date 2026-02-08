@@ -75,6 +75,7 @@ def register_jobs():
     from app.etl.tasks import (
         run_process_chat_messages,
         run_discover_new_words,
+        run_monitor_collector,
     )
 
     # 註冊處理聊天訊息任務（每小時執行）
@@ -99,6 +100,17 @@ def register_jobs():
         replace_existing=True
     )
     logger.info("Registered job: discover_new_words (every 3 hours at :15)")
+
+    # 註冊 Collector 監控任務（每 30 分鐘執行）
+    _scheduler.add_job(
+        run_monitor_collector,
+        'cron',
+        minute='*/30',
+        id='monitor_collector',
+        name='監控 Collector 狀態',
+        replace_existing=True
+    )
+    logger.info("Registered job: monitor_collector (every 30 minutes)")
 
 
 def start_scheduler():
