@@ -27,11 +27,14 @@ const Navigation = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const roleMenuRef = useRef(null);
+    const mobileRoleMenuRef = useRef(null);
 
     // Close role menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (roleMenuRef.current && !roleMenuRef.current.contains(event.target)) {
+            const isInsideDesktopMenu = roleMenuRef.current?.contains(event.target);
+            const isInsideMobileMenu = mobileRoleMenuRef.current?.contains(event.target);
+            if (!isInsideDesktopMenu && !isInsideMobileMenu) {
                 setShowRoleMenu(false);
             }
         };
@@ -193,7 +196,7 @@ const Navigation = () => {
 
             {/* Mobile Role Menu */}
             {showRoleMenu && (
-                <div className="absolute top-full right-12 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 md:hidden">
+                <div ref={mobileRoleMenuRef} className="absolute top-full right-12 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 md:hidden">
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
                         <p className="text-xs text-gray-500">目前身份</p>
                         <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
@@ -254,7 +257,7 @@ const Navigation = () => {
 
             {/* Login Modal */}
             {showLoginModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLoginModal(false)}>
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setShowLoginModal(false)}>
                     <div
                         className="bg-white rounded-2xl p-6 w-80 shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
@@ -269,7 +272,7 @@ const Navigation = () => {
                                 type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                onKeyPress={handleKeyPress}
+                                onKeyDown={handleKeyPress}
                                 placeholder="密碼"
                                 className="w-full border border-gray-300 rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                                 autoFocus
