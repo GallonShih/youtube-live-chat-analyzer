@@ -7,11 +7,9 @@ import {
 } from '@heroicons/react/24/outline';
 import DateTimeHourSelector from '../../components/common/DateTimeHourSelector';
 import { formatLocalHour } from '../../utils/formatters';
-import API_BASE_URL from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import API_BASE_URL, { authFetch } from '../../api/client';
 
 const TextMining = () => {
-    const { getAuthHeaders } = useAuth();
     // Filter state
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -44,11 +42,10 @@ const TextMining = () => {
             // 3. 呼叫後端 API
             // Method: POST
             // Endpoint: /api/text-mining/analyze
-            const response = await fetch(`${API_BASE_URL}/api/text-mining/analyze`, {
+            const response = await authFetch(`${API_BASE_URL}/api/text-mining/analyze`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     start_time: isoStartTime,

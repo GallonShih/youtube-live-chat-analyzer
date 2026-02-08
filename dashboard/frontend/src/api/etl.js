@@ -1,17 +1,10 @@
-import API_BASE_URL from './client';
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('yt_chat_analyzer_access_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
+import API_BASE_URL, { authFetch } from './client';
 
 /**
  * 取得所有 ETL 任務
  */
 export const fetchETLJobs = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/jobs`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/jobs`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -20,9 +13,7 @@ export const fetchETLJobs = async () => {
  * 取得排程器狀態
  */
 export const fetchSchedulerStatus = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/status`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/status`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -31,9 +22,8 @@ export const fetchSchedulerStatus = async () => {
  * 觸發 ETL 任務
  */
 export const triggerETLJob = async (jobId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/trigger`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/trigger`, {
         method: 'POST',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
@@ -43,9 +33,8 @@ export const triggerETLJob = async (jobId) => {
  * 暫停 ETL 任務
  */
 export const pauseETLJob = async (jobId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/pause`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/pause`, {
         method: 'POST',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
@@ -55,9 +44,8 @@ export const pauseETLJob = async (jobId) => {
  * 恢復 ETL 任務
  */
 export const resumeETLJob = async (jobId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/resume`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/jobs/${jobId}/resume`, {
         method: 'POST',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
@@ -72,9 +60,7 @@ export const fetchETLLogs = async ({ jobId, status, limit = 50 } = {}) => {
     if (status) params.append('status', status);
     if (limit) params.append('limit', limit);
 
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/logs?${params}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/logs?${params}`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -86,9 +72,7 @@ export const fetchETLSettings = async (category = null) => {
     const params = new URLSearchParams();
     if (category) params.append('category', category);
 
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/settings?${params}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/settings?${params}`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -97,9 +81,8 @@ export const fetchETLSettings = async (category = null) => {
  * 更新 ETL 設定
  */
 export const updateETLSetting = async (key, value) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/settings/${key}?value=${encodeURIComponent(value)}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/settings/${key}?value=${encodeURIComponent(value)}`, {
         method: 'PUT',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
@@ -111,9 +94,7 @@ export const updateETLSetting = async (key, value) => {
  * 取得所有提示詞範本
  */
 export const fetchPromptTemplates = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -122,9 +103,7 @@ export const fetchPromptTemplates = async () => {
  * 取得單一提示詞範本
  */
 export const fetchPromptTemplate = async (templateId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -133,9 +112,7 @@ export const fetchPromptTemplate = async (templateId) => {
  * 取得啟用的提示詞範本
  */
 export const fetchActivePromptTemplate = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/active/current`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/active/current`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
@@ -144,11 +121,10 @@ export const fetchActivePromptTemplate = async () => {
  * 建立新的提示詞範本
  */
 export const createPromptTemplate = async (data) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify(data),
     });
@@ -160,11 +136,10 @@ export const createPromptTemplate = async (data) => {
  * 更新提示詞範本
  */
 export const updatePromptTemplate = async (templateId, data) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify(data),
     });
@@ -176,9 +151,8 @@ export const updatePromptTemplate = async (templateId, data) => {
  * 刪除提示詞範本
  */
 export const deletePromptTemplate = async (templateId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
@@ -188,9 +162,8 @@ export const deletePromptTemplate = async (templateId) => {
  * 啟用提示詞範本
  */
 export const activatePromptTemplate = async (templateId) => {
-    const res = await fetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}/activate`, {
+    const res = await authFetch(`${API_BASE_URL}/api/admin/etl/prompt-templates/${templateId}/activate`, {
         method: 'POST',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();

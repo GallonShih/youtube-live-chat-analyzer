@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
-import API_BASE_URL from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import API_BASE_URL, { authFetch } from '../../api/client';
 
 const SettingsManager = () => {
     const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -11,8 +10,6 @@ const SettingsManager = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
 
-    const { getAuthHeaders } = useAuth();
-
     useEffect(() => {
         fetchSettings();
     }, []);
@@ -20,9 +17,7 @@ const SettingsManager = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_BASE_URL}/api/admin/settings/youtube_url`, {
-                headers: getAuthHeaders()
-            });
+            const response = await authFetch(`${API_BASE_URL}/api/admin/settings/youtube_url`);
             const data = await response.json();
 
             if (data.value) {
@@ -53,11 +48,10 @@ const SettingsManager = () => {
 
         try {
             setSaving(true);
-            const response = await fetch(`${API_BASE_URL}/api/admin/settings`, {
+            const response = await authFetch(`${API_BASE_URL}/api/admin/settings`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     key: 'youtube_url',

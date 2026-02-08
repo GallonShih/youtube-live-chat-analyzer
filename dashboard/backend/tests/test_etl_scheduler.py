@@ -39,10 +39,11 @@ def test_register_jobs():
         
         # Easier way: Let it import, but mock the add_job call
          scheduler.register_jobs()
-         assert scheduler._scheduler.add_job.call_count == 2
+         assert scheduler._scheduler.add_job.call_count == 3
          args_list = scheduler._scheduler.add_job.call_args_list
          assert args_list[0][1]['id'] == 'process_chat_messages'
          assert args_list[1][1]['id'] == 'discover_new_words'
+         assert args_list[2][1]['id'] == 'monitor_collector'
 
 def test_start_scheduler():
     scheduler._scheduler = MagicMock()

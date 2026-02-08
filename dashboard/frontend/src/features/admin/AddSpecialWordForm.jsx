@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import ValidationResultModal from './ValidationResultModal';
 import { useToast } from '../../components/common/Toast';
-import API_BASE_URL from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import API_BASE_URL, { authFetch } from '../../api/client';
 
 const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
     const toast = useToast();
-    const { getAuthHeaders } = useAuth();
     const [word, setWord] = useState('');
     const [isValidated, setIsValidated] = useState(false);
     const [validationResult, setValidationResult] = useState({
@@ -27,11 +25,10 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/validate-special-word`, {
+            const res = await authFetch(`${API_BASE_URL}/api/admin/validate-special-word`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     word: word.trim(),
@@ -67,11 +64,10 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
 
         setIsSubmitting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/add-special-word`, {
+            const res = await authFetch(`${API_BASE_URL}/api/admin/add-special-word`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     word: word.trim()

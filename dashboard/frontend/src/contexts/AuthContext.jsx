@@ -13,6 +13,29 @@ export const AuthProvider = ({ children }) => {
     const [accessToken, setAccessToken] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Listen for auth events dispatched by authFetch
+    useEffect(() => {
+        const handleTokenRefreshed = () => {
+            const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+            if (token) {
+                setAccessToken(token);
+                setIsAdmin(true);
+            }
+        };
+
+        const handleLogout = () => {
+            clearTokens();
+        };
+
+        window.addEventListener('auth-token-refreshed', handleTokenRefreshed);
+        window.addEventListener('auth-logout', handleLogout);
+
+        return () => {
+            window.removeEventListener('auth-token-refreshed', handleTokenRefreshed);
+            window.removeEventListener('auth-logout', handleLogout);
+        };
+    }, []);
+
     // Initialize from localStorage
     useEffect(() => {
         const initAuth = async () => {
@@ -139,20 +162,12 @@ export const AuthProvider = ({ children }) => {
         }
     }, [accessToken]);
 
-    const getAuthHeaders = useCallback(() => {
-        if (accessToken) {
-            return { 'Authorization': `Bearer ${accessToken}` };
-        }
-        return {};
-    }, [accessToken]);
-
     const value = {
         isAdmin,
         role: isAdmin ? 'admin' : 'guest',
         login,
         logout,
         accessToken,
-        getAuthHeaders,
         isLoading,
     };
 

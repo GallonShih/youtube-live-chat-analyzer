@@ -12,9 +12,13 @@ const CATEGORY_LABELS = {
     etl: 'ETL Processing',
     import: 'Dictionary Import',
     ai: 'AI Discovery',
+    monitor: 'Collector Monitor',
 };
 
-const CATEGORY_ORDER = ['etl', 'ai', 'import', 'api'];
+const CATEGORY_ORDER = ['etl', 'ai', 'import', 'api', 'monitor'];
+
+// Internal settings hidden from UI
+const HIDDEN_KEYS = new Set(['MONITOR_ALERT_STATE']);
 
 const ETLSettingsManager = () => {
     const [settings, setSettings] = useState([]);
@@ -194,9 +198,9 @@ const ETLSettingsManager = () => {
         }
     };
 
-    // Group settings by category
+    // Group settings by category (exclude internal keys)
     const groupedSettings = CATEGORY_ORDER.reduce((acc, category) => {
-        acc[category] = settings.filter(s => s.category === category);
+        acc[category] = settings.filter(s => s.category === category && !HIDDEN_KEYS.has(s.key));
         return acc;
     }, {});
 

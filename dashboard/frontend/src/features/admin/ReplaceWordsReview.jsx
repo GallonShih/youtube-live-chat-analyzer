@@ -5,12 +5,10 @@ import ValidationResultModal from './ValidationResultModal';
 import AddReplaceWordForm from './AddReplaceWordForm';
 import WordDetailModal from './WordDetailModal';
 import { useToast } from '../../components/common/Toast';
-import API_BASE_URL from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import API_BASE_URL, { authFetch } from '../../api/client';
 
 const ReplaceWordsReview = () => {
     const toast = useToast();
-    const { getAuthHeaders } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState([]);
@@ -61,9 +59,7 @@ const ReplaceWordsReview = () => {
             if (sourceWordFilter) params.append('source_word_filter', sourceWordFilter);
             if (targetWordFilter) params.append('target_word_filter', targetWordFilter);
 
-            const res = await fetch(`${API_BASE_URL}/api/admin/pending-replace-words?${params}`, {
-                headers: getAuthHeaders()
-            });
+            const res = await authFetch(`${API_BASE_URL}/api/admin/pending-replace-words?${params}`);
             const data = await res.json();
             setItems(data.items);
             setTotal(data.total);
@@ -167,11 +163,10 @@ const ReplaceWordsReview = () => {
                 body = JSON.stringify({ ids, reviewed_by: 'admin' });
             }
 
-            const res = await fetch(url, {
+            const res = await authFetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body
             });
@@ -201,11 +196,10 @@ const ReplaceWordsReview = () => {
     // Validate individual item
     const handleValidate = async (item) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/validate-replace-word`, {
+            const res = await authFetch(`${API_BASE_URL}/api/admin/validate-replace-word`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     source_word: item.source_word,

@@ -1,32 +1,22 @@
-import API_BASE_URL from './client';
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('yt_chat_analyzer_access_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
+import API_BASE_URL, { authFetch } from './client';
 
 export const fetchReplacementWordlists = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/replacement-wordlists`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/replacement-wordlists`);
     if (!res.ok) throw new Error('Failed to fetch replacement wordlists');
     return res.json();
 };
 
 export const fetchReplacementWordlist = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`);
     if (!res.ok) throw new Error('Failed to load replacement wordlist');
     return res.json();
 };
 
 export const createReplacementWordlist = async ({ name, replacements }) => {
-    const res = await fetch(`${API_BASE_URL}/api/replacement-wordlists`, {
+    const res = await authFetch(`${API_BASE_URL}/api/replacement-wordlists`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify({ name, replacements })
     });
@@ -42,11 +32,10 @@ export const updateReplacementWordlist = async (id, { name, replacements }) => {
     if (name !== undefined) body.name = name;
     if (replacements !== undefined) body.replacements = replacements;
 
-    const res = await fetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify(body)
     });
@@ -55,9 +44,8 @@ export const updateReplacementWordlist = async (id, { name, replacements }) => {
 };
 
 export const deleteReplacementWordlist = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/replacement-wordlists/${id}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error('Failed to delete replacement wordlist');
     return true;

@@ -1,9 +1,4 @@
-import API_BASE_URL from './client';
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('yt_chat_analyzer_access_token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
+import API_BASE_URL, { authFetch } from './client';
 
 // Word Frequency
 export const fetchWordFrequency = async ({ startTime, endTime, limit, excludeWords, replacementWordlistId, replacements }) => {
@@ -23,36 +18,29 @@ export const fetchWordFrequency = async ({ startTime, endTime, limit, excludeWor
         params.append('replacement_wordlist_id', replacementWordlistId);
     }
 
-    const res = await fetch(`${url}?${params.toString()}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${url}?${params.toString()}`);
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     return res.json();
 };
 
 // Wordlists
 export const fetchWordlists = async () => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/exclusion-wordlists`);
     if (!res.ok) throw new Error('Failed to fetch wordlists');
     return res.json();
 };
 
 export const fetchWordlist = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
-        headers: getAuthHeaders()
-    });
+    const res = await authFetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`);
     if (!res.ok) throw new Error('Failed to load wordlist');
     return res.json();
 };
 
 export const createWordlist = async ({ name, words }) => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists`, {
+    const res = await authFetch(`${API_BASE_URL}/api/exclusion-wordlists`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify({ name, words })
     });
@@ -64,11 +52,10 @@ export const createWordlist = async ({ name, words }) => {
 };
 
 export const updateWordlist = async (id, { words }) => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders()
         },
         body: JSON.stringify({ words })
     });
@@ -77,9 +64,8 @@ export const updateWordlist = async (id, { words }) => {
 };
 
 export const deleteWordlist = async (id) => {
-    const res = await fetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
+    const res = await authFetch(`${API_BASE_URL}/api/exclusion-wordlists/${id}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
     });
     if (!res.ok) throw new Error('Failed to delete wordlist');
     return true;

@@ -53,7 +53,13 @@ INSERT INTO etl_settings (key, value, value_type, description, category, is_sens
 -- AI 詞彙發現設定
 ('DISCOVER_NEW_WORDS_ENABLED', 'true', 'boolean', '啟用 AI 詞彙發現功能', 'ai', false),
 ('DISCOVER_NEW_WORDS_MIN_CONFIDENCE', '0.7', 'float', 'AI 發現詞彙的最低信心分數', 'ai', false),
-('DISCOVER_NEW_WORDS_BATCH_SIZE', '500', 'integer', '每次 AI 分析的訊息數量', 'ai', false)
+('DISCOVER_NEW_WORDS_BATCH_SIZE', '500', 'integer', '每次 AI 分析的訊息數量', 'ai', false),
+
+-- Collector 監控設定
+('DISCORD_WEBHOOK_URL', '', 'string', 'Discord Webhook URL（用於 Collector 監控告警）', 'monitor', true),
+('MONITOR_ENABLED', 'true', 'boolean', '啟用 Collector 監控', 'monitor', false),
+('MONITOR_NO_DATA_THRESHOLD_MINUTES', '10', 'integer', '無新資料告警閾值（分鐘）', 'monitor', false),
+('MONITOR_ALERT_STATE', '{}', 'string', 'Collector 監控告警狀態（系統內部使用）', 'monitor', true)
 ON CONFLICT (key) DO NOTHING;
 
 

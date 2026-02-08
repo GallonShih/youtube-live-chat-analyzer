@@ -5,12 +5,10 @@ import ValidationResultModal from './ValidationResultModal';
 import AddSpecialWordForm from './AddSpecialWordForm';
 import WordDetailModal from './WordDetailModal';
 import { useToast } from '../../components/common/Toast';
-import API_BASE_URL from '../../api/client';
-import { useAuth } from '../../contexts/AuthContext';
+import API_BASE_URL, { authFetch } from '../../api/client';
 
 const SpecialWordsReview = () => {
     const toast = useToast();
-    const { getAuthHeaders } = useAuth();
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedIds, setSelectedIds] = useState([]);
@@ -57,9 +55,7 @@ const SpecialWordsReview = () => {
             if (wordFilter) params.append('word_filter', wordFilter);
 
 
-            const res = await fetch(`${API_BASE_URL}/api/admin/pending-special-words?${params}`, {
-                headers: getAuthHeaders()
-            });
+            const res = await authFetch(`${API_BASE_URL}/api/admin/pending-special-words?${params}`);
             const data = await res.json();
             setItems(data.items);
             setTotal(data.total);
@@ -184,11 +180,10 @@ const SpecialWordsReview = () => {
                 body = JSON.stringify({ ids, reviewed_by: 'admin' });
             }
 
-            const res = await fetch(url, {
+            const res = await authFetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body
             });
@@ -197,11 +192,10 @@ const SpecialWordsReview = () => {
                 // Fallback: if batch endpoint 404s, try loop (resilience)
                 if (res.status === 404 && !id) {
                     for (const singleId of ids) {
-                        await fetch(`${API_BASE_URL}/api/admin/${action}-special-word/${singleId}`, {
+                        await authFetch(`${API_BASE_URL}/api/admin/${action}-special-word/${singleId}`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                ...getAuthHeaders()
                             },
                             body: JSON.stringify({ reviewed_by: 'admin' })
                         });
@@ -231,11 +225,10 @@ const SpecialWordsReview = () => {
 
     const handleValidate = async (item) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/validate-special-word`, {
+            const res = await authFetch(`${API_BASE_URL}/api/admin/validate-special-word`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...getAuthHeaders()
                 },
                 body: JSON.stringify({
                     word: item.word,
