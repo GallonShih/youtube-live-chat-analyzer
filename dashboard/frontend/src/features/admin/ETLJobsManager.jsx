@@ -28,6 +28,7 @@ const StatusBadge = ({ status }) => {
         completed: 'bg-green-100 text-green-800',
         failed: 'bg-red-100 text-red-800',
         pending: 'bg-yellow-100 text-yellow-800',
+        skipped: 'bg-orange-100 text-orange-800',
     };
 
     return (

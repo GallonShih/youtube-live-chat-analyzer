@@ -4,6 +4,7 @@ ETL 任務入口函數
 """
 
 import logging
+import functools
 from datetime import datetime
 from typing import Dict, Any, Callable, Optional
 
@@ -20,6 +21,93 @@ JOB_NAMES = {
     'import_dicts': '匯入字典',
     'monitor_collector': '監控 Collector 狀態',
 }
+
+# Advisory lock keys for distributed lock (prevent duplicate execution across workers)
+ETL_LOCK_KEYS = {
+    'process_chat_messages': 737001,
+    'discover_new_words': 737002,
+    'import_dicts': 737003,
+    'monitor_collector': 737004,
+}
+
+
+def with_advisory_lock(lock_key: int):
+    """
+    Decorator that uses PostgreSQL advisory locks to prevent duplicate
+    execution across multiple Uvicorn workers.
+
+    Uses pg_try_advisory_lock (non-blocking). Only the worker that acquires
+    the lock executes the task; others skip silently or mark the log as 'skipped'.
+
+    Falls back to executing the task if the lock mechanism itself fails
+    (fail-open to avoid breaking existing behavior).
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            etl_log_id = kwargs.get('etl_log_id') or (args[0] if args else None)
+
+            engine = ETLConfig.get_engine()
+            if not engine:
+                logger.warning(
+                    f"[{func.__name__}] No database engine, "
+                    "falling back to direct execution"
+                )
+                return func(*args, **kwargs)
+
+            raw_conn = None
+            try:
+                # Use a dedicated raw connection for the advisory lock.
+                # The lock is held for the lifetime of this connection.
+                raw_conn = engine.raw_connection()
+                cursor = raw_conn.cursor()
+                cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
+                acquired = cursor.fetchone()[0]
+                cursor.close()
+
+                if not acquired:
+                    logger.info(
+                        f"[{func.__name__}] Advisory lock {lock_key} not acquired, "
+                        "skipping (another worker is executing this task)"
+                    )
+                    if etl_log_id:
+                        update_etl_log_status(
+                            etl_log_id, 'skipped',
+                            error_message='Skipped: another worker is already executing this task'
+                        )
+                    return {'status': 'skipped', 'reason': 'another worker is executing this task'}
+
+                logger.info(
+                    f"[{func.__name__}] Advisory lock {lock_key} acquired, executing task"
+                )
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    # Release the advisory lock explicitly
+                    try:
+                        cursor = raw_conn.cursor()
+                        cursor.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
+                        cursor.close()
+                        raw_conn.commit()
+                    except Exception as unlock_err:
+                        logger.warning(
+                            f"[{func.__name__}] Failed to release advisory lock: {unlock_err}"
+                        )
+            except Exception as lock_err:
+                logger.warning(
+                    f"[{func.__name__}] Advisory lock mechanism failed: {lock_err}, "
+                    "falling back to direct execution"
+                )
+                return func(*args, **kwargs)
+            finally:
+                if raw_conn is not None:
+                    try:
+                        raw_conn.close()
+                    except Exception:
+                        pass
+
+        return wrapper
+    return decorator
 
 
 def create_etl_log(job_id: str, trigger_type: str = 'scheduled') -> Optional[int]:
@@ -70,9 +158,9 @@ def update_etl_log_status(
     
     Args:
         etl_log_id: ETL 記錄 ID
-        status: 新狀態 ('completed', 'failed')
+        status: 新狀態 ('completed', 'failed', 'skipped')
         records_processed: 處理的記錄數
-        error_message: 錯誤訊息（僅用於 failed 狀態）
+        error_message: 錯誤訊息（用於 failed/skipped 狀態）
     
     Returns:
         是否成功
@@ -109,6 +197,19 @@ def update_etl_log_status(
                     """),
                     {"id": etl_log_id, "error": error_msg}
                 )
+            elif status == 'skipped':
+                skip_msg = str(error_message)[:500] if error_message else 'Skipped: task is already running'
+                conn.execute(
+                    text("""
+                        UPDATE etl_execution_log
+                        SET status = 'skipped',
+                            completed_at = NOW(),
+                            error_message = :error,
+                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
+                        WHERE id = :id;
+                    """),
+                    {"id": etl_log_id, "error": skip_msg}
+                )
             conn.commit()
             logger.info(f"Updated ETL log {etl_log_id}: status={status}")
             return True
@@ -117,6 +218,7 @@ def update_etl_log_status(
         return False
 
 
+@with_advisory_lock(ETL_LOCK_KEYS['process_chat_messages'])
 def run_process_chat_messages(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     """
     執行處理聊天訊息任務
@@ -156,6 +258,7 @@ def run_process_chat_messages(etl_log_id: Optional[int] = None) -> Dict[str, Any
         return {'status': 'failed', 'error': str(e)}
 
 
+@with_advisory_lock(ETL_LOCK_KEYS['discover_new_words'])
 def run_discover_new_words(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     """
     執行 AI 詞彙發現任務
@@ -196,6 +299,7 @@ def run_discover_new_words(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
         return {'status': 'failed', 'error': str(e)}
 
 
+@with_advisory_lock(ETL_LOCK_KEYS['import_dicts'])
 def run_import_dicts(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     """
     執行字典匯入任務
@@ -235,6 +339,7 @@ def run_import_dicts(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
         return {'status': 'failed', 'error': str(e)}
 
 
+@with_advisory_lock(ETL_LOCK_KEYS['monitor_collector'])
 def run_monitor_collector(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
     """
     執行 Collector 監控任務
