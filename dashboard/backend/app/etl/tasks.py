@@ -71,7 +71,10 @@ def with_advisory_lock(lock_key: int):
                         "skipping (another worker is executing this task)"
                     )
                     if etl_log_id:
-                        update_etl_log_status(etl_log_id, 'skipped')
+                        update_etl_log_status(
+                            etl_log_id, 'skipped',
+                            error_message='Skipped: another worker is already executing this task'
+                        )
                     return {'status': 'skipped', 'reason': 'another worker is executing this task'}
 
                 logger.info(
@@ -157,7 +160,7 @@ def update_etl_log_status(
         etl_log_id: ETL 記錄 ID
         status: 新狀態 ('completed', 'failed', 'skipped')
         records_processed: 處理的記錄數
-        error_message: 錯誤訊息（僅用於 failed 狀態）
+        error_message: 錯誤訊息（用於 failed/skipped 狀態）
     
     Returns:
         是否成功
@@ -195,16 +198,17 @@ def update_etl_log_status(
                     {"id": etl_log_id, "error": error_msg}
                 )
             elif status == 'skipped':
+                skip_msg = str(error_message)[:500] if error_message else 'Skipped: task is already running'
                 conn.execute(
                     text("""
                         UPDATE etl_execution_log
                         SET status = 'skipped',
                             completed_at = NOW(),
-                            error_message = 'Skipped: another worker is already executing this task',
+                            error_message = :error,
                             duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
                         WHERE id = :id;
                     """),
-                    {"id": etl_log_id}
+                    {"id": etl_log_id, "error": skip_msg}
                 )
             conn.commit()
             logger.info(f"Updated ETL log {etl_log_id}: status={status}")

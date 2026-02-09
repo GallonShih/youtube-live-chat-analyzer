@@ -127,7 +127,7 @@ async def trigger_job_endpoint(
             running_jobs = trigger_job_endpoint._running_jobs
         
         if job_id in running_jobs:
-            update_etl_log_status(etl_log_id, 'failed', error_message='Task already running')
+            update_etl_log_status(etl_log_id, 'skipped', error_message='Skipped: task is already running on this worker')
             return {
                 "success": False,
                 "status": "already_running",
@@ -240,11 +240,11 @@ def get_execution_logs(
     """
     取得 ETL 執行記錄
     
-    所有任務狀態（running, completed, failed）都記錄在 etl_execution_log
+    所有任務狀態（running, completed, failed, skipped）都記錄在 etl_execution_log
 
     Args:
         job_id: 篩選特定任務
-        status: 篩選狀態 (running, completed, failed)
+        status: 篩選狀態 (running, completed, failed, skipped)
         limit: 返回數量
 
     Returns:
