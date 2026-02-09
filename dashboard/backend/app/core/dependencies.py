@@ -15,6 +15,7 @@ def get_current_user(
     """
     Get the current user from the Authorization header.
     Returns guest user if no token is provided.
+    Raises 401 if a token is provided but invalid/expired.
     """
     if credentials is None:
         return {"role": "guest"}
@@ -22,8 +23,12 @@ def get_current_user(
     try:
         payload = verify_access_token(credentials.credentials)
         return {"role": payload.get("role", "guest")}
-    except TokenError:
-        return {"role": "guest"}
+    except TokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def require_admin(

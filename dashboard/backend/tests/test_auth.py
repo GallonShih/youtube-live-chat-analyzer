@@ -1,5 +1,6 @@
 """Tests for authentication endpoints and protected routes."""
 import pytest
+from datetime import timedelta
 from app.core.security import create_access_token, create_refresh_token
 
 
@@ -67,6 +68,18 @@ class TestAuthRefresh:
         )
         assert response.status_code == 401
 
+    def test_refresh_with_expired_refresh_token(self, client):
+        """Test refresh fails when refresh token is expired."""
+        expired_refresh = create_refresh_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": expired_refresh}
+        )
+        assert response.status_code == 401
+        assert "expired" in response.json()["detail"].lower()
+
     def test_refresh_with_access_token(self, client):
         """Test refresh fails when using access token instead of refresh token."""
         # Get an access token
@@ -99,14 +112,24 @@ class TestAuthMe:
         assert data["role"] == "guest"
 
     def test_me_invalid_token(self, client):
-        """Test getting user info with invalid token returns guest."""
+        """Test getting user info with invalid token returns 401."""
         response = client.get(
             "/api/auth/me",
             headers={"Authorization": "Bearer invalid.token"}
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["role"] == "guest"
+        assert response.status_code == 401
+
+    def test_me_expired_token(self, client):
+        """Test getting user info with expired token returns 401."""
+        expired_access = create_access_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {expired_access}"}
+        )
+        assert response.status_code == 401
+        assert "expired" in response.json()["detail"].lower()
 
 
 class TestProtectedEndpoints:
@@ -174,3 +197,84 @@ class TestProtectedEndpoints:
             json={"name": "Test", "template": "test template"}
         )
         assert response.status_code == 401
+
+    def test_protected_endpoint_with_expired_token(self, client, db):
+        """Test protected endpoint rejects expired token with 401."""
+        expired_access = create_access_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        response = client.post(
+            "/api/word-trends/groups",
+            json={"name": "Test Group", "words": ["test"]},
+            headers={"Authorization": f"Bearer {expired_access}"}
+        )
+        assert response.status_code == 401
+
+
+class TestTokenRefreshFlow:
+    """Test end-to-end token refresh scenarios."""
+
+    def test_full_refresh_flow(self, client):
+        """Test: expired access → 401 → refresh → new access → admin."""
+        # Create an expired access token and a valid refresh token
+        expired_access = create_access_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        valid_refresh = create_refresh_token({"role": "admin"})
+
+        # Step 1: auth/me with expired access returns 401
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {expired_access}"}
+        )
+        assert response.status_code == 401
+
+        # Step 2: Use refresh token to get new access token
+        response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": valid_refresh}
+        )
+        assert response.status_code == 200
+        new_access = response.json()["access_token"]
+
+        # Step 3: auth/me with new access token succeeds
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {new_access}"}
+        )
+        assert response.status_code == 200
+        assert response.json()["role"] == "admin"
+
+    def test_both_tokens_expired_requires_relogin(self, client):
+        """Test: both tokens expired → refresh fails → must re-login."""
+        expired_access = create_access_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        expired_refresh = create_refresh_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+
+        # Step 1: auth/me with expired access returns 401
+        response = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {expired_access}"}
+        )
+        assert response.status_code == 401
+
+        # Step 2: Refresh with expired refresh token also fails
+        response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": expired_refresh}
+        )
+        assert response.status_code == 401
+
+    def test_public_endpoint_ignores_expired_token(self, client, db):
+        """Test: public endpoints work even with expired token in header."""
+        expired_access = create_access_token(
+            {"role": "admin"}, expires_delta=timedelta(seconds=-3600)
+        )
+        response = client.get(
+            "/api/word-trends/groups",
+            headers={"Authorization": f"Bearer {expired_access}"}
+        )
+        assert response.status_code == 200
