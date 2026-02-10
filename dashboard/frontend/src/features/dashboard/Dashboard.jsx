@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart } from 'react-chartjs-2';
 import {
     MagnifyingGlassIcon,
@@ -15,6 +15,7 @@ import WordCloudPanel from '../wordcloud/WordCloudPanel';
 import MoneyStats from './MoneyStats';
 import EmojiStatsPanel from './EmojiStatsPanel';
 import StreamInfoBar from './StreamInfoBar';
+import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
 
 registerChartComponents();
 
@@ -29,6 +30,10 @@ function Dashboard() {
     const [endDate, setEndDate] = useState('');
     const [toggleRefresh, setToggleRefresh] = useState(true);
 
+    // Default period
+    const { defaultStartTime, loading: defaultPeriodLoading } = useDefaultStartTime();
+    const [defaultApplied, setDefaultApplied] = useState(false);
+
     // Dynamic Time Axis State
     const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -36,6 +41,21 @@ function Dashboard() {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    // Apply default start time on load (only set startDate, keep auto-refresh on)
+    useEffect(() => {
+        if (defaultPeriodLoading || defaultApplied) return;
+        setDefaultApplied(true);
+        if (defaultStartTime) {
+            setStartDate(defaultStartTime);
+        }
+    }, [defaultPeriodLoading, defaultStartTime, defaultApplied]);
+
+    // Refs for auto-refresh to read latest filter values without re-creating interval
+    const startDateRef = useRef(startDate);
+    const endDateRef = useRef(endDate);
+    useEffect(() => { startDateRef.current = startDate; }, [startDate]);
+    useEffect(() => { endDateRef.current = endDate; }, [endDate]);
 
     const [timeAxisConfig, setTimeAxisConfig] = useState({
         type: 'time',
@@ -120,12 +140,31 @@ function Dashboard() {
     };
 
     useEffect(() => {
-        const intervalId = setInterval(() => {
-            if (toggleRefresh) {
+        const doFetch = () => {
+            const sd = startDateRef.current;
+            const ed = endDateRef.current;
+            const now = new Date();
+
+            if (sd && !ed) {
+                // Has start but no end → fetch from start to now (default period mode)
+                const startIso = new Date(sd).toISOString();
+                const endObj = new Date(now);
+                endObj.setMinutes(59, 59, 999);
+                const endIso = endObj.toISOString();
+
+                fetchViewers(startIso, endIso);
+                fetchComments(startIso, endIso);
+
+                setTimeAxisConfig(prev => ({
+                    ...prev,
+                    min: new Date(sd).getTime(),
+                    max: now.getTime(),
+                }));
+            } else {
+                // No filter → 12h rolling window
                 fetchViewers();
                 fetchComments();
 
-                const now = new Date();
                 const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
                 setTimeAxisConfig(prev => ({
                     ...prev,
@@ -133,12 +172,13 @@ function Dashboard() {
                     max: now.getTime(),
                 }));
             }
+        };
+
+        const intervalId = setInterval(() => {
+            if (toggleRefresh) doFetch();
         }, 5000);
 
-        if (toggleRefresh) {
-            fetchViewers();
-            fetchComments();
-        }
+        if (toggleRefresh) doFetch();
 
         return () => clearInterval(intervalId);
     }, [toggleRefresh]);
