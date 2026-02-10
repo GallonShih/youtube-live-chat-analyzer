@@ -24,6 +24,7 @@ import { usePlayback } from '../../hooks/usePlayback';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
 import { usePlaybackLayout } from '../../hooks/usePlaybackLayout';
+import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
 
 registerChartComponents();
 
@@ -33,6 +34,10 @@ function PlaybackPage() {
     const [endDate, setEndDate] = useState('');
     const [stepSeconds, setStepSeconds] = useState(300); // 5 minutes default
     const [playbackSpeed, setPlaybackSpeed] = useState(1); // seconds per step
+
+    // Default period
+    const { defaultStartTime, loading: defaultPeriodLoading } = useDefaultStartTime();
+    const [defaultApplied, setDefaultApplied] = useState(false);
 
     // Hooks
     const {
@@ -68,6 +73,15 @@ function PlaybackPage() {
 
     // Grid layout width measurement
     const { width: gridWidth, containerRef: gridContainerRef, mounted: gridMounted } = useContainerWidth();
+
+    // Apply default period
+    useEffect(() => {
+        if (defaultPeriodLoading || defaultApplied) return;
+        setDefaultApplied(true);
+        if (defaultStartTime) {
+            setStartDate(defaultStartTime);
+        }
+    }, [defaultPeriodLoading, defaultStartTime, defaultApplied]);
 
     // Step options
     const stepOptions = [

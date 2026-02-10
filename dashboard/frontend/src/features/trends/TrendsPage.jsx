@@ -18,9 +18,11 @@ import {
     fetchTrendStats
 } from '../../api/wordTrends';
 import { formatLocalHour } from '../../utils/formatters';
+import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
 
 const TrendsPage = () => {
     const { isAdmin } = useAuth();
+    const { defaultStartTime, loading: defaultPeriodLoading } = useDefaultStartTime();
 
     // Word Groups state
     const [groups, setGroups] = useState([]);
@@ -43,6 +45,17 @@ const TrendsPage = () => {
     // Chart display options
     const [lineWidth, setLineWidth] = useState(2);
     const [showPoints, setShowPoints] = useState(true);
+
+    // Apply default period
+    const [defaultApplied, setDefaultApplied] = useState(false);
+    useEffect(() => {
+        if (defaultPeriodLoading || defaultApplied) return;
+        setDefaultApplied(true);
+        if (defaultStartTime) {
+            setStartDate(defaultStartTime);
+            setEndDate(formatLocalHour(new Date()));
+        }
+    }, [defaultPeriodLoading, defaultStartTime, defaultApplied]);
 
     // Load groups on mount
     useEffect(() => {
