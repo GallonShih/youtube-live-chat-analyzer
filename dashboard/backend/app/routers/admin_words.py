@@ -840,6 +840,60 @@ def get_active_special_words(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/active-replace-words/{word_id}", dependencies=[Depends(require_admin)])
+def delete_active_replace_word(
+    word_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        word = db.query(ReplaceWord).filter(ReplaceWord.id == word_id).first()
+        if not word:
+            raise HTTPException(status_code=404, detail="Replace word not found")
+
+        db.delete(word)
+        db.commit()
+
+        logger.info(f"Deleted active replace word {word_id}")
+        return {
+            "success": True,
+            "message": "Replace word deleted successfully",
+            "id": word_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting active replace word {word_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/active-special-words/{word_id}", dependencies=[Depends(require_admin)])
+def delete_active_special_word(
+    word_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        word = db.query(SpecialWord).filter(SpecialWord.id == word_id).first()
+        if not word:
+            raise HTTPException(status_code=404, detail="Special word not found")
+
+        db.delete(word)
+        db.commit()
+
+        logger.info(f"Deleted active special word {word_id}")
+        return {
+            "success": True,
+            "message": "Special word deleted successfully",
+            "id": word_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting active special word {word_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/add-special-word", dependencies=[Depends(require_admin)])
 def add_special_word(
     word: str = Body(..., embed=True),

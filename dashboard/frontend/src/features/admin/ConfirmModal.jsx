@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 const ConfirmModal = ({
     isOpen,
@@ -8,7 +9,8 @@ const ConfirmModal = ({
     onCancel,
     confirmText = "Confirm",
     cancelText = "Cancel",
-    isDestructive = false
+    isDestructive = false,
+    usePortal = false
 }) => {
     const cancelButtonRef = useRef(null);
     const modalRef = useRef(null);
@@ -32,8 +34,9 @@ const ConfirmModal = ({
     }, [isOpen, onCancel]);
 
     if (!isOpen) return null;
+    if (typeof document === 'undefined') return null;
 
-    return (
+    const modal = (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-overlay"
             role="dialog"
@@ -85,6 +88,8 @@ const ConfirmModal = ({
             </div>
         </div>
     );
+
+    return usePortal ? createPortal(modal, document.body) : modal;
 };
 
 export default ConfirmModal;

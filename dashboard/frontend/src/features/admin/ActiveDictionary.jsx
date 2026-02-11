@@ -1,10 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { TrashIcon } from '@heroicons/react/24/outline';
+import ConfirmModal from './ConfirmModal';
 import API_BASE_URL, { authFetch } from '../../api/client';
 
 const ActiveDictionary = () => {
     const [subView, setSubView] = useState('replace');
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [deleteError, setDeleteError] = useState('');
+    const [deletingKey, setDeletingKey] = useState('');
+    const [confirmConfig, setConfirmConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        isDestructive: false
+    });
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const scrollPositionRef = useRef(0);
+    const restoreScrollRef = useRef(false);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(0);
     const [search, setSearch] = useState('');
@@ -48,6 +61,13 @@ const ActiveDictionary = () => {
         fetchItems();
     }, [page]);
 
+    useLayoutEffect(() => {
+        if (restoreScrollRef.current) {
+            restoreScrollRef.current = false;
+            window.scrollTo({ top: scrollPositionRef.current, behavior: 'auto' });
+        }
+    }, [items]);
+
     const applySearch = () => {
         setSearch(localSearch);
     };
@@ -62,6 +82,53 @@ const ActiveDictionary = () => {
         if (!isoStr) return '-';
         const d = new Date(isoStr);
         return d.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    };
+
+    const openDeleteConfirm = (item) => {
+        const title = subView === 'replace' ? '刪除替換詞' : '刪除特殊詞';
+        const message = subView === 'replace'
+            ? `確定要刪除替換詞「${item.source_word} → ${item.target_word}」嗎？此動作無法復原。`
+            : `確定要刪除特殊詞「${item.word}」嗎？此動作無法復原。`;
+        scrollPositionRef.current = window.scrollY;
+        setPendingDelete(item);
+        setConfirmConfig({
+            isOpen: true,
+            title,
+            message,
+            isDestructive: true
+        });
+    };
+
+    const handleDeleteConfirmed = async () => {
+        if (!pendingDelete) return;
+        const endpoint = subView === 'replace' ? 'active-replace-words' : 'active-special-words';
+        const key = `${subView}-${pendingDelete.id}`;
+        setDeletingKey(key);
+        setDeleteError('');
+        try {
+            const res = await authFetch(`${API_BASE_URL}/api/admin/${endpoint}/${pendingDelete.id}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || 'Delete failed');
+            }
+
+            const willChangePage = items.length === 1 && page > 0;
+            if (willChangePage) {
+                setPage(prev => Math.max(0, prev - 1));
+            } else {
+                fetchItems(page);
+                restoreScrollRef.current = true;
+            }
+        } catch (err) {
+            console.error('Failed to delete dictionary word:', err);
+            setDeleteError(err.message || 'Delete failed');
+        } finally {
+            setDeletingKey('');
+            setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+            setPendingDelete(null);
+        }
     };
 
     return (
@@ -111,6 +178,27 @@ const ActiveDictionary = () => {
                 </button>
             </div>
 
+            {deleteError && (
+                <div className="mb-4 text-sm text-red-600">
+                    {deleteError}
+                </div>
+            )}
+
+            <ConfirmModal
+                isOpen={confirmConfig.isOpen}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                isDestructive={confirmConfig.isDestructive}
+                confirmText="刪除"
+                cancelText="取消"
+                usePortal
+                onConfirm={handleDeleteConfirmed}
+                onCancel={() => {
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                    setPendingDelete(null);
+                }}
+            />
+
             {/* Table */}
             {loading ? (
                 <div className="text-center py-8 text-gray-500">Loading...</div>
@@ -132,6 +220,7 @@ const ActiveDictionary = () => {
                                     <th className="text-left py-3 px-4 font-medium text-gray-600">Word</th>
                                 )}
                                 <th className="text-left py-3 px-4 font-medium text-gray-600">Created</th>
+                                <th className="text-right py-3 px-4 font-medium text-gray-600">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -149,6 +238,17 @@ const ActiveDictionary = () => {
                                         <td className="py-3 px-4 font-mono">{item.word}</td>
                                     )}
                                     <td className="py-3 px-4 text-gray-500">{formatDate(item.created_at)}</td>
+                                    <td className="py-3 px-4 text-right">
+                                        <button
+                                            type="button"
+                                            onClick={() => openDeleteConfirm(item)}
+                                            disabled={deletingKey === `${subView}-${item.id}`}
+                                            className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                            title="刪除"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

@@ -126,6 +126,76 @@ def test_get_active_special_words_pagination(client, db):
     assert len(data["items"]) == 1
 
 
+# --- Delete active words ---
+
+def test_delete_active_replace_word_success(admin_client, db, sample_replace_words):
+    word_id = sample_replace_words[0].id
+
+    response = admin_client.delete(f"/api/admin/active-replace-words/{word_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["id"] == word_id
+
+    remaining = db.query(type(sample_replace_words[0])).filter_by(id=word_id).first()
+    assert remaining is None
+
+
+def test_delete_active_replace_word_not_found(admin_client):
+    response = admin_client.delete("/api/admin/active-replace-words/999999")
+    assert response.status_code == 404
+
+
+def test_delete_active_special_word_success(admin_client, db, sample_special_words):
+    word_id = sample_special_words[0].id
+
+    response = admin_client.delete(f"/api/admin/active-special-words/{word_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["id"] == word_id
+
+    remaining = db.query(type(sample_special_words[0])).filter_by(id=word_id).first()
+    assert remaining is None
+
+
+def test_delete_active_special_word_not_found(admin_client):
+    response = admin_client.delete("/api/admin/active-special-words/999999")
+    assert response.status_code == 404
+
+
+def test_delete_active_replace_word_requires_admin(client, db, sample_replace_words):
+    word_id = sample_replace_words[0].id
+    response = client.delete(f"/api/admin/active-replace-words/{word_id}")
+    assert response.status_code == 401
+
+
+def test_delete_active_replace_word_forbidden_for_non_admin(client, db, sample_replace_words):
+    from app.core.security import create_access_token
+    token = create_access_token({"role": "user"})
+    headers = {"Authorization": f"Bearer {token}"}
+    word_id = sample_replace_words[0].id
+
+    response = client.delete(f"/api/admin/active-replace-words/{word_id}", headers=headers)
+    assert response.status_code == 403
+
+
+def test_delete_active_special_word_requires_admin(client, db, sample_special_words):
+    word_id = sample_special_words[0].id
+    response = client.delete(f"/api/admin/active-special-words/{word_id}")
+    assert response.status_code == 401
+
+
+def test_delete_active_special_word_forbidden_for_non_admin(client, db, sample_special_words):
+    from app.core.security import create_access_token
+    token = create_access_token({"role": "user"})
+    headers = {"Authorization": f"Bearer {token}"}
+    word_id = sample_special_words[0].id
+
+    response = client.delete(f"/api/admin/active-special-words/{word_id}", headers=headers)
+    assert response.status_code == 403
+
+
 # --- Query validation ---
 
 def test_active_replace_words_invalid_limit(client):
