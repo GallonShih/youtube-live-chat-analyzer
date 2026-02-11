@@ -159,42 +159,36 @@ class TestDictImporterImportMethods:
 
     @patch('app.etl.processors.dict_importer.ETLConfig')
     def test_import_meaningless_words_returns_file_not_found(self, mock_config):
-        """Test _import_meaningless_words returns error for missing file."""
+        """Test _import_meaningless_words raises error for missing file."""
         mock_config.get.return_value = 'postgresql://test'
         
         from app.etl.processors.dict_importer import DictImporter
         importer = DictImporter(text_analysis_dir=Path('/nonexistent'))
         
-        result = importer._import_meaningless_words()
-        
-        assert result['processed'] == 0
-        assert result['error'] == 'file_not_found'
+        with pytest.raises(FileNotFoundError, match="Meaningless words file not found"):
+            importer._import_meaningless_words()
 
     @patch('app.etl.processors.dict_importer.ETLConfig')
     def test_import_replace_words_returns_file_not_found(self, mock_config):
-        """Test _import_replace_words returns error for missing file."""
+        """Test _import_replace_words raises error for missing file."""
         mock_config.get.return_value = 'postgresql://test'
         
         from app.etl.processors.dict_importer import DictImporter
         importer = DictImporter(text_analysis_dir=Path('/nonexistent'))
         
-        result = importer._import_replace_words()
-        
-        assert result['processed'] == 0
-        assert result['error'] == 'file_not_found'
+        with pytest.raises(FileNotFoundError, match="Replace words file not found"):
+            importer._import_replace_words()
 
     @patch('app.etl.processors.dict_importer.ETLConfig')
     def test_import_special_words_returns_file_not_found(self, mock_config):
-        """Test _import_special_words returns error for missing file."""
+        """Test _import_special_words raises error for missing file."""
         mock_config.get.return_value = 'postgresql://test'
         
         from app.etl.processors.dict_importer import DictImporter
         importer = DictImporter(text_analysis_dir=Path('/nonexistent'))
         
-        result = importer._import_special_words()
-        
-        assert result['processed'] == 0
-        assert result['error'] == 'file_not_found'
+        with pytest.raises(FileNotFoundError, match="Special words file not found"):
+            importer._import_special_words()
 
 
 class TestDictImporterDatabase:

@@ -181,7 +181,7 @@ def test_run_import_dicts_scheduled(mock_create, mock_update, mock_importer_clas
     assert result['status'] == 'completed'
     # import_dicts is a manual-only task
     mock_create.assert_called_once_with('import_dicts', 'manual')
-    mock_update.assert_called_once_with(300, 'completed', records_processed=500)
+    mock_update.assert_called_once_with(300, 'completed', records_processed=500, error_message=None)
 
 
 @patch('app.etl.processors.dict_importer.DictImporter')
