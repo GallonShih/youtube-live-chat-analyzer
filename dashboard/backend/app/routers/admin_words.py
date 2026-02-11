@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends, Body, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -766,6 +766,79 @@ def add_replace_word(
         db.rollback()
         logger.error(f"Error adding replace word: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/active-replace-words")
+def get_active_replace_words(
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    search: str = '',
+    db: Session = Depends(get_db)
+):
+    try:
+        query = db.query(ReplaceWord)
+
+        if search:
+            like_pattern = f'%{search}%'
+            query = query.filter(
+                (ReplaceWord.source_word.ilike(like_pattern)) |
+                (ReplaceWord.target_word.ilike(like_pattern))
+            )
+
+        total = query.count()
+        items = query.order_by(ReplaceWord.created_at.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "source_word": item.source_word,
+                    "target_word": item.target_word,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                }
+                for item in items
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching active replace words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/active-special-words")
+def get_active_special_words(
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    search: str = '',
+    db: Session = Depends(get_db)
+):
+    try:
+        query = db.query(SpecialWord)
+
+        if search:
+            query = query.filter(SpecialWord.word.ilike(f'%{search}%'))
+
+        total = query.count()
+        items = query.order_by(SpecialWord.created_at.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "word": item.word,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                }
+                for item in items
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching active special words: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/add-special-word", dependencies=[Depends(require_admin)])
 def add_special_word(

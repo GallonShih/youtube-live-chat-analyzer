@@ -4,6 +4,7 @@ import {
     CurrencyDollarIcon,
     MagnifyingGlassIcon,
     ClockIcon,
+    BookOpenIcon,
 } from '@heroicons/react/24/outline';
 import Navigation from '../../components/common/Navigation';
 import ReplaceWordsReview from './ReplaceWordsReview';
@@ -12,6 +13,7 @@ import CurrencyRateManager from './CurrencyRateManager';
 import SettingsManager from './SettingsManager';
 import TextMining from './TextMining';
 import ETLJobsManager from './ETLJobsManager';
+import ActiveDictionary from './ActiveDictionary';
 
 const AdminPanel = () => {
     const [activeTab, setActiveTab] = useState('replace');
@@ -47,6 +49,16 @@ const AdminPanel = () => {
                             onClick={() => setActiveTab('special')}
                         >
                             <span className="hidden sm:inline">Pending </span>Special
+                        </button>
+                        <button
+                            className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'dictionary'
+                                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                }`}
+                            onClick={() => setActiveTab('dictionary')}
+                        >
+                            <BookOpenIcon className="w-4 h-4" />
+                            <span className="hidden sm:inline">Dictionary</span>
                         </button>
                         <button
                             className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'currency'
@@ -94,6 +106,7 @@ const AdminPanel = () => {
                     <div className="p-3 sm:p-6">
                         {activeTab === 'replace' && <ReplaceWordsReview />}
                         {activeTab === 'special' && <SpecialWordsReview />}
+                        {activeTab === 'dictionary' && <ActiveDictionary />}
                         {activeTab === 'currency' && <CurrencyRateManager />}
                         {activeTab === 'settings' && <SettingsManager />}
                         {activeTab === 'textmining' && <TextMining />}
