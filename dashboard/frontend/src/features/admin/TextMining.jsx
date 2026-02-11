@@ -19,6 +19,17 @@ const TextMining = () => {
     const [results, setResults] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [copiedKey, setCopiedKey] = useState('');
+
+    const copyText = async (text, key) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedKey(key);
+            window.setTimeout(() => setCopiedKey(''), 1000);
+        } catch (err) {
+            console.error('Copy failed:', err);
+        }
+    };
 
     const handleAnalyze = async () => {
         // 1. 驗證輸入
@@ -99,10 +110,17 @@ const TextMining = () => {
                                         items.map((item, idx) => (
                                             <span
                                                 key={idx}
-                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                                onClick={() => copyText(item.text, `${direction}-${length}-${idx}`)}
+                                                title="點擊複製"
+                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 cursor-pointer hover:bg-blue-200 transition-colors"
                                             >
-                                                {item.text}
+                                                <span style={{ whiteSpace: 'break-spaces' }}>
+                                                    {item.text}
+                                                </span>
                                                 <span className="ml-1 text-blue-600">({item.count})</span>
+                                                {copiedKey === `${direction}-${length}-${idx}` && (
+                                                    <span className="ml-1 text-green-700">已複製</span>
+                                                )}
                                             </span>
                                         ))
                                     ) : (

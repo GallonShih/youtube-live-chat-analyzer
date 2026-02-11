@@ -186,6 +186,61 @@ class TestTextMiningAnalyze:
 
         assert response.status_code == 422  # Validation error
 
+    def test_analyze_whitespace_boundary_rules(
+        self, client, db, processed_chat_messages_table
+    ):
+        """Forward excludes trailing whitespace; backward excludes leading whitespace."""
+        now = datetime.now(timezone.utc)
+        db.execute(
+            text("""
+            INSERT INTO processed_chat_messages 
+            (message_id, live_stream_id, original_message, processed_message,
+             author_name, author_id, published_at)
+            VALUES
+            -- Forward examples
+            (:id1, 'stream1', '吉祥妳來 ', '吉祥妳來 ', 'user1', 'uid1', :time1),   -- 3-char forward ends with space -> exclude
+            (:id2, 'stream1', '吉祥 妳來', '吉祥 妳來', 'user2', 'uid2', :time2),   -- 3-char forward starts with space -> keep
+            -- Backward examples
+            (:id3, 'stream1', ' 妳來吉祥', ' 妳來吉祥', 'user3', 'uid3', :time3),   -- 3-char backward starts with space -> exclude
+            (:id4, 'stream1', '妳 來吉祥', '妳 來吉祥', 'user4', 'uid4', :time4)    -- 3-char backward middle space -> keep
+            """),
+            {
+                "id1": "msg_tm_ws_1",
+                "id2": "msg_tm_ws_2",
+                "id3": "msg_tm_ws_3",
+                "id4": "msg_tm_ws_4",
+                "time1": now - timedelta(minutes=40),
+                "time2": now - timedelta(minutes=30),
+                "time3": now - timedelta(minutes=20),
+                "time4": now - timedelta(minutes=10),
+            }
+        )
+        db.commit()
+
+        response = client.post(
+            "/api/text-mining/analyze",
+            json={
+                "start_time": (now - timedelta(hours=1)).isoformat(),
+                "end_time": now.isoformat(),
+                "target_word": "吉祥"
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Forward length 3: keep " 妳來", exclude "妳來 "
+        forward_3 = data["original_message"]["forward"]["3"]
+        texts_3 = [item["text"] for item in forward_3]
+        assert " 妳來" in texts_3
+        assert "妳來 " not in texts_3
+
+        # Backward length 3: keep "妳 來", exclude " 妳來"
+        backward_3 = data["original_message"]["backward"]["3"]
+        back_texts_3 = [item["text"] for item in backward_3]
+        assert "妳 來" in back_texts_3
+        assert " 妳來" not in back_texts_3
+
     def test_analyze_empty_target_word(self, client):
         """Test validation for empty target word."""
         response = client.post(

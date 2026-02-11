@@ -79,6 +79,12 @@ def find_extensions(
     """
     forward_counts: Dict[int, Dict[str, int]] = {i: {} for i in range(1, 6)}
     backward_counts: Dict[int, Dict[str, int]] = {i: {} for i in range(1, 6)}
+
+    def starts_with_whitespace(text: str) -> bool:
+        return bool(text) and text[0].isspace()
+
+    def ends_with_whitespace(text: str) -> bool:
+        return bool(text) and text[-1].isspace()
     
     for message in messages:
         # Find all occurrences of target word
@@ -93,16 +99,16 @@ def find_extensions(
             for length in range(1, 6):
                 if end_idx + length <= len(message):
                     ext = message[end_idx:end_idx + length]
-                    # Skip if extension contains only whitespace
-                    if ext.strip():
+                    # For forward extension, skip only when the last char is whitespace.
+                    if not ends_with_whitespace(ext):
                         forward_counts[length][ext] = forward_counts[length].get(ext, 0) + 1
             
             # Backward extension (before target word)
             for length in range(1, 6):
                 if idx - length >= 0:
                     ext = message[idx - length:idx]
-                    # Skip if extension contains only whitespace
-                    if ext.strip():
+                    # For backward extension, skip only when the first char is whitespace.
+                    if not starts_with_whitespace(ext):
                         backward_counts[length][ext] = backward_counts[length].get(ext, 0) + 1
             
             start = idx + 1
