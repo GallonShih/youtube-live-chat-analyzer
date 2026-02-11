@@ -15,6 +15,8 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
         warnings: []
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [sourceWhitespaceError, setSourceWhitespaceError] = useState(false);
+    const [targetWhitespaceError, setTargetWhitespaceError] = useState(false);
 
     const handleValidate = async () => {
         if (!sourceWord.trim() || !targetWord.trim()) {
@@ -27,6 +29,16 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
             return;
         }
 
+        if (sourceWhitespaceError || targetWhitespaceError || /^\s|\s$/.test(sourceWord) || /^\s|\s$/.test(targetWord)) {
+            setValidationResult({
+                isOpen: true,
+                isValid: false,
+                conflicts: [{ type: 'error', message: '前後不可包含空白' }],
+                warnings: []
+            });
+            return;
+        }
+
         try {
             const res = await authFetch(`${API_BASE_URL}/api/admin/validate-replace-word`, {
                 method: 'POST',
@@ -34,8 +46,8 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    source_word: sourceWord.trim(),
-                    target_word: targetWord.trim(),
+                    source_word: sourceWord,
+                    target_word: targetWord,
                     pending_id: null
                 })
             });
@@ -112,12 +124,20 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                             id="source-word-input"
                             type="text"
                             value={sourceWord}
-                            onChange={(e) => { setSourceWord(e.target.value); handleInputChange(); }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setSourceWord(val);
+                                setSourceWhitespaceError(/^\s|\s$/.test(val));
+                                handleInputChange();
+                            }}
+                            className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${sourceWhitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                             placeholder="輸入原始詞彙"
                             required
                             aria-required="true"
                         />
+                        {sourceWhitespaceError && (
+                            <p className="mt-1 text-sm text-red-600">前後不可包含空白</p>
+                        )}
                     </div>
                     <div>
                         <label htmlFor="target-word-input" className="block text-sm font-semibold mb-1">
@@ -127,19 +147,28 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                             id="target-word-input"
                             type="text"
                             value={targetWord}
-                            onChange={(e) => { setTargetWord(e.target.value); handleInputChange(); }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setTargetWord(val);
+                                setTargetWhitespaceError(/^\s|\s$/.test(val));
+                                handleInputChange();
+                            }}
+                            className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${targetWhitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                             placeholder="輸入替換詞彙"
                             required
                             aria-required="true"
                         />
+                        {targetWhitespaceError && (
+                            <p className="mt-1 text-sm text-red-600">前後不可包含空白</p>
+                        )}
                     </div>
                 </div>
                 <div className="flex space-x-3">
                     <button
                         type="button"
                         onClick={handleValidate}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        disabled={!sourceWord.trim() || !targetWord.trim() || sourceWhitespaceError || targetWhitespaceError}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         檢查
                     </button>

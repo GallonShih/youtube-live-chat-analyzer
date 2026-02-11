@@ -14,6 +14,7 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
         warnings: []
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [whitespaceError, setWhitespaceError] = useState(false);
 
     const handleValidate = async () => {
         if (!word.trim()) {
@@ -26,6 +27,16 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
             return;
         }
 
+        if (whitespaceError || /^\s|\s$/.test(word)) {
+            setValidationResult({
+                isOpen: true,
+                isValid: false,
+                conflicts: [{ type: 'error', message: '前後不可包含空白' }],
+                warnings: []
+            });
+            return;
+        }
+
         try {
             const res = await authFetch(`${API_BASE_URL}/api/admin/validate-special-word`, {
                 method: 'POST',
@@ -33,7 +44,7 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    word: word.trim(),
+                    word: word,
                     pending_id: null
                 })
             });
@@ -108,18 +119,27 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
                         id="special-word-input"
                         type="text"
                         value={word}
-                        onChange={(e) => { setWord(e.target.value); handleInputChange(); }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setWord(val);
+                            setWhitespaceError(/^\s|\s$/.test(val));
+                            handleInputChange();
+                        }}
+                        className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${whitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
                         placeholder="輸入詞彙"
                         required
                         aria-required="true"
                     />
+                    {whitespaceError && (
+                        <p className="mt-1 text-sm text-red-600">前後不可包含空白</p>
+                    )}
                 </div>
                 <div className="flex space-x-3">
                     <button
                         type="button"
                         onClick={handleValidate}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        disabled={!word.trim() || whitespaceError}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         檢查
                     </button>
