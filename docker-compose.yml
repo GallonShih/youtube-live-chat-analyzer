@@ -304,6 +304,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       ENABLE_ETL_SCHEDULER: ${ENABLE_ETL_SCHEDULER:-true}
+      MONITOR_CHECK_INTERVAL_MINUTES: ${MONITOR_CHECK_INTERVAL_MINUTES:-10}
       TEXT_ANALYSIS_DIR: /app/text_analysis
       STOPWORDS_FILE: /app/text_analysis/cn_stopwords.txt
       # Authentication

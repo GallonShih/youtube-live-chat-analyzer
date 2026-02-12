@@ -101,16 +101,18 @@ def register_jobs():
     )
     logger.info("Registered job: discover_new_words (every 3 hours at :15)")
 
-    # 註冊 Collector 監控任務（每 30 分鐘執行）
+    # 註冊 Collector 監控任務
+    import os
+    monitor_interval = int(os.getenv('MONITOR_CHECK_INTERVAL_MINUTES', '10'))
     _scheduler.add_job(
         run_monitor_collector,
-        'cron',
-        minute='*/30',
+        'interval',
+        minutes=monitor_interval,
         id='monitor_collector',
         name='監控 Collector 狀態',
         replace_existing=True
     )
-    logger.info("Registered job: monitor_collector (every 30 minutes)")
+    logger.info(f"Registered job: monitor_collector (every {monitor_interval} minutes)")
 
 
 def start_scheduler():
