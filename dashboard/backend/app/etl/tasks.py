@@ -4,15 +4,33 @@ ETL 任務入口函數
 """
 
 import logging
+import os
 import functools
 from datetime import datetime
 from typing import Dict, Any, Callable, Optional
 
+import psycopg2
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 
 from app.etl.config import ETLConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _create_lock_connection():
+    """Create a standalone psycopg2 connection for advisory locks (bypasses pool)."""
+    database_url = os.getenv('DATABASE_URL', '')
+    if not database_url:
+        return None
+    url = make_url(database_url)
+    return psycopg2.connect(
+        host=url.host,
+        port=url.port,
+        database=url.database,
+        user=url.username,
+        password=url.password,
+    )
 
 # Job name mapping
 JOB_NAMES = {
@@ -47,19 +65,17 @@ def with_advisory_lock(lock_key: int):
         def wrapper(*args, **kwargs):
             etl_log_id = kwargs.get('etl_log_id') or (args[0] if args else None)
 
-            engine = ETLConfig.get_engine()
-            if not engine:
-                logger.warning(
-                    f"[{func.__name__}] No database engine, "
-                    "falling back to direct execution"
-                )
-                return func(*args, **kwargs)
-
             raw_conn = None
             try:
-                # Use a dedicated raw connection for the advisory lock.
-                # The lock is held for the lifetime of this connection.
-                raw_conn = engine.raw_connection()
+                # Create a standalone connection for advisory lock (bypasses pool).
+                # This prevents pool exhaustion when multiple jobs run concurrently.
+                raw_conn = _create_lock_connection()
+                if raw_conn is None:
+                    logger.warning(
+                        f"[{func.__name__}] No DATABASE_URL, "
+                        "falling back to direct execution"
+                    )
+                    return func(*args, **kwargs)
                 cursor = raw_conn.cursor()
                 cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
                 acquired = cursor.fetchone()[0]

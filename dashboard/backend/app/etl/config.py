@@ -36,8 +36,8 @@ class ETLConfig:
         """初始化資料庫連線"""
         cls._engine = create_engine(
             database_url,
-            pool_size=2,
-            max_overflow=1,
+            pool_size=1,
+            max_overflow=2,
             pool_pre_ping=True,
             pool_recycle=1800,
         )
