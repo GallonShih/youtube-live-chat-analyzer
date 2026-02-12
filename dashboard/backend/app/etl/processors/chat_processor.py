@@ -45,7 +45,13 @@ class ChatProcessor:
     def get_engine(self) -> Engine:
         """取得資料庫連線引擎"""
         if self._engine is None:
-            self._engine = create_engine(self.database_url, pool_pre_ping=True)
+            self._engine = create_engine(
+                self.database_url,
+                pool_size=1,
+                max_overflow=1,
+                pool_pre_ping=True,
+                pool_recycle=1800,
+            )
         return self._engine
 
     def run(self) -> Dict[str, Any]:

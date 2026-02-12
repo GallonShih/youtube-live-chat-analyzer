@@ -22,10 +22,11 @@ class DatabaseManager:
         # Create engine with connection pooling
         self.engine = create_engine(
             self.database_url,
-            pool_size=5,
-            max_overflow=10,
-            pool_pre_ping=True,  # Validate connections before use
-            echo=False  # Set to True for SQL debugging
+            pool_size=2,
+            max_overflow=1,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            echo=False,
         )
 
         # Create session factory

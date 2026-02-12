@@ -34,7 +34,13 @@ class ETLConfig:
     @classmethod
     def init_engine(cls, database_url: str):
         """初始化資料庫連線"""
-        cls._engine = create_engine(database_url, pool_pre_ping=True)
+        cls._engine = create_engine(
+            database_url,
+            pool_size=1,
+            max_overflow=0,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+        )
         cls._cache = {}
         logger.info("ETLConfig engine initialized")
 
