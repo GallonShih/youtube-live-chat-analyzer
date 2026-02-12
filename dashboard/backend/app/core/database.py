@@ -18,8 +18,8 @@ class DatabaseManager:
         
         if self.database_url.startswith("postgresql"):
             engine_args.update({
-                "pool_size": 3,
-                "max_overflow": 2,
+                "pool_size": 5,
+                "max_overflow": 5,
                 "pool_pre_ping": True,
                 "pool_recycle": 1800,
             })
