@@ -40,6 +40,7 @@ class ETLConfig:
             max_overflow=2,
             pool_pre_ping=True,
             pool_recycle=1800,
+            pool_reset_on_return="rollback",
         )
         cls._cache = {}
         logger.info("ETLConfig engine initialized")

@@ -28,6 +28,7 @@ class DatabaseManager:
             pool_pre_ping=True,
             pool_recycle=1800,
             pool_timeout=10,
+            pool_reset_on_return="rollback",
             echo=False,
             connect_args={
                 "keepalives": 1,

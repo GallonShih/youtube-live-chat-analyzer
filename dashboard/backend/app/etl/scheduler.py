@@ -42,6 +42,7 @@ def init_scheduler(database_url: str) -> BackgroundScheduler:
         max_overflow=1,
         pool_pre_ping=True,
         pool_recycle=1800,
+        pool_reset_on_return="rollback",
     )
     jobstores = {
         'default': SQLAlchemyJobStore(engine=jobstore_engine)

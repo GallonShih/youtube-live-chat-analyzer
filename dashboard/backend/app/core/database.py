@@ -22,6 +22,7 @@ class DatabaseManager:
                 "max_overflow": 5,
                 "pool_pre_ping": True,
                 "pool_recycle": 1800,
+                "pool_reset_on_return": "rollback",
             })
 
         self.engine = create_engine(self.database_url, **engine_args)

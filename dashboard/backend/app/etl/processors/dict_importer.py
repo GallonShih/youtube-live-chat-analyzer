@@ -56,6 +56,7 @@ class DictImporter:
                 max_overflow=0,
                 pool_pre_ping=True,
                 pool_recycle=1800,
+                pool_reset_on_return="rollback",
             )
         return self._engine
 
