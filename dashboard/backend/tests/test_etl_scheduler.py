@@ -14,16 +14,27 @@ def test_init_scheduler():
     with patch('app.etl.scheduler.BackgroundScheduler') as MockScheduler:
         with patch('app.etl.scheduler.SQLAlchemyJobStore'):
             with patch('app.etl.scheduler.ThreadPoolExecutor'):
-                sched = scheduler.init_scheduler('sqlite:///')
-                assert sched is not None
-                assert scheduler.get_scheduler() is sched
-                MockScheduler.assert_called_once()
-                
-                # Test singleton (should return same instance without re-init)
-                MockScheduler.reset_mock()
-                sched2 = scheduler.init_scheduler('sqlite:///')
-                assert sched2 is sched
-                MockScheduler.assert_not_called()
+                with patch('sqlalchemy.create_engine') as MockCreateEngine:
+                    sched = scheduler.init_scheduler('sqlite:///')
+                    assert sched is not None
+                    assert scheduler.get_scheduler() is sched
+                    MockScheduler.assert_called_once()
+                    
+                    # Verify create_engine called with correct params
+                    MockCreateEngine.assert_called_once()
+                    args, kwargs = MockCreateEngine.call_args
+                    assert args[0] == 'sqlite:///'
+                    assert kwargs['pool_size'] == 1
+                    assert kwargs['max_overflow'] == 1
+                    assert kwargs['pool_pre_ping'] is True
+                    
+                    # Test singleton (should return same instance without re-init)
+                    MockScheduler.reset_mock()
+                    MockCreateEngine.reset_mock()
+                    sched2 = scheduler.init_scheduler('sqlite:///')
+                    assert sched2 is sched
+                    MockScheduler.assert_not_called()
+                    MockCreateEngine.assert_not_called()
 
 def test_register_jobs():
     scheduler._scheduler = MagicMock()
