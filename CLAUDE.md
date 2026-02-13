@@ -166,12 +166,19 @@ Located in `dashboard/backend/app/etl/`:
 1. **`import_dicts`**: Load JSON dictionaries into database tables (manual trigger)
 2. **`process_chat_messages`**: Hourly ETL (word replacement → emoji extraction → Jieba tokenization)
 3. **`discover_new_words`**: Every 3 hours, uses Gemini API to find new slang/memes
+4. **`monitor_collector`**: Periodically checks data freshness, sends Discord alerts
+
+**Infrastructure** (`processors/base.py`, `app/utils/orm_helpers.py`):
+- `BaseETLProcessor`: Abstract base class for all ETL processors, provides `get_session()` for ORM and `execute_raw_sql()` for performance-critical queries
+- `bulk_upsert()`: PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` via SQLAlchemy ORM
+- All processors share the main `DatabaseManager` connection pool (no standalone engines)
 
 **Processors** (`processors/`):
 - `text_processor.py`: Jieba tokenization, emoji extraction, word replacement
-- `chat_processor.py`: ChatProcessor class for message ETL
-- `word_discovery.py`: WordDiscoveryProcessor with Gemini API integration
-- `dict_importer.py`: DictImporter for loading JSON dictionaries
+- `chat_processor.py`: ChatProcessor class for message ETL (hybrid ORM + raw SQL)
+- `word_discovery.py`: WordDiscoveryProcessor with Gemini API integration (hybrid ORM + raw SQL)
+- `dict_importer.py`: DictImporter for loading JSON dictionaries (ORM with bulk_upsert)
+- `collector_monitor.py`: CollectorMonitor for data freshness alerts (ORM)
 
 > **Legacy**: The original Airflow DAGs are preserved in `airflow/dags/` for reference. See `docs/legacy/AIRFLOW_GUIDE.md`.
 
@@ -180,19 +187,24 @@ Located in `dashboard/backend/app/etl/`:
 Entry point: `dashboard/backend/main.py`
 
 Structure:
-- `app/models.py`: SQLAlchemy ORM models
+- `app/models.py`: SQLAlchemy ORM models (18 models covering all tables)
 - `app/routers/`: API endpoints organized by feature
   - `auth.py`: Authentication endpoints (login, logout, refresh, me)
   - `chat.py`: Chat message queries
   - `stats.py`: Stream statistics
   - `word_trends.py`: Word trend analysis endpoints
-  - `wordcloud.py`: Word frequency aggregation
+  - `wordcloud.py`: Word frequency aggregation (raw SQL for UNNEST)
   - `playback.py`: Time-range message playback
   - `admin_*.py`: Admin panel operations (word approval, settings, currency management)
   - `etl_jobs.py`: ETL task management API
   - `prompt_templates.py`: Gemini prompt template management
 - `app/etl/`: Built-in ETL scheduler and processors
+  - `config.py`: ETLConfig for reading/writing etl_settings (ORM-based)
+  - `processors/base.py`: BaseETLProcessor base class
+- `app/utils/`: Utility modules
+  - `orm_helpers.py`: `bulk_upsert()`, `bulk_upsert_do_nothing()`, `safe_commit()`
 - `app/core/`: Configuration, database connection, and authentication
+  - `database.py`: DatabaseManager with connection pooling (pool_size=10, max_overflow=10)
   - `auth_config.py`: Authentication settings
   - `security.py`: JWT token creation and verification
   - `dependencies.py`: FastAPI dependencies for auth
@@ -308,6 +320,26 @@ Before sending messages to Gemini API, the processor filters out words already i
 
 ### Frontend State Management
 Dashboard uses URL query parameters to persist filter state (e.g., time range, word type). This allows direct linking to specific dashboard views.
+
+### Database Access Patterns (Hybrid ORM + Raw SQL)
+
+The backend uses a **hybrid approach** for database access:
+
+**Use ORM** (default for all new code):
+- CRUD operations on all 18 models in `app/models.py`
+- Batch operations via `bulk_upsert()` from `app/utils/orm_helpers.py`
+- ETL processors inherit `BaseETLProcessor` which provides `get_session()`
+- API routers receive sessions via FastAPI's `Depends(get_db)`
+
+**Keep raw SQL** for these specific cases:
+- `UNNEST(tokens)` queries (wordcloud, playback_wordcloud) - PostgreSQL array expansion, no ORM equivalent
+- JSONB operators (`->`, `->>`) for nested path extraction (admin_currency)
+- `LIKE ANY` pattern matching (word_discovery occurrence counts)
+- `GREATEST()` in upsert SET clauses (word_discovery)
+- `EXTRACT(EPOCH)` temporal calculations (tasks.py)
+- Advisory locks via psycopg2 standalone connections (tasks.py)
+
+**Connection pooling**: All code shares a single `DatabaseManager` (pool_size=10, max_overflow=10). ETL processors no longer create standalone engines.
 
 ## CI/CD
 

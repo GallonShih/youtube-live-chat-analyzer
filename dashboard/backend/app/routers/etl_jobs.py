@@ -5,7 +5,7 @@ ETL 任務管理 API
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import logging
@@ -21,6 +21,7 @@ from app.etl.scheduler import (
     trigger_job,
 )
 from app.etl.tasks import TASK_REGISTRY, MANUAL_TASKS
+from app.models import ETLExecutionLog, ETLSetting
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/etl", tags=["etl-jobs"])
@@ -251,40 +252,28 @@ def get_execution_logs(
         執行記錄列表
     """
     try:
-        query = """
-            SELECT id, job_id, job_name, status, trigger_type, started_at, completed_at,
-                   duration_seconds, records_processed, error_message
-            FROM etl_execution_log
-            WHERE 1=1
-        """
-        params = {"limit": limit}
+        query = db.query(ETLExecutionLog)
 
         if job_id:
-            query += " AND job_id = :job_id"
-            params["job_id"] = job_id
-
+            query = query.filter(ETLExecutionLog.job_id == job_id)
         if status:
-            query += " AND status = :status"
-            params["status"] = status
+            query = query.filter(ETLExecutionLog.status == status)
 
-        query += " ORDER BY started_at DESC LIMIT :limit"
-
-        result = db.execute(text(query), params)
-        rows = result.fetchall()
+        rows = query.order_by(ETLExecutionLog.started_at.desc()).limit(limit).all()
 
         logs = []
         for row in rows:
             logs.append({
-                "id": row[0],
-                "job_id": row[1],
-                "job_name": row[2],
-                "status": row[3],
-                "trigger_type": row[4] or "scheduled",
-                "started_at": row[5].isoformat() if row[5] else None,
-                "completed_at": row[6].isoformat() if row[6] else None,
-                "duration_seconds": row[7],
-                "records_processed": row[8],
-                "error_message": row[9]
+                "id": row.id,
+                "job_id": row.job_id,
+                "job_name": row.job_name,
+                "status": row.status,
+                "trigger_type": row.trigger_type or "scheduled",
+                "started_at": row.started_at.isoformat() if row.started_at else None,
+                "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+                "duration_seconds": row.duration_seconds,
+                "records_processed": row.records_processed,
+                "error_message": row.error_message
             })
 
         return {"logs": logs, "total": len(logs)}
@@ -309,32 +298,23 @@ def get_etl_settings(
         設定列表
     """
     try:
-        query = """
-            SELECT key, value, value_type, description, is_sensitive, category, updated_at
-            FROM etl_settings
-            WHERE 1=1
-        """
-        params = {}
+        query = db.query(ETLSetting)
 
         if category:
-            query += " AND category = :category"
-            params["category"] = category
+            query = query.filter(ETLSetting.category == category)
 
-        query += " ORDER BY category, key"
-
-        result = db.execute(text(query), params)
-        rows = result.fetchall()
+        rows = query.order_by(ETLSetting.category, ETLSetting.key).all()
 
         settings = []
         for row in rows:
             settings.append({
-                "key": row[0],
-                "value": "******" if row[4] and row[1] else row[1],  # 遮蔽敏感資訊
-                "value_type": row[2],
-                "description": row[3],
-                "is_sensitive": row[4],
-                "category": row[5],
-                "updated_at": row[6].isoformat() if row[6] else None
+                "key": row.key,
+                "value": "******" if row.is_sensitive and row.value else row.value,
+                "value_type": row.value_type,
+                "description": row.description,
+                "is_sensitive": row.is_sensitive,
+                "category": row.category,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None
             })
 
         return {"settings": settings}
@@ -361,25 +341,13 @@ def update_etl_setting(
         更新結果
     """
     try:
-        # 檢查設定是否存在
-        result = db.execute(
-            text("SELECT key, value_type FROM etl_settings WHERE key = :key"),
-            {"key": key}
-        )
-        row = result.fetchone()
+        setting = db.query(ETLSetting).filter(ETLSetting.key == key).first()
 
-        if not row:
+        if not setting:
             raise HTTPException(status_code=404, detail=f"Setting '{key}' not found")
 
-        # 更新設定
-        db.execute(
-            text("""
-                UPDATE etl_settings
-                SET value = :value, updated_at = NOW()
-                WHERE key = :key
-            """),
-            {"key": key, "value": value}
-        )
+        setting.value = value
+        setting.updated_at = func.now()
         db.commit()
 
         logger.info(f"ETL setting '{key}' updated")
