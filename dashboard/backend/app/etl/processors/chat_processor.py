@@ -1,6 +1,11 @@
 """
 Chat Processor Module
 聊天訊息處理邏輯（遷移自 Airflow process_chat_messages.py）
+
+ORM migration:
+- Reset, dictionaries, checkpoint, upsert → ORM
+- Batch fetch (LEFT JOIN) → raw SQL (performance critical)
+- Table existence check → raw SQL (information_schema)
 """
 
 import json
@@ -8,10 +13,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import func
 
 from app.etl.config import ETLConfig
+from app.etl.processors.base import BaseETLProcessor
+from app.utils.orm_helpers import bulk_upsert
 from .text_processor import process_messages_batch
 
 logger = logging.getLogger(__name__)
@@ -20,7 +26,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_BATCH_SIZE = 1000
 
 
-class ChatProcessor:
+class ChatProcessor(BaseETLProcessor):
     """
     聊天訊息處理器
 
@@ -32,28 +38,8 @@ class ChatProcessor:
     5. 寫入 processed_chat_messages 表
     """
 
-    def __init__(self, database_url: Optional[str] = None):
-        """
-        初始化處理器
-
-        Args:
-            database_url: 資料庫連線字串，預設從環境變數讀取
-        """
-        self.database_url = database_url or ETLConfig.get('DATABASE_URL')
-        self._engine: Optional[Engine] = None
-
-    def get_engine(self) -> Engine:
-        """取得資料庫連線引擎"""
-        if self._engine is None:
-            self._engine = create_engine(
-                self.database_url,
-                pool_size=1,
-                max_overflow=1,
-                pool_pre_ping=True,
-                pool_recycle=1800,
-                pool_reset_on_return="rollback",
-            )
-        return self._engine
+    def __init__(self):
+        super().__init__()
 
     def run(self) -> Dict[str, Any]:
         """
@@ -69,16 +55,13 @@ class ChatProcessor:
             # 1. 檢查是否需要重置
             reset_performed = self._check_reset()
 
-            # 2. 創建表（如果不存在）
-            self._create_tables_if_not_exists()
-
-            # 3. 檢查字典表是否存在
+            # 2. 檢查字典表是否存在
             self._check_dictionaries_tables()
 
-            # 4. 載入字典
+            # 3. 載入字典
             replace_dict, special_words = self._load_dictionaries()
 
-            # 5. 循環處理所有批次
+            # 4. 循環處理所有批次
             result = self._process_all_batches(replace_dict, special_words)
 
             # 計算執行時間
@@ -107,18 +90,22 @@ class ChatProcessor:
         """
         檢查是否需要重置
 
-        如果 PROCESS_CHAT_RESET 為 true，則清空處理表
+        如果 PROCESS_CHAT_RESET 為 true，則清空處理表（ORM delete）
         """
+        from app.models import ProcessedChatMessage, ProcessedChatCheckpoint
+
         reset_flag = ETLConfig.get('PROCESS_CHAT_RESET', False)
 
         if reset_flag:
             logger.info("Reset flag is TRUE - truncating processed tables")
 
-            engine = self.get_engine()
-            with engine.connect() as conn:
-                conn.execute(text("TRUNCATE TABLE processed_chat_messages;"))
-                conn.execute(text("TRUNCATE TABLE processed_chat_checkpoint;"))
-                conn.commit()
+            session = self.get_session()
+            try:
+                session.query(ProcessedChatMessage).delete()
+                session.query(ProcessedChatCheckpoint).delete()
+                session.commit()
+            finally:
+                session.close()
 
             # 重設 reset flag 為 false
             ETLConfig.set('PROCESS_CHAT_RESET', 'false', 'boolean')
@@ -129,103 +116,67 @@ class ChatProcessor:
         logger.info("Reset flag is FALSE - proceeding with incremental processing")
         return False
 
-    def _create_tables_if_not_exists(self):
-        """創建表（如果不存在）"""
-        engine = self.get_engine()
-
-        create_tables_sql = """
-        -- 處理後的留言表
-        CREATE TABLE IF NOT EXISTS processed_chat_messages (
-            message_id VARCHAR(255) PRIMARY KEY,
-            live_stream_id VARCHAR(255) NOT NULL,
-            original_message TEXT NOT NULL,
-            processed_message TEXT NOT NULL,
-            tokens TEXT[],
-            unicode_emojis TEXT[],
-            youtube_emotes JSONB,
-            author_name VARCHAR(255) NOT NULL,
-            author_id VARCHAR(255) NOT NULL,
-            published_at TIMESTAMP WITH TIME ZONE NOT NULL,
-            processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- ETL 檢查點表
-        CREATE TABLE IF NOT EXISTS processed_chat_checkpoint (
-            id SERIAL PRIMARY KEY,
-            last_processed_message_id VARCHAR(255),
-            last_processed_timestamp TIMESTAMP WITH TIME ZONE,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- 創建索引
-        CREATE INDEX IF NOT EXISTS idx_processed_chat_live_stream ON processed_chat_messages(live_stream_id);
-        CREATE INDEX IF NOT EXISTS idx_processed_chat_published_at ON processed_chat_messages(published_at);
-        CREATE INDEX IF NOT EXISTS idx_processed_chat_author_id ON processed_chat_messages(author_id);
-        CREATE INDEX IF NOT EXISTS idx_processed_chat_tokens ON processed_chat_messages USING GIN(tokens);
-        CREATE INDEX IF NOT EXISTS idx_processed_chat_emojis ON processed_chat_messages USING GIN(unicode_emojis);
-        """
-
-        with engine.connect() as conn:
-            conn.execute(text(create_tables_sql))
-            conn.commit()
-
-        logger.info("Tables created or already exist")
-
     def _check_dictionaries_tables(self):
         """
-        檢查字典表是否存在（空表允許繼續執行）
+        檢查字典表是否存在（保留 raw SQL for information_schema query）
+        空表允許繼續執行
         """
-        engine = self.get_engine()
+        from app.models import ReplaceWord, SpecialWord
 
-        check_sql = """
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public'
-            AND table_name IN ('replace_words', 'special_words');
-        """
-
-        with engine.connect() as conn:
-            result = conn.execute(text(check_sql))
+        session = self.get_session()
+        try:
+            result = self.execute_raw_sql(
+                """
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name IN ('replace_words', 'special_words')
+                """,
+                session=session
+            )
             tables = {row[0] for row in result}
 
-        required_tables = {'replace_words', 'special_words'}
-        missing_tables = required_tables - tables
+            required_tables = {'replace_words', 'special_words'}
+            missing_tables = required_tables - tables
 
-        if missing_tables:
-            raise ValueError(
-                f"Required tables missing: {missing_tables}. "
-                "Please run import_dicts task first."
-            )
+            if missing_tables:
+                raise ValueError(
+                    f"Required tables missing: {missing_tables}. "
+                    "Please run import_dicts task first."
+                )
 
-        # 檢查表是否有資料（僅警告，不阻止執行）
-        for table in required_tables:
-            with engine.connect() as conn:
-                result = conn.execute(text(f"SELECT COUNT(*) FROM {table};"))
-                count = result.scalar()
+            # 檢查表是否有資料（ORM count）
+            for model, table_name in [(ReplaceWord, 'replace_words'), (SpecialWord, 'special_words')]:
+                count = session.query(func.count(model.id)).scalar()
 
-            if count == 0:
-                logger.warning(f"Table '{table}' exists but is empty. "
-                              "Processing will continue but results may be incomplete.")
-            else:
-                logger.info(f"Table '{table}' has {count} records.")
+                if count == 0:
+                    logger.warning(f"Table '{table_name}' exists but is empty. "
+                                  "Processing will continue but results may be incomplete.")
+                else:
+                    logger.info(f"Table '{table_name}' has {count} records.")
+        finally:
+            session.close()
 
     def _load_dictionaries(self) -> tuple:
         """
-        載入字典資料
+        載入字典資料（ORM）
 
         Returns:
             (replace_dict, special_words) tuple
         """
-        engine = self.get_engine()
+        from app.models import ReplaceWord, SpecialWord
 
-        with engine.connect() as conn:
+        session = self.get_session()
+        try:
             # 載入替換詞彙
-            result = conn.execute(text("SELECT source_word, target_word FROM replace_words;"))
-            replace_dict = {row[0]: row[1] for row in result}
+            replace_words = session.query(ReplaceWord).all()
+            replace_dict = {rw.source_word: rw.target_word for rw in replace_words}
 
             # 載入特殊詞彙
-            result = conn.execute(text("SELECT word FROM special_words;"))
-            special_words = [row[0] for row in result]
+            special_words_orm = session.query(SpecialWord).all()
+            special_words = [sw.word for sw in special_words_orm]
+        finally:
+            session.close()
 
         logger.info(f"Loaded {len(replace_dict)} replace words")
         logger.info(f"Loaded {len(special_words)} special words")
@@ -234,9 +185,9 @@ class ChatProcessor:
 
     def _get_checkpoint_timestamp(self) -> datetime:
         """
-        取得檢查點時間戳
+        取得檢查點時間戳（ORM）
         """
-        engine = self.get_engine()
+        from app.models import ProcessedChatCheckpoint
 
         # 先檢查設定的起始時間
         start_time_str = ETLConfig.get('PROCESS_CHAT_START_TIME')
@@ -251,16 +202,15 @@ class ChatProcessor:
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid PROCESS_CHAT_START_TIME format: {start_time_str}, error: {e}")
 
-        # 從 checkpoint 表讀取
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT last_processed_timestamp
-                FROM processed_chat_checkpoint
-                ORDER BY updated_at DESC
-                LIMIT 1;
-            """))
-            row = result.fetchone()
-            db_checkpoint = row[0] if row else None
+        # 從 checkpoint 表讀取（ORM）
+        session = self.get_session()
+        try:
+            checkpoint = session.query(ProcessedChatCheckpoint).order_by(
+                ProcessedChatCheckpoint.updated_at.desc()
+            ).first()
+            db_checkpoint = checkpoint.last_processed_timestamp if checkpoint else None
+        finally:
+            session.close()
 
         # 決定使用哪個時間
         if var_start_time and db_checkpoint:
@@ -275,7 +225,7 @@ class ChatProcessor:
 
     def _fetch_batch(self, checkpoint_time: datetime, end_time: datetime) -> List[Dict[str, Any]]:
         """
-        獲取一批待處理的留言
+        獲取一批待處理的留言（保留 raw SQL for LEFT JOIN performance）
 
         Args:
             checkpoint_time: 起始時間點
@@ -284,7 +234,6 @@ class ChatProcessor:
         Returns:
             留言列表
         """
-        engine = self.get_engine()
         batch_size = ETLConfig.get('PROCESS_CHAT_BATCH_SIZE', DEFAULT_BATCH_SIZE)
 
         fetch_sql = """
@@ -299,16 +248,20 @@ class ChatProcessor:
             LIMIT :batch_size;
         """
 
-        with engine.connect() as conn:
-            result = conn.execute(
-                text(fetch_sql),
+        session = self.get_session()
+        try:
+            result = self.execute_raw_sql(
+                fetch_sql,
                 {
                     "checkpoint_time": checkpoint_time,
                     "end_time": end_time,
                     "batch_size": batch_size
-                }
+                },
+                session=session
             )
             rows = result.fetchall()
+        finally:
+            session.close()
 
         messages_data = []
         for row in rows:
@@ -326,7 +279,7 @@ class ChatProcessor:
 
     def _upsert_batch(self, processed_messages: List[Dict[str, Any]]) -> int:
         """
-        批次寫入處理結果
+        批次寫入處理結果（ORM bulk_upsert）
 
         Args:
             processed_messages: 處理後的留言列表
@@ -334,80 +287,77 @@ class ChatProcessor:
         Returns:
             寫入數量
         """
-        engine = self.get_engine()
+        from app.models import ProcessedChatMessage
 
-        upsert_sql = """
-            INSERT INTO processed_chat_messages
-                (message_id, live_stream_id, original_message, processed_message,
-                 tokens, unicode_emojis, youtube_emotes, author_name, author_id, published_at)
-            VALUES (:message_id, :live_stream_id, :original_message, :processed_message,
-                    :tokens, :unicode_emojis, :youtube_emotes, :author_name, :author_id, :published_at)
-            ON CONFLICT (message_id)
-            DO UPDATE SET
-                processed_message = EXCLUDED.processed_message,
-                tokens = EXCLUDED.tokens,
-                unicode_emojis = EXCLUDED.unicode_emojis,
-                youtube_emotes = EXCLUDED.youtube_emotes,
-                processed_at = NOW();
-        """
+        if not processed_messages:
+            return 0
 
-        with engine.connect() as conn:
-            for msg in processed_messages:
-                conn.execute(
-                    text(upsert_sql),
-                    {
-                        'message_id': msg['message_id'],
-                        'live_stream_id': msg['live_stream_id'],
-                        'original_message': msg['original_message'],
-                        'processed_message': msg['processed_message'],
-                        'tokens': msg['tokens'],
-                        'unicode_emojis': msg['unicode_emojis'],
-                        'youtube_emotes': json.dumps(msg['youtube_emotes']) if msg['youtube_emotes'] else None,
-                        'author_name': msg['author_name'],
-                        'author_id': msg['author_id'],
-                        'published_at': msg['published_at']
-                    }
-                )
-            conn.commit()
+        # Prepare data for bulk_upsert
+        upsert_data = []
+        for msg in processed_messages:
+            upsert_data.append({
+                'message_id': msg['message_id'],
+                'live_stream_id': msg['live_stream_id'],
+                'original_message': msg['original_message'],
+                'processed_message': msg['processed_message'],
+                'tokens': msg['tokens'],
+                'unicode_emojis': msg['unicode_emojis'],
+                'youtube_emotes': msg['youtube_emotes'],
+                'author_name': msg['author_name'],
+                'author_id': msg['author_id'],
+                'published_at': msg['published_at']
+            })
 
-        return len(processed_messages)
+        session = self.get_session()
+        try:
+            count = bulk_upsert(
+                session,
+                ProcessedChatMessage,
+                upsert_data,
+                constraint_columns=['message_id'],
+                update_columns=[
+                    'processed_message', 'tokens',
+                    'unicode_emojis', 'youtube_emotes'
+                ]
+            )
+            session.commit()
+        finally:
+            session.close()
+
+        logger.debug(f"Upserted {count} processed messages")
+        return count
 
     def _update_checkpoint_record(self, last_message_id: str, last_published_at: str):
         """
-        更新檢查點記錄
+        更新檢查點記錄（ORM）
 
         Args:
             last_message_id: 最後處理的留言 ID
             last_published_at: 最後處理的時間戳
         """
-        engine = self.get_engine()
+        from app.models import ProcessedChatCheckpoint
 
-        with engine.connect() as conn:
-            # 檢查是否有 checkpoint 記錄
-            result = conn.execute(text("SELECT COUNT(*) FROM processed_chat_checkpoint;"))
-            has_checkpoint = result.scalar() > 0
+        session = self.get_session()
+        try:
+            # 取得最新的 checkpoint 記錄
+            checkpoint = session.query(ProcessedChatCheckpoint).order_by(
+                ProcessedChatCheckpoint.id.desc()
+            ).first()
 
-            if has_checkpoint:
-                conn.execute(
-                    text("""
-                        UPDATE processed_chat_checkpoint
-                        SET last_processed_message_id = :message_id,
-                            last_processed_timestamp = :timestamp,
-                            updated_at = NOW()
-                        WHERE id = (SELECT MAX(id) FROM processed_chat_checkpoint);
-                    """),
-                    {"message_id": last_message_id, "timestamp": last_published_at}
-                )
+            if checkpoint:
+                checkpoint.last_processed_message_id = last_message_id
+                checkpoint.last_processed_timestamp = last_published_at
+                checkpoint.updated_at = func.now()
             else:
-                conn.execute(
-                    text("""
-                        INSERT INTO processed_chat_checkpoint
-                            (last_processed_message_id, last_processed_timestamp)
-                        VALUES (:message_id, :timestamp);
-                    """),
-                    {"message_id": last_message_id, "timestamp": last_published_at}
+                checkpoint = ProcessedChatCheckpoint(
+                    last_processed_message_id=last_message_id,
+                    last_processed_timestamp=last_published_at,
                 )
-            conn.commit()
+                session.add(checkpoint)
+
+            session.commit()
+        finally:
+            session.close()
 
     def _process_all_batches(
         self,

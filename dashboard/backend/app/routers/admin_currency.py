@@ -5,7 +5,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.dependencies import require_admin
-from app.models import CurrencyRate
+from app.models import CurrencyRate, ChatMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin-currency"])
@@ -83,6 +83,10 @@ def upsert_currency_rate(
 @router.get("/currency-rates/unknown")
 def get_unknown_currencies(db: Session = Depends(get_db)):
     try:
+        # Raw SQL kept for JSONB operators (->>, ->).
+        # SQLAlchemy ORM's JSONB support generates less readable code for
+        # nested path traversal (raw_data->'money'->>'currency') and the
+        # DISTINCT + GROUP BY combination on extracted JSONB fields.
         result = db.execute(text("""
             SELECT DISTINCT raw_data->'money'->>'currency' as currency,
                    COUNT(*) as message_count

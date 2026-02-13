@@ -136,8 +136,10 @@ def get_word_frequency(
             if wordlist and wordlist.replacements:
                 replace_dict = build_replace_dict(wordlist.replacements)
         
-        # 構建基礎查詢 - 取得 (message_id, word) pairs
-        # Per-Message count: 同一則留言中，同個詞只計算一次
+        # Raw SQL kept: PostgreSQL's UNNEST on array columns is performance-critical.
+        # Migrating to ORM would require loading all messages into memory and
+        # expanding arrays in Python, which would be orders of magnitude slower
+        # for large datasets. SQLAlchemy has limited native UNNEST support.
         base_query = """
             SELECT DISTINCT message_id, unnest(tokens) as word
             FROM processed_chat_messages
@@ -167,7 +169,7 @@ def get_word_frequency(
         # 套用取代並計算詞頻（含 per-message 去重）
         words = count_words_with_replacement(rows, replace_dict, excluded, limit)
         
-        # 取得統計資訊
+        # Raw SQL kept: Same UNNEST reason as above query
         stats_query = """
             SELECT 
                 COUNT(DISTINCT message_id) as total_messages,

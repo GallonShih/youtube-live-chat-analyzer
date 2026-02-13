@@ -1,6 +1,8 @@
 """
 Dictionary Importer Module
 字典匯入邏輯（遷移自 Airflow import_text_analysis_dicts.py）
+
+Uses ORM with bulk_upsert for efficient batch operations.
 """
 
 import json
@@ -8,12 +10,11 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-
+from app.etl.processors.base import BaseETLProcessor
 from app.etl.config import ETLConfig
+from app.utils.orm_helpers import bulk_upsert, bulk_upsert_do_nothing
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEXT_ANALYSIS_DIR = Path(os.getenv('TEXT_ANALYSIS_DIR', '/app/text_analysis').strip())
 
 
-class DictImporter:
+class DictImporter(BaseETLProcessor):
     """
     字典匯入器
 
@@ -31,34 +32,9 @@ class DictImporter:
     3. 匯入特殊詞彙 (special_words.json)
     """
 
-    def __init__(
-        self,
-        database_url: Optional[str] = None,
-        text_analysis_dir: Optional[Path] = None
-    ):
-        """
-        初始化匯入器
-
-        Args:
-            database_url: 資料庫連線字串
-            text_analysis_dir: 字典檔案目錄
-        """
-        self.database_url = database_url or ETLConfig.get('DATABASE_URL')
+    def __init__(self, text_analysis_dir: Optional[Path] = None):
+        super().__init__()
         self.text_analysis_dir = text_analysis_dir or DEFAULT_TEXT_ANALYSIS_DIR
-        self._engine: Optional[Engine] = None
-
-    def get_engine(self) -> Engine:
-        """取得資料庫連線引擎"""
-        if self._engine is None:
-            self._engine = create_engine(
-                self.database_url,
-                pool_size=1,
-                max_overflow=0,
-                pool_pre_ping=True,
-                pool_recycle=1800,
-                pool_reset_on_return="rollback",
-            )
-        return self._engine
 
     def run(self) -> Dict[str, Any]:
         """
@@ -71,23 +47,20 @@ class DictImporter:
         start_time = datetime.now()
 
         try:
-            # 1. 創建表（如果不存在）
-            self._create_tables_if_not_exists()
-
-            # 2. 匯入無意義詞彙
+            # 1. 匯入無意義詞彙
             meaningless_result = self._import_meaningless_words()
 
-            # 3. 匯入替換詞彙（檢查是否需要清空）
+            # 2. 匯入替換詞彙（檢查是否需要清空）
             truncate_replace = ETLConfig.get('TRUNCATE_REPLACE_WORDS', False)
             if truncate_replace:
-                self._truncate_table('replace_words')
+                self._truncate_model('replace_words')
                 ETLConfig.set('TRUNCATE_REPLACE_WORDS', 'false', 'boolean')
             replace_result = self._import_replace_words()
 
-            # 4. 匯入特殊詞彙（檢查是否需要清空）
+            # 3. 匯入特殊詞彙（檢查是否需要清空）
             truncate_special = ETLConfig.get('TRUNCATE_SPECIAL_WORDS', False)
             if truncate_special:
-                self._truncate_table('special_words')
+                self._truncate_model('special_words')
                 ETLConfig.set('TRUNCATE_SPECIAL_WORDS', 'false', 'boolean')
             special_result = self._import_special_words()
 
@@ -123,61 +96,33 @@ class DictImporter:
                 'execution_time_seconds': int((datetime.now() - start_time).total_seconds())
             }
 
-    def _create_tables_if_not_exists(self):
-        """創建文字分析相關的資料表"""
-        engine = self.get_engine()
+    def _truncate_model(self, table_name: str):
+        """清空指定表（使用 ORM delete）"""
+        from app.models import ReplaceWord, SpecialWord, MeaninglessWord
 
-        create_tables_sql = """
-        -- 無意義詞彙表
-        CREATE TABLE IF NOT EXISTS meaningless_words (
-            id SERIAL PRIMARY KEY,
-            word VARCHAR(255) NOT NULL UNIQUE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
+        model_map = {
+            'replace_words': ReplaceWord,
+            'special_words': SpecialWord,
+            'meaningless_words': MeaninglessWord,
+        }
 
-        -- 替換詞彙表 (key-value mapping)
-        CREATE TABLE IF NOT EXISTS replace_words (
-            id SERIAL PRIMARY KEY,
-            source_word VARCHAR(255) NOT NULL UNIQUE,
-            target_word VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
+        model = model_map.get(table_name)
+        if not model:
+            logger.warning(f"Unknown table: {table_name}")
+            return
 
-        -- 特殊詞彙表
-        CREATE TABLE IF NOT EXISTS special_words (
-            id SERIAL PRIMARY KEY,
-            word VARCHAR(255) NOT NULL UNIQUE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- 創建索引以提升查詢效能
-        CREATE INDEX IF NOT EXISTS idx_meaningless_words_word ON meaningless_words(word);
-        CREATE INDEX IF NOT EXISTS idx_replace_words_source ON replace_words(source_word);
-        CREATE INDEX IF NOT EXISTS idx_replace_words_target ON replace_words(target_word);
-        CREATE INDEX IF NOT EXISTS idx_special_words_word ON special_words(word);
-        """
-
-        with engine.connect() as conn:
-            conn.execute(text(create_tables_sql))
-            conn.commit()
-
-        logger.info("Dictionary tables created or already exist")
-
-    def _truncate_table(self, table_name: str):
-        """清空指定表"""
-        engine = self.get_engine()
-
-        with engine.connect() as conn:
-            conn.execute(text(f"TRUNCATE TABLE {table_name};"))
-            conn.commit()
-
-        logger.info(f"Table {table_name} truncated")
+        session = self.get_session()
+        try:
+            session.query(model).delete()
+            session.commit()
+            logger.info(f"Table {table_name} truncated")
+        finally:
+            session.close()
 
     def _import_meaningless_words(self) -> Dict[str, Any]:
         """匯入無意義詞彙"""
+        from app.models import MeaninglessWord
+
         json_file = self.text_analysis_dir / 'meaningless_words.json'
 
         if not json_file.exists():
@@ -192,30 +137,25 @@ class DictImporter:
             logger.info("No meaningless words to import")
             return {'processed': 0, 'total': 0}
 
-        engine = self.get_engine()
-
-        with engine.connect() as conn:
-            for word in words:
-                conn.execute(
-                    text("""
-                        INSERT INTO meaningless_words (word)
-                        VALUES (:word)
-                        ON CONFLICT (word) DO NOTHING;
-                    """),
-                    {"word": word}
-                )
-            conn.commit()
+        session = self.get_session()
+        try:
+            # Bulk insert with ON CONFLICT DO NOTHING
+            word_data = [{"word": word} for word in words]
+            bulk_upsert_do_nothing(session, MeaninglessWord, word_data, ['word'])
+            session.commit()
 
             # 查詢總數
-            result = conn.execute(text("SELECT COUNT(*) FROM meaningless_words;"))
-            total_count = result.scalar()
+            total_count = session.query(MeaninglessWord).count()
+        finally:
+            session.close()
 
         logger.info(f"Imported {len(words)} meaningless words, total: {total_count}")
-
         return {'processed': len(words), 'total': total_count}
 
     def _import_replace_words(self) -> Dict[str, Any]:
         """匯入替換詞彙對照表"""
+        from app.models import ReplaceWord
+
         json_file = self.text_analysis_dir / 'replace_words.json'
 
         if not json_file.exists():
@@ -230,32 +170,32 @@ class DictImporter:
             logger.info("No replace words to import")
             return {'processed': 0, 'total': 0}
 
-        engine = self.get_engine()
-
-        with engine.connect() as conn:
-            for source, target in replace_map.items():
-                conn.execute(
-                    text("""
-                        INSERT INTO replace_words (source_word, target_word)
-                        VALUES (:source, :target)
-                        ON CONFLICT (source_word) DO UPDATE SET
-                            target_word = EXCLUDED.target_word,
-                            updated_at = NOW();
-                    """),
-                    {"source": source, "target": target}
-                )
-            conn.commit()
+        session = self.get_session()
+        try:
+            # Bulk upsert (ON CONFLICT DO UPDATE target_word)
+            replace_data = [
+                {"source_word": source, "target_word": target}
+                for source, target in replace_map.items()
+            ]
+            bulk_upsert(
+                session, ReplaceWord, replace_data,
+                constraint_columns=['source_word'],
+                update_columns=['target_word']
+            )
+            session.commit()
 
             # 查詢總數
-            result = conn.execute(text("SELECT COUNT(*) FROM replace_words;"))
-            total_count = result.scalar()
+            total_count = session.query(ReplaceWord).count()
+        finally:
+            session.close()
 
         logger.info(f"Imported {len(replace_map)} replace words, total: {total_count}")
-
         return {'processed': len(replace_map), 'total': total_count}
 
     def _import_special_words(self) -> Dict[str, Any]:
         """匯入特殊詞彙"""
+        from app.models import SpecialWord
+
         json_file = self.text_analysis_dir / 'special_words.json'
 
         if not json_file.exists():
@@ -270,24 +210,17 @@ class DictImporter:
             logger.info("No special words to import")
             return {'processed': 0, 'total': 0}
 
-        engine = self.get_engine()
-
-        with engine.connect() as conn:
-            for word in words:
-                conn.execute(
-                    text("""
-                        INSERT INTO special_words (word)
-                        VALUES (:word)
-                        ON CONFLICT (word) DO NOTHING;
-                    """),
-                    {"word": word}
-                )
-            conn.commit()
+        session = self.get_session()
+        try:
+            # Bulk insert with ON CONFLICT DO NOTHING
+            word_data = [{"word": word} for word in words]
+            bulk_upsert_do_nothing(session, SpecialWord, word_data, ['word'])
+            session.commit()
 
             # 查詢總數
-            result = conn.execute(text("SELECT COUNT(*) FROM special_words;"))
-            total_count = result.scalar()
+            total_count = session.query(SpecialWord).count()
+        finally:
+            session.close()
 
         logger.info(f"Imported {len(words)} special words, total: {total_count}")
-
         return {'processed': len(words), 'total': total_count}

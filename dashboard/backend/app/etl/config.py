@@ -6,8 +6,9 @@ ETL 設定管理（從資料庫讀取，fallback 到環境變數）
 import os
 import logging
 from typing import Any, Optional
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,12 @@ class ETLConfig:
 
     讀取優先級：
     1. 環境變數（僅限敏感資訊如 GEMINI_API_KEY）
-    2. 資料庫 etl_settings 表
+    2. 資料庫 etl_settings 表（via ORM）
     3. 程式碼預設值
 
     注意：快取預設停用，確保每次讀取都是最新值
     """
 
-    _engine: Optional[Engine] = None
     _cache: dict = {}
     _cache_enabled: bool = False  # 預設停用快取，確保讀取最新設定
 
@@ -32,27 +32,13 @@ class ETLConfig:
     SENSITIVE_KEYS = {'GEMINI_API_KEY', 'DISCORD_WEBHOOK_URL'}
 
     @classmethod
-    def init_engine(cls, database_url: str):
-        """初始化資料庫連線"""
-        cls._engine = create_engine(
-            database_url,
-            pool_size=1,
-            max_overflow=2,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_reset_on_return="rollback",
-        )
-        cls._cache = {}
-        logger.info("ETLConfig engine initialized")
-
-    @classmethod
-    def get_engine(cls) -> Optional[Engine]:
-        """取得資料庫引擎"""
-        if cls._engine is None:
-            database_url = os.getenv('DATABASE_URL')
-            if database_url:
-                cls.init_engine(database_url)
-        return cls._engine
+    def get_engine(cls):
+        """取得資料庫引擎（向後兼容，供 advisory lock 等使用）"""
+        try:
+            db_manager = get_db_manager()
+            return db_manager.engine
+        except Exception:
+            return None
 
     @classmethod
     def clear_cache(cls):
@@ -98,21 +84,23 @@ class ETLConfig:
             if env_value is not None and env_value != '':
                 return env_value  # 敏感設定直接返回，不快取
 
-        # 1. 從資料庫讀取
-        engine = cls.get_engine()
-        if engine:
-            try:
-                with engine.connect() as conn:
-                    result = conn.execute(
-                        text("SELECT value, value_type FROM etl_settings WHERE key = :key"),
-                        {"key": key}
-                    ).fetchone()
+        # 1. 從資料庫讀取（ORM）
+        try:
+            from app.models import ETLSetting
 
-                    if result and result[0] is not None and result[0] != '':
-                        raw_value, value_type = result
-                        value = cls._convert_type(raw_value, value_type)
-            except Exception as e:
-                logger.warning(f"Failed to read {key} from database: {e}")
+            db_manager = get_db_manager()
+            session = db_manager.get_session()
+            try:
+                setting = session.query(ETLSetting).filter(
+                    ETLSetting.key == key
+                ).first()
+
+                if setting and setting.value is not None and setting.value != '':
+                    value = cls._convert_type(setting.value, setting.value_type)
+            finally:
+                session.close()
+        except Exception as e:
+            logger.warning(f"Failed to read {key} from database: {e}")
 
         # 2. 從環境變數讀取（非敏感設定的 fallback）
         if value is None:
@@ -133,7 +121,7 @@ class ETLConfig:
     @classmethod
     def set(cls, key: str, value: Any, value_type: str = 'string') -> bool:
         """
-        設定值到資料庫
+        設定值到資料庫（ORM upsert）
 
         Args:
             key: 設定鍵名
@@ -143,25 +131,29 @@ class ETLConfig:
         Returns:
             是否成功
         """
-        engine = cls.get_engine()
-        if not engine:
-            logger.error("Database engine not initialized")
-            return False
-
         try:
-            with engine.connect() as conn:
-                conn.execute(
-                    text("""
-                        INSERT INTO etl_settings (key, value, value_type, updated_at)
-                        VALUES (:key, :value, :value_type, NOW())
-                        ON CONFLICT (key) DO UPDATE SET
-                            value = EXCLUDED.value,
-                            value_type = EXCLUDED.value_type,
-                            updated_at = NOW()
-                    """),
-                    {"key": key, "value": str(value), "value_type": value_type}
+            from app.models import ETLSetting
+            from sqlalchemy.dialects.postgresql import insert
+
+            db_manager = get_db_manager()
+            session = db_manager.get_session()
+            try:
+                stmt = insert(ETLSetting).values(
+                    key=key,
+                    value=str(value),
+                    value_type=value_type,
                 )
-                conn.commit()
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=['key'],
+                    set_={
+                        'value': stmt.excluded.value,
+                        'value_type': stmt.excluded.value_type,
+                    }
+                )
+                session.execute(stmt)
+                session.commit()
+            finally:
+                session.close()
 
             # 更新快取
             if cls._cache_enabled:

@@ -1,6 +1,9 @@
 """
 ETL Tasks Module
 ETL 任務入口函數
+
+Advisory locks remain as psycopg2 (PostgreSQL-specific, requires standalone connection).
+ETL log operations migrated to ORM.
 """
 
 import logging
@@ -10,16 +13,21 @@ from datetime import datetime
 from typing import Dict, Any, Callable, Optional
 
 import psycopg2
-from sqlalchemy import text
+from sqlalchemy import func
 from sqlalchemy.engine import make_url
 
+from app.core.database import get_db_manager
 from app.etl.config import ETLConfig
 
 logger = logging.getLogger(__name__)
 
 
 def _create_lock_connection():
-    """Create a standalone psycopg2 connection for advisory locks (bypasses pool)."""
+    """Create a standalone psycopg2 connection for advisory locks (bypasses pool).
+
+    Advisory locks MUST use standalone connections to prevent pool exhaustion.
+    This is intentionally NOT migrated to ORM.
+    """
     database_url = os.getenv('DATABASE_URL', '')
     if not database_url:
         return None
@@ -59,6 +67,9 @@ def with_advisory_lock(lock_key: int):
 
     Falls back to executing the task if the lock mechanism itself fails
     (fail-open to avoid breaking existing behavior).
+
+    NOTE: Advisory locks intentionally use psycopg2 standalone connections,
+    NOT the ORM connection pool.
     """
     def decorator(func):
         @functools.wraps(func)
@@ -128,36 +139,38 @@ def with_advisory_lock(lock_key: int):
 
 def create_etl_log(job_id: str, trigger_type: str = 'scheduled') -> Optional[int]:
     """
-    創建 ETL 執行記錄
-    
+    創建 ETL 執行記錄 (ORM)
+
     Args:
         job_id: 任務 ID
         trigger_type: 觸發類型 ('scheduled' or 'manual')
-    
+
     Returns:
         etl_log_id or None if failed
     """
-    engine = ETLConfig.get_engine()
-    if not engine:
-        logger.warning("Cannot create ETL log: database engine not initialized")
-        return None
-    
     try:
-        job_name = JOB_NAMES.get(job_id, job_id)
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("""
-                    INSERT INTO etl_execution_log
-                        (job_id, job_name, status, trigger_type, started_at)
-                    VALUES (:job_id, :job_name, 'running', :trigger_type, NOW())
-                    RETURNING id;
-                """),
-                {"job_id": job_id, "job_name": job_name, "trigger_type": trigger_type}
+        from app.models import ETLExecutionLog
+
+        db_manager = get_db_manager()
+        session = db_manager.get_session()
+        try:
+            job_name = JOB_NAMES.get(job_id, job_id)
+            log = ETLExecutionLog(
+                job_id=job_id,
+                job_name=job_name,
+                status='running',
+                trigger_type=trigger_type,
+                started_at=func.now(),
             )
-            log_id = result.scalar()
-            conn.commit()
-            logger.info(f"Created ETL log: {job_id} (id={log_id}, trigger={trigger_type})")
-            return log_id
+            session.add(log)
+            session.commit()
+            session.refresh(log)
+            log_id = log.id
+        finally:
+            session.close()
+
+        logger.info(f"Created ETL log: {job_id} (id={log_id}, trigger={trigger_type})")
+        return log_id
     except Exception as e:
         logger.error(f"Failed to create ETL log: {e}")
         return None
@@ -170,65 +183,60 @@ def update_etl_log_status(
     error_message: Optional[str] = None
 ) -> bool:
     """
-    更新 ETL 執行記錄狀態
-    
+    更新 ETL 執行記錄狀態 (ORM)
+
     Args:
         etl_log_id: ETL 記錄 ID
         status: 新狀態 ('completed', 'failed', 'skipped')
         records_processed: 處理的記錄數
         error_message: 錯誤訊息（用於 failed/skipped 狀態）
-    
+
     Returns:
         是否成功
     """
-    engine = ETLConfig.get_engine()
-    if not engine:
-        logger.warning("Cannot update ETL log: database engine not initialized")
-        return False
-    
     try:
-        with engine.connect() as conn:
+        from app.models import ETLExecutionLog
+
+        db_manager = get_db_manager()
+        session = db_manager.get_session()
+        try:
+            log = session.query(ETLExecutionLog).filter(
+                ETLExecutionLog.id == etl_log_id
+            ).first()
+
+            if not log:
+                logger.warning(f"ETL log {etl_log_id} not found")
+                return False
+
+            log.status = status
+            log.completed_at = func.now()
+
             if status == 'completed':
-                conn.execute(
-                    text("""
-                        UPDATE etl_execution_log
-                        SET status = 'completed',
-                            completed_at = NOW(),
-                            records_processed = :records,
-                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
-                        WHERE id = :id;
-                    """),
-                    {"id": etl_log_id, "records": records_processed}
+                log.records_processed = records_processed
+            elif status in ('failed', 'skipped'):
+                error_msg = str(error_message)[:500] if error_message else (
+                    'Skipped: task is already running' if status == 'skipped' else None
                 )
-            elif status == 'failed':
-                error_msg = str(error_message)[:500] if error_message else None
-                conn.execute(
-                    text("""
-                        UPDATE etl_execution_log
-                        SET status = 'failed',
-                            completed_at = NOW(),
-                            error_message = :error,
-                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
-                        WHERE id = :id;
-                    """),
-                    {"id": etl_log_id, "error": error_msg}
-                )
-            elif status == 'skipped':
-                skip_msg = str(error_message)[:500] if error_message else 'Skipped: task is already running'
-                conn.execute(
-                    text("""
-                        UPDATE etl_execution_log
-                        SET status = 'skipped',
-                            completed_at = NOW(),
-                            error_message = :error,
-                            duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
-                        WHERE id = :id;
-                    """),
-                    {"id": etl_log_id, "error": skip_msg}
-                )
-            conn.commit()
-            logger.info(f"Updated ETL log {etl_log_id}: status={status}")
-            return True
+                log.error_message = error_msg
+
+            # Calculate duration: use raw SQL for EXTRACT since it depends on started_at
+            # which is already in the DB row
+            from sqlalchemy import text
+            session.execute(
+                text("""
+                    UPDATE etl_execution_log
+                    SET duration_seconds = EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER
+                    WHERE id = :id
+                """),
+                {"id": etl_log_id}
+            )
+
+            session.commit()
+        finally:
+            session.close()
+
+        logger.info(f"Updated ETL log {etl_log_id}: status={status}")
+        return True
     except Exception as e:
         logger.error(f"Failed to update ETL log: {e}")
         return False
@@ -261,8 +269,8 @@ def run_process_chat_messages(etl_log_id: Optional[int] = None) -> Dict[str, Any
 
         if etl_log_id:
             update_etl_log_status(
-                etl_log_id, 
-                'completed', 
+                etl_log_id,
+                'completed',
                 records_processed=result.get('total_processed', 0)
             )
 
@@ -342,8 +350,8 @@ def run_import_dicts(etl_log_id: Optional[int] = None) -> Dict[str, Any]:
 
         if etl_log_id:
             update_etl_log_status(
-                etl_log_id, 
-                result.get('status', 'completed'), 
+                etl_log_id,
+                result.get('status', 'completed'),
                 records_processed=result.get('total_processed', 0),
                 error_message=result.get('error')
             )

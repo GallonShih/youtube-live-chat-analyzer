@@ -1,3 +1,7 @@
+"""
+Tests for ETL tasks module (ORM-based).
+"""
+
 import pytest
 from unittest.mock import MagicMock, patch, ANY
 from datetime import datetime
@@ -10,50 +14,66 @@ from app.etl.tasks import (
 
 # ============ Helper Function Tests ============
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_success_scheduled(mock_get_engine):
+@patch('app.etl.tasks.get_db_manager')
+def test_create_etl_log_success_scheduled(mock_get_db_manager):
     """Test creating an ETL log with scheduled trigger."""
-    mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.return_value.__enter__.return_value = mock_conn
-    mock_conn.execute.return_value.scalar.return_value = 123  # returning ID
-    
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
+
+    # Mock the refresh to set an id on the log object
+    def fake_refresh(log):
+        log.id = 123
+    mock_session.refresh.side_effect = fake_refresh
+
     log_id = create_etl_log('test_job', trigger_type='scheduled')
-    
+
     assert log_id == 123
-    mock_conn.execute.assert_called_once()
-    call_args = mock_conn.execute.call_args
-    assert "scheduled" in str(call_args)
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+    mock_session.close.assert_called_once()
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_success_manual(mock_get_engine):
+@patch('app.etl.tasks.get_db_manager')
+def test_create_etl_log_success_manual(mock_get_db_manager):
     """Test creating an ETL log with manual trigger."""
-    mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.return_value.__enter__.return_value = mock_conn
-    mock_conn.execute.return_value.scalar.return_value = 456
-    
-    log_id = create_etl_log('test_job', trigger_type='manual')
-    
-    assert log_id == 456
-    mock_conn.execute.assert_called_once()
-    call_args = mock_conn.execute.call_args
-    assert "manual" in str(call_args)
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_update_etl_log_status_success(mock_get_engine):
+    def fake_refresh(log):
+        log.id = 456
+    mock_session.refresh.side_effect = fake_refresh
+
+    log_id = create_etl_log('test_job', trigger_type='manual')
+
+    assert log_id == 456
+    mock_session.add.assert_called_once()
+
+    # Verify the ETLExecutionLog object was created with correct trigger_type
+    added_log = mock_session.add.call_args[0][0]
+    assert added_log.trigger_type == 'manual'
+
+@patch('app.etl.tasks.get_db_manager')
+def test_update_etl_log_status_success(mock_get_db_manager):
     """Test updating ETL log status."""
-    mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.return_value.__enter__.return_value = mock_conn
-    
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
+
+    # Mock finding the log
+    mock_log = MagicMock()
+    mock_session.query.return_value.filter.return_value.first.return_value = mock_log
+
     success = update_etl_log_status(123, 'completed', records_processed=50)
-    
+
     assert success is True
-    mock_conn.execute.assert_called_once()
+    assert mock_log.status == 'completed'
+    assert mock_log.records_processed == 50
+    mock_session.commit.assert_called_once()
+    mock_session.close.assert_called_once()
 
 # ============ Task Function Tests ============
 
@@ -66,9 +86,9 @@ def test_run_process_chat_messages_scheduled(mock_create, mock_update, mock_proc
     mock_processor_class.return_value = mock_processor
     mock_processor.run.return_value = {'status': 'completed', 'total_processed': 10}
     mock_create.return_value = 100
-    
+
     result = run_process_chat_messages()
-    
+
     assert result['status'] == 'completed'
     # Should create new log with 'scheduled' trigger type
     mock_create.assert_called_once_with('process_chat_messages', 'scheduled')
@@ -83,10 +103,10 @@ def test_run_process_chat_messages_manual(mock_create, mock_update, mock_process
     mock_processor = MagicMock()
     mock_processor_class.return_value = mock_processor
     mock_processor.run.return_value = {'status': 'completed', 'total_processed': 10}
-    
+
     etl_log_id = 999
     result = run_process_chat_messages(etl_log_id=etl_log_id)
-    
+
     assert result['status'] == 'completed'
     # Should NOT create new log
     mock_create.assert_not_called()
@@ -102,9 +122,9 @@ def test_run_process_chat_messages_failure(mock_create, mock_update, mock_proces
     mock_processor_class.return_value = mock_processor
     mock_processor.run.side_effect = Exception("Task failed")
     mock_create.return_value = 100
-    
+
     result = run_process_chat_messages()
-    
+
     assert result['status'] == 'failed'
     assert 'Task failed' in result['error']
     mock_update.assert_called_with(100, 'failed', error_message='Task failed')
@@ -121,9 +141,9 @@ def test_run_discover_new_words_scheduled(mock_create, mock_update, mock_process
     mock_processor_class.return_value = mock_processor
     mock_processor.run.return_value = {'status': 'completed', 'messages_analyzed': 100}
     mock_create.return_value = 200
-    
+
     result = run_discover_new_words()
-    
+
     assert result['status'] == 'completed'
     mock_create.assert_called_once_with('discover_new_words', 'scheduled')
     mock_update.assert_called_once_with(
@@ -139,9 +159,9 @@ def test_run_discover_new_words_manual(mock_create, mock_update, mock_processor_
     mock_processor = MagicMock()
     mock_processor_class.return_value = mock_processor
     mock_processor.run.return_value = {'status': 'completed', 'messages_analyzed': 50}
-    
+
     result = run_discover_new_words(etl_log_id=888)
-    
+
     assert result['status'] == 'completed'
     mock_create.assert_not_called()
     mock_update.assert_called_once()
@@ -156,9 +176,9 @@ def test_run_discover_new_words_failure(mock_create, mock_update, mock_processor
     mock_processor_class.return_value = mock_processor
     mock_processor.run.side_effect = Exception("AI service unavailable")
     mock_create.return_value = 200
-    
+
     result = run_discover_new_words()
-    
+
     assert result['status'] == 'failed'
     assert 'AI service unavailable' in result['error']
     mock_update.assert_called_with(200, 'failed', error_message='AI service unavailable')
@@ -175,9 +195,9 @@ def test_run_import_dicts_scheduled(mock_create, mock_update, mock_importer_clas
     mock_importer_class.return_value = mock_importer
     mock_importer.run.return_value = {'status': 'completed', 'total_processed': 500}
     mock_create.return_value = 300
-    
+
     result = run_import_dicts()
-    
+
     assert result['status'] == 'completed'
     # import_dicts is a manual-only task
     mock_create.assert_called_once_with('import_dicts', 'manual')
@@ -192,9 +212,9 @@ def test_run_import_dicts_manual(mock_create, mock_update, mock_importer_class):
     mock_importer = MagicMock()
     mock_importer_class.return_value = mock_importer
     mock_importer.run.return_value = {'status': 'completed', 'total_processed': 250}
-    
+
     result = run_import_dicts(etl_log_id=777)
-    
+
     assert result['status'] == 'completed'
     mock_create.assert_not_called()
     mock_update.assert_called_once()
@@ -209,9 +229,9 @@ def test_run_import_dicts_failure(mock_create, mock_update, mock_importer_class)
     mock_importer_class.return_value = mock_importer
     mock_importer.run.side_effect = Exception("File not found")
     mock_create.return_value = 300
-    
+
     result = run_import_dicts()
-    
+
     assert result['status'] == 'failed'
     assert 'File not found' in result['error']
     mock_update.assert_called_with(300, 'failed', error_message='File not found')
@@ -219,61 +239,72 @@ def test_run_import_dicts_failure(mock_create, mock_update, mock_importer_class)
 
 # ============ ETL Log Edge Cases ============
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_no_engine(mock_get_engine):
-    """Test create_etl_log when engine is not initialized."""
-    mock_get_engine.return_value = None
-    
+@patch('app.etl.tasks.get_db_manager')
+def test_create_etl_log_no_engine(mock_get_db_manager):
+    """Test create_etl_log when database is not available."""
+    mock_get_db_manager.side_effect = Exception("No DB")
+
     log_id = create_etl_log('test_job')
-    
+
     assert log_id is None
 
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_create_etl_log_exception(mock_get_engine):
+@patch('app.etl.tasks.get_db_manager')
+def test_create_etl_log_exception(mock_get_db_manager):
     """Test create_etl_log when database operation fails."""
-    mock_engine = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.side_effect = Exception("Connection failed")
-    
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_session.commit.side_effect = Exception("Connection failed")
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
+
     log_id = create_etl_log('test_job')
-    
+
     assert log_id is None
 
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_update_etl_log_status_no_engine(mock_get_engine):
-    """Test update_etl_log_status when engine is not initialized."""
-    mock_get_engine.return_value = None
-    
+@patch('app.etl.tasks.get_db_manager')
+def test_update_etl_log_status_no_engine(mock_get_db_manager):
+    """Test update_etl_log_status when database is unavailable."""
+    mock_get_db_manager.side_effect = Exception("No DB")
+
     success = update_etl_log_status(123, 'completed')
-    
+
     assert success is False
 
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_update_etl_log_status_failed(mock_get_engine):
+@patch('app.etl.tasks.get_db_manager')
+def test_update_etl_log_status_failed(mock_get_db_manager):
     """Test update_etl_log_status with failed status."""
-    mock_engine = MagicMock()
-    mock_conn = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.return_value.__enter__.return_value = mock_conn
-    
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
+
+    mock_log = MagicMock()
+    mock_session.query.return_value.filter.return_value.first.return_value = mock_log
+
     success = update_etl_log_status(123, 'failed', error_message='Test error')
-    
+
     assert success is True
-    mock_conn.execute.assert_called_once()
+    assert mock_log.status == 'failed'
+    assert mock_log.error_message == 'Test error'
 
 
-@patch('app.etl.config.ETLConfig.get_engine')
-def test_update_etl_log_status_exception(mock_get_engine):
+@patch('app.etl.tasks.get_db_manager')
+def test_update_etl_log_status_exception(mock_get_db_manager):
     """Test update_etl_log_status when database operation fails."""
-    mock_engine = MagicMock()
-    mock_get_engine.return_value = mock_engine
-    mock_engine.connect.side_effect = Exception("Connection failed")
-    
+    mock_manager = MagicMock()
+    mock_session = MagicMock()
+    mock_session.commit.side_effect = Exception("Connection failed")
+    mock_manager.get_session.return_value = mock_session
+    mock_get_db_manager.return_value = mock_manager
+
+    mock_log = MagicMock()
+    mock_session.query.return_value.filter.return_value.first.return_value = mock_log
+
     success = update_etl_log_status(123, 'completed')
-    
+
     assert success is False
 
 

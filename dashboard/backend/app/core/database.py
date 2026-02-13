@@ -17,9 +17,12 @@ class DatabaseManager:
         engine_args = {"echo": False}
         
         if self.database_url.startswith("postgresql"):
+            # Increased pool size to support concurrent ETL tasks and API requests
+            # pool_size: Number of connections to maintain in the pool
+            # max_overflow: Additional connections allowed beyond pool_size
             engine_args.update({
-                "pool_size": 5,
-                "max_overflow": 5,
+                "pool_size": 10,  # Increased from 5 to 10 for ORM migration
+                "max_overflow": 10,  # Increased from 5 to 10 for ORM migration
                 "pool_pre_ping": True,
                 "pool_recycle": 1800,
                 "pool_reset_on_return": "rollback",
@@ -50,6 +53,32 @@ class DatabaseManager:
         except SQLAlchemyError as e:
             logger.error(f"Database connection test failed: {e}")
             return False
+
+    def get_pool_status(self) -> dict:
+        """
+        Get current connection pool status for monitoring and debugging.
+
+        Returns:
+            Dictionary containing pool metrics:
+            - size: Number of connections currently in the pool
+            - checked_in: Number of connections available
+            - checked_out: Number of connections currently in use
+            - overflow: Number of overflow connections in use
+            - total: Total connections (pool + overflow)
+
+        Example:
+            >>> db_manager = get_db_manager()
+            >>> status = db_manager.get_pool_status()
+            >>> print(f"Pool utilization: {status['checked_out']}/{status['total']}")
+        """
+        pool = self.engine.pool
+        return {
+            "size": pool.size(),
+            "checked_in": pool.checkedin(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+            "total": pool.size() + pool.overflow()
+        }
 
     def close(self):
         self.engine.dispose()

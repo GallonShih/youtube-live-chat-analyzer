@@ -1,18 +1,18 @@
 """
 Prompt Templates Router
-AI 提示詞範本管理 API
+AI 提示詞範本管理 API (ORM)
 """
 
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 import logging
 
 from app.core.database import get_db
 from app.core.dependencies import require_admin
+from app.models import PromptTemplate, ETLSetting
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/etl/prompt-templates", tags=["prompt-templates"])
@@ -42,38 +42,48 @@ class PromptTemplateResponse(BaseModel):
     created_by: str
 
 
+def _template_to_dict(t: PromptTemplate) -> dict:
+    """Convert PromptTemplate ORM object to response dict."""
+    return {
+        "id": t.id,
+        "name": t.name,
+        "description": t.description,
+        "template": t.template,
+        "is_active": t.is_active,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+        "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        "created_by": t.created_by,
+    }
+
+
+def _template_to_response(t: PromptTemplate) -> PromptTemplateResponse:
+    """Convert PromptTemplate ORM object to PromptTemplateResponse."""
+    return PromptTemplateResponse(
+        id=t.id,
+        name=t.name,
+        description=t.description,
+        template=t.template,
+        is_active=t.is_active,
+        created_at=t.created_at.isoformat() if t.created_at else "",
+        updated_at=t.updated_at.isoformat() if t.updated_at else "",
+        created_by=t.created_by,
+    )
+
+
 @router.get("")
 def list_templates(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    列出所有提示詞範本
-    
-    Returns:
-        範本列表
-    """
+    """列出所有提示詞範本"""
     try:
-        result = db.execute(text("""
-            SELECT id, name, description, template, is_active, 
-                   created_at, updated_at, created_by
-            FROM prompt_templates
-            ORDER BY is_active DESC, name ASC
-        """))
-        rows = result.fetchall()
-        
-        templates = []
-        for row in rows:
-            templates.append({
-                "id": row[0],
-                "name": row[1],
-                "description": row[2],
-                "template": row[3],
-                "is_active": row[4],
-                "created_at": row[5].isoformat() if row[5] else None,
-                "updated_at": row[6].isoformat() if row[6] else None,
-                "created_by": row[7]
-            })
-        
-        return {"templates": templates, "total": len(templates)}
-    
+        templates = db.query(PromptTemplate).order_by(
+            PromptTemplate.is_active.desc(),
+            PromptTemplate.name.asc()
+        ).all()
+
+        return {
+            "templates": [_template_to_dict(t) for t in templates],
+            "total": len(templates),
+        }
+
     except Exception as e:
         logger.error(f"Error listing prompt templates: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -81,41 +91,17 @@ def list_templates(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
 @router.get("/{template_id}")
 def get_template(template_id: int, db: Session = Depends(get_db)) -> PromptTemplateResponse:
-    """
-    取得單一提示詞範本
-    
-    Args:
-        template_id: 範本 ID
-    
-    Returns:
-        範本詳情
-    """
+    """取得單一提示詞範本"""
     try:
-        result = db.execute(
-            text("""
-                SELECT id, name, description, template, is_active, 
-                       created_at, updated_at, created_by
-                FROM prompt_templates
-                WHERE id = :template_id
-            """),
-            {"template_id": template_id}
-        )
-        row = result.fetchone()
-        
-        if not row:
+        template = db.query(PromptTemplate).filter(
+            PromptTemplate.id == template_id
+        ).first()
+
+        if not template:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
-        
-        return PromptTemplateResponse(
-            id=row[0],
-            name=row[1],
-            description=row[2],
-            template=row[3],
-            is_active=row[4],
-            created_at=row[5].isoformat() if row[5] else "",
-            updated_at=row[6].isoformat() if row[6] else "",
-            created_by=row[7]
-        )
-    
+
+        return _template_to_response(template)
+
     except HTTPException:
         raise
     except Exception as e:
@@ -128,56 +114,34 @@ def create_template(
     data: PromptTemplateCreate,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    建立新的提示詞範本
-    
-    Args:
-        data: 範本資料
-    
-    Returns:
-        建立成功的範本
-    """
+    """建立新的提示詞範本"""
     try:
         # 檢查名稱是否重複
-        result = db.execute(
-            text("SELECT id FROM prompt_templates WHERE name = :name"),
-            {"name": data.name}
-        )
-        if result.fetchone():
+        existing = db.query(PromptTemplate).filter(
+            PromptTemplate.name == data.name
+        ).first()
+        if existing:
             raise HTTPException(status_code=400, detail=f"Template name '{data.name}' already exists")
-        
+
         # 插入新範本
-        result = db.execute(
-            text("""
-                INSERT INTO prompt_templates (name, description, template, is_active, created_by)
-                VALUES (:name, :description, :template, false, 'admin')
-                RETURNING id, name, description, template, is_active, created_at, updated_at, created_by
-            """),
-            {
-                "name": data.name,
-                "description": data.description,
-                "template": data.template
-            }
+        template = PromptTemplate(
+            name=data.name,
+            description=data.description,
+            template=data.template,
+            is_active=False,
+            created_by='admin',
         )
-        row = result.fetchone()
+        db.add(template)
         db.commit()
-        
+        db.refresh(template)
+
         logger.info(f"Created prompt template: {data.name}")
-        
+
         return {
             "success": True,
-            "template": {
-                "id": row[0],
-                "name": row[1],
-                "description": row[2],
-                "template": row[3],
-                "is_active": row[4],
-                "created_at": row[5].isoformat() if row[5] else None,
-                "updated_at": row[6].isoformat() if row[6] else None,
-                "created_by": row[7]
-            }
+            "template": _template_to_dict(template),
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -192,73 +156,49 @@ def update_template(
     data: PromptTemplateUpdate,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
-    """
-    更新提示詞範本
-    
-    Args:
-        template_id: 範本 ID
-        data: 更新資料
-    
-    Returns:
-        更新結果
-    """
+    """更新提示詞範本"""
     try:
-        # 檢查範本是否存在
-        result = db.execute(
-            text("SELECT id FROM prompt_templates WHERE id = :template_id"),
-            {"template_id": template_id}
-        )
-        if not result.fetchone():
+        template = db.query(PromptTemplate).filter(
+            PromptTemplate.id == template_id
+        ).first()
+
+        if not template:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
-        
+
         # 如果有更新名稱，檢查是否重複
         if data.name:
-            result = db.execute(
-                text("SELECT id FROM prompt_templates WHERE name = :name AND id != :template_id"),
-                {"name": data.name, "template_id": template_id}
-            )
-            if result.fetchone():
+            conflict = db.query(PromptTemplate).filter(
+                PromptTemplate.name == data.name,
+                PromptTemplate.id != template_id
+            ).first()
+            if conflict:
                 raise HTTPException(status_code=400, detail=f"Template name '{data.name}' already exists")
-        
-        # 構建更新語句
-        update_fields = []
-        params = {"template_id": template_id}
-        
+
+        # 更新欄位
+        has_update = False
         if data.name is not None:
-            update_fields.append("name = :name")
-            params["name"] = data.name
-        
+            template.name = data.name
+            has_update = True
         if data.description is not None:
-            update_fields.append("description = :description")
-            params["description"] = data.description
-        
+            template.description = data.description
+            has_update = True
         if data.template is not None:
-            update_fields.append("template = :template")
-            params["template"] = data.template
-        
-        if not update_fields:
+            template.template = data.template
+            has_update = True
+
+        if not has_update:
             raise HTTPException(status_code=400, detail="No fields to update")
-        
-        update_fields.append("updated_at = NOW()")
-        
-        db.execute(
-            text(f"""
-                UPDATE prompt_templates
-                SET {", ".join(update_fields)}
-                WHERE id = :template_id
-            """),
-            params
-        )
+
         db.commit()
-        
+
         logger.info(f"Updated prompt template {template_id}")
-        
+
         return {
             "success": True,
             "template_id": template_id,
             "message": f"Template {template_id} updated successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -269,48 +209,33 @@ def update_template(
 
 @router.delete("/{template_id}", dependencies=[Depends(require_admin)])
 def delete_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    刪除提示詞範本
-    
-    Args:
-        template_id: 範本 ID
-    
-    Returns:
-        刪除結果
-    """
+    """刪除提示詞範本"""
     try:
-        # 檢查範本是否存在
-        result = db.execute(
-            text("SELECT is_active FROM prompt_templates WHERE id = :template_id"),
-            {"template_id": template_id}
-        )
-        row = result.fetchone()
-        
-        if not row:
+        template = db.query(PromptTemplate).filter(
+            PromptTemplate.id == template_id
+        ).first()
+
+        if not template:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
-        
+
         # 不允許刪除啟用中的範本
-        if row[0]:
+        if template.is_active:
             raise HTTPException(
                 status_code=400,
                 detail="Cannot delete active template. Please activate another template first."
             )
-        
-        # 刪除範本
-        db.execute(
-            text("DELETE FROM prompt_templates WHERE id = :template_id"),
-            {"template_id": template_id}
-        )
+
+        db.delete(template)
         db.commit()
-        
+
         logger.info(f"Deleted prompt template {template_id}")
-        
+
         return {
             "success": True,
             "template_id": template_id,
             "message": f"Template {template_id} deleted successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -321,49 +246,38 @@ def delete_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str
 
 @router.post("/{template_id}/activate", dependencies=[Depends(require_admin)])
 def activate_template(template_id: int, db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """
-    啟用提示詞範本（同時停用其他範本）
-    
-    Args:
-        template_id: 範本 ID
-    
-    Returns:
-        啟用結果
-    """
+    """啟用提示詞範本（同時停用其他範本）"""
     try:
-        # 檢查範本是否存在
-        result = db.execute(
-            text("SELECT id FROM prompt_templates WHERE id = :template_id"),
-            {"template_id": template_id}
-        )
-        if not result.fetchone():
+        template = db.query(PromptTemplate).filter(
+            PromptTemplate.id == template_id
+        ).first()
+
+        if not template:
             raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
-        
+
         # 停用所有範本
-        db.execute(text("UPDATE prompt_templates SET is_active = false"))
-        
+        db.query(PromptTemplate).update({PromptTemplate.is_active: False})
+
         # 啟用指定範本
-        db.execute(
-            text("UPDATE prompt_templates SET is_active = true, updated_at = NOW() WHERE id = :template_id"),
-            {"template_id": template_id}
-        )
-        
+        template.is_active = True
+
         # 更新 etl_settings
-        db.execute(
-            text("UPDATE etl_settings SET value = :template_id WHERE key = 'ACTIVE_PROMPT_TEMPLATE_ID'"),
-            {"template_id": str(template_id)}
-        )
-        
+        etl_setting = db.query(ETLSetting).filter(
+            ETLSetting.key == 'ACTIVE_PROMPT_TEMPLATE_ID'
+        ).first()
+        if etl_setting:
+            etl_setting.value = str(template_id)
+
         db.commit()
-        
+
         logger.info(f"Activated prompt template {template_id}")
-        
+
         return {
             "success": True,
             "template_id": template_id,
             "message": f"Template {template_id} activated successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -374,36 +288,17 @@ def activate_template(template_id: int, db: Session = Depends(get_db)) -> Dict[s
 
 @router.get("/active/current")
 def get_active_template(db: Session = Depends(get_db)) -> PromptTemplateResponse:
-    """
-    取得目前啟用的提示詞範本
-    
-    Returns:
-        啟用的範本
-    """
+    """取得目前啟用的提示詞範本"""
     try:
-        result = db.execute(text("""
-            SELECT id, name, description, template, is_active, 
-                   created_at, updated_at, created_by
-            FROM prompt_templates
-            WHERE is_active = true
-            LIMIT 1
-        """))
-        row = result.fetchone()
-        
-        if not row:
+        template = db.query(PromptTemplate).filter(
+            PromptTemplate.is_active == True
+        ).first()
+
+        if not template:
             raise HTTPException(status_code=404, detail="No active template found")
-        
-        return PromptTemplateResponse(
-            id=row[0],
-            name=row[1],
-            description=row[2],
-            template=row[3],
-            is_active=row[4],
-            created_at=row[5].isoformat() if row[5] else "",
-            updated_at=row[6].isoformat() if row[6] else "",
-            created_by=row[7]
-        )
-    
+
+        return _template_to_response(template)
+
     except HTTPException:
         raise
     except Exception as e:

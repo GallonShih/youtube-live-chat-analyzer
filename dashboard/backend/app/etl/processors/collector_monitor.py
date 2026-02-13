@@ -1,6 +1,11 @@
 """
 Collector Monitor Module
 監控 Collector 資料寫入狀態，異常時發送 Discord 告警
+
+ORM migration:
+- _get_active_streams → ORM (SystemSetting, LiveStream)
+- _check_data_freshness → ORM (func.max)
+- Alert state management → ETLConfig (unchanged)
 """
 
 import json
@@ -10,17 +15,17 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 import requests
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import func
 
 from app.etl.config import ETLConfig
+from app.etl.processors.base import BaseETLProcessor
 
 logger = logging.getLogger(__name__)
 
 ALERT_STATE_KEY = 'MONITOR_ALERT_STATE'
 
 
-class CollectorMonitor:
+class CollectorMonitor(BaseETLProcessor):
     """
     Collector 監控器
 
@@ -29,22 +34,8 @@ class CollectorMonitor:
     當資料恢復後發送恢復通知。
     """
 
-    def __init__(self, database_url: Optional[str] = None):
-        self.database_url = database_url or ETLConfig.get('DATABASE_URL')
-        self._engine: Optional[Engine] = None
-
-    def get_engine(self) -> Engine:
-        """取得資料庫連線引擎"""
-        if self._engine is None:
-            self._engine = create_engine(
-                self.database_url,
-                pool_size=1,
-                max_overflow=0,
-                pool_pre_ping=True,
-                pool_recycle=1800,
-                pool_reset_on_return="rollback",
-            )
-        return self._engine
+    def __init__(self):
+        super().__init__()
 
     def run(self) -> Dict[str, Any]:
         """
@@ -155,40 +146,41 @@ class CollectorMonitor:
         return result
 
     def _get_active_streams(self) -> List[Dict[str, Any]]:
-        """查詢目前正在直播的 streams"""
-        engine = self.get_engine()
+        """查詢目前正在直播的 streams（ORM）"""
+        from app.models import SystemSetting, LiveStream
 
-        # First get youtube_url from system_settings to know which stream to monitor
-        with engine.connect() as conn:
-            result = conn.execute(
-                text("SELECT value FROM system_settings WHERE key = 'youtube_url'")
-            ).fetchone()
+        session = self.get_session()
+        try:
+            # Get youtube_url from system_settings
+            setting = session.query(SystemSetting).filter(
+                SystemSetting.key == 'youtube_url'
+            ).first()
 
-        if not result or not result[0]:
-            logger.info("No youtube_url configured in system_settings")
-            return []
+            if not setting or not setting.value:
+                logger.info("No youtube_url configured in system_settings")
+                return []
 
-        video_id = self._extract_video_id(result[0])
-        if not video_id:
-            logger.warning(f"Could not extract video_id from URL: {result[0]}")
-            return []
+            video_id = self._extract_video_id(setting.value)
+            if not video_id:
+                logger.warning(f"Could not extract video_id from URL: {setting.value}")
+                return []
 
-        # Check if this stream is live or upcoming (collector may be collecting waiting room chat)
-        with engine.connect() as conn:
-            rows = conn.execute(
-                text("""
-                    SELECT video_id, title, live_broadcast_content
-                    FROM live_streams
-                    WHERE video_id = :video_id
-                      AND live_broadcast_content IN ('live', 'upcoming')
-                """),
-                {"video_id": video_id}
-            ).fetchall()
+            # Check if this stream is live or upcoming
+            streams = session.query(LiveStream).filter(
+                LiveStream.video_id == video_id,
+                LiveStream.live_broadcast_content.in_(['live', 'upcoming'])
+            ).all()
 
-        return [
-            {'video_id': row[0], 'title': row[1], 'live_broadcast_content': row[2]}
-            for row in rows
-        ]
+            return [
+                {
+                    'video_id': s.video_id,
+                    'title': s.title,
+                    'live_broadcast_content': s.live_broadcast_content
+                }
+                for s in streams
+            ]
+        finally:
+            session.close()
 
     @staticmethod
     def _extract_video_id(url: str) -> Optional[str]:
@@ -198,34 +190,31 @@ class CollectorMonitor:
 
     def _check_data_freshness(self, video_id: str) -> Dict[str, Optional[datetime]]:
         """
-        檢查指定直播的資料新鮮度
+        檢查指定直播的資料新鮮度（ORM）
 
         Returns:
             {'chat_messages': last_time_or_None, 'stream_stats': last_time_or_None}
         """
-        engine = self.get_engine()
-        result = {}
+        from app.models import ChatMessage, StreamStats
 
-        with engine.connect() as conn:
+        session = self.get_session()
+        try:
             # Check chat_messages
-            row = conn.execute(
-                text("""
-                    SELECT MAX(created_at) FROM chat_messages
-                    WHERE live_stream_id = :video_id
-                """),
-                {"video_id": video_id}
-            ).fetchone()
-            result['chat_messages'] = row[0] if row and row[0] else None
+            chat_max = session.query(func.max(ChatMessage.created_at)).filter(
+                ChatMessage.live_stream_id == video_id
+            ).scalar()
 
             # Check stream_stats
-            row = conn.execute(
-                text("""
-                    SELECT MAX(collected_at) FROM stream_stats
-                    WHERE live_stream_id = :video_id
-                """),
-                {"video_id": video_id}
-            ).fetchone()
-            result['stream_stats'] = row[0] if row and row[0] else None
+            stats_max = session.query(func.max(StreamStats.collected_at)).filter(
+                StreamStats.live_stream_id == video_id
+            ).scalar()
+        finally:
+            session.close()
+
+        result = {
+            'chat_messages': chat_max,
+            'stream_stats': stats_max,
+        }
 
         # Ensure timestamps are timezone-aware (UTC)
         for key, val in result.items():
