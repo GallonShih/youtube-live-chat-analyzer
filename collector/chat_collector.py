@@ -128,8 +128,14 @@ class ChatCollector:
 
         except Exception as e:
             logger.error(f"Failed to flush buffer: {e}")
-            # DB connection-level failure — backup entire batch
-            self._save_buffer_to_file(flush_batch)
+            # DB connection-level failure — put messages back in buffer for retry
+            with self._buffer_lock:
+                self._buffer = flush_batch + self._buffer
+                # If buffer is getting too large, dump the oldest to disk to avoid OOM
+                if len(self._buffer) > self._buffer_size * 10:
+                    overflow = self._buffer[:len(self._buffer) - self._buffer_size * 10]
+                    self._buffer = self._buffer[len(self._buffer) - self._buffer_size * 10:]
+                    self._save_buffer_to_file(overflow)
 
     def _save_buffer_to_file(self, messages):
         """Backup messages to local file in case of DB failure."""
@@ -208,6 +214,7 @@ class ChatCollector:
 
                 saved_count = 0
                 error_count = 0
+                failed_messages = []
 
                 with get_db_session() as session:
                     for msg_data in messages:
@@ -223,9 +230,17 @@ class ChatCollector:
                         except Exception as e:
                             nested.rollback()
                             error_count += 1
+                            failed_messages.append(msg_data)
                             logger.debug(f"Error importing message: {e}")
 
-                os.remove(filepath)
+                if failed_messages:
+                    # Rewrite file with only the failed messages for retry
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(failed_messages, f, ensure_ascii=False, default=str)
+                    logger.warning(f"Kept {len(failed_messages)} failed message(s) in {os.path.basename(filepath)}")
+                else:
+                    os.remove(filepath)
+
                 logger.info(f"Imported backup {stream_id}/{os.path.basename(filepath)}: {saved_count} saved, {error_count} errors")
 
             except Exception as e:

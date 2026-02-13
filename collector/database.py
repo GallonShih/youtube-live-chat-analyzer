@@ -20,10 +20,10 @@ class DatabaseManager:
             raise ValueError("DATABASE_URL environment variable is required")
 
         # Create engine with connection pooling
-        # 3 threads use DB concurrently: ChatCollector, StatsCollector, URLMonitor
+        # Threads using DB: ChatCollector, StatsCollector, URLMonitor, BackupImporter (startup)
         self.engine = create_engine(
             self.database_url,
-            pool_size=3,
+            pool_size=4,
             max_overflow=2,
             pool_pre_ping=True,
             pool_recycle=1800,
