@@ -192,6 +192,11 @@ class CollectorWorker:
         If chat is not available, the retry logic will handle reconnection attempts.
         """
         while self.is_running:
+            # Zombie thread check: if this thread is no longer the active chat_thread, exit.
+            if self.chat_thread and threading.current_thread() != self.chat_thread:
+                logger.warning(f"Zombie chat thread {threading.current_thread().name} detected, exiting...")
+                return
+
             self._url_changed.clear()
 
             try:
@@ -241,6 +246,11 @@ class CollectorWorker:
     def _run_stats_polling(self):
         """Run stats polling with retry logic"""
         while self.is_running:
+            # Zombie thread check
+            if self.stats_thread and threading.current_thread() != self.stats_thread:
+                 logger.warning(f"Zombie stats thread {threading.current_thread().name} detected, exiting...")
+                 return
+
             self._url_changed.clear()
             try:
                 logger.info("Starting stats polling...")
@@ -325,7 +335,10 @@ class CollectorWorker:
                         logger.info("Chat watchdog: restarting collector...")
 
                         # Stop current collector
-                        self.chat_collector.stop_collection()
+                        try:
+                            self.chat_collector.stop_collection()
+                        except Exception as e:
+                            logger.error(f"Error stopping stuck chat collector: {e}")
 
                         # Wait a moment for cleanup
                         time.sleep(2)
@@ -334,7 +347,20 @@ class CollectorWorker:
                         with self._restart_lock:
                             self.chat_collector = ChatCollector(self.video_id, register_signals=False)
 
-                        logger.info("Chat watchdog: collector restarted")
+                        # Start new thread to avoid using stuck thread
+                        logger.info("Spawning new chat thread...")
+                        
+                        new_thread = threading.Thread(
+                            target=self._run_chat_collection,
+                            name=f"ChatCollector-{int(time.time())}"
+                        )
+                        new_thread.daemon = True
+                        
+                        # Update the thread reference so the old thread knows to exit (if it wakes up)
+                        self.chat_thread = new_thread
+                        self.chat_thread.start()
+
+                        logger.info("Chat watchdog: collector and thread restarted")
                 else:
                     logger.debug("Chat watchdog: collector or last_activity_time not initialized yet")
                         
@@ -372,13 +398,29 @@ class CollectorWorker:
                         logger.warning(f"Stats watchdog: collector appears hung (no poll for {idle_time:.0f}s, threshold: {timeout}s)")
                         logger.info("Stats watchdog: restarting collector...")
 
-                        self.stats_collector.stop_polling()
+                        try:
+                            self.stats_collector.stop_polling()
+                        except Exception as e:
+                            logger.error(f"Error stopping stuck stats collector: {e}")
+                        
                         time.sleep(2)
 
                         with self._restart_lock:
                             self.stats_collector = StatsCollector()
 
-                        logger.info("Stats watchdog: collector restarted")
+                        # Start new thread
+                        logger.info("Spawning new stats thread...")
+
+                        new_thread = threading.Thread(
+                            target=self._run_stats_polling,
+                            name=f"StatsCollector-{int(time.time())}"
+                        )
+                        new_thread.daemon = True
+
+                        self.stats_thread = new_thread
+                        self.stats_thread.start()
+
+                        logger.info("Stats watchdog: collector and thread restarted")
                 else:
                     logger.debug("Stats watchdog: collector or last_poll_time not initialized yet")
 
