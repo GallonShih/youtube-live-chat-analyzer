@@ -253,3 +253,42 @@ class TestTextMiningAnalyze:
         )
 
         assert response.status_code == 422  # Validation error
+
+    def test_analyze_counts_by_message_not_occurrence(
+        self, client, db, processed_chat_messages_table
+    ):
+        """Same extension repeated in one message should count once."""
+        now = datetime.now(timezone.utc)
+        db.execute(
+            text("""
+            INSERT INTO processed_chat_messages
+            (message_id, live_stream_id, original_message, processed_message,
+             author_name, author_id, published_at)
+            VALUES
+            (:id1, 'stream1', '老師好老師好', '老師好老師好', 'user1', 'uid1', :time1),
+            (:id2, 'stream1', '老師好', '老師好', 'user2', 'uid2', :time2)
+            """),
+            {
+                "id1": "msg_tm_dedupe_1",
+                "id2": "msg_tm_dedupe_2",
+                "time1": now - timedelta(minutes=20),
+                "time2": now - timedelta(minutes=10),
+            }
+        )
+        db.commit()
+
+        response = client.post(
+            "/api/text-mining/analyze",
+            json={
+                "start_time": (now - timedelta(hours=1)).isoformat(),
+                "end_time": now.isoformat(),
+                "target_word": "老師"
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        forward_1 = data["original_message"]["forward"]["1"]
+        count_by_text = {item["text"]: item["count"] for item in forward_1}
+        assert count_by_text.get("好") == 2

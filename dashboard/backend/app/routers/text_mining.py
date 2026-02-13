@@ -87,6 +87,11 @@ def find_extensions(
         return bool(text) and text[-1].isspace()
     
     for message in messages:
+        # Message-level deduplication:
+        # the same extension in the same message counts once.
+        message_forward_seen: Dict[int, set[str]] = {i: set() for i in range(1, 6)}
+        message_backward_seen: Dict[int, set[str]] = {i: set() for i in range(1, 6)}
+
         # Find all occurrences of target word
         start = 0
         while True:
@@ -101,7 +106,7 @@ def find_extensions(
                     ext = message[end_idx:end_idx + length]
                     # For forward extension, skip only when the last char is whitespace.
                     if not ends_with_whitespace(ext):
-                        forward_counts[length][ext] = forward_counts[length].get(ext, 0) + 1
+                        message_forward_seen[length].add(ext)
             
             # Backward extension (before target word)
             for length in range(1, 6):
@@ -109,9 +114,15 @@ def find_extensions(
                     ext = message[idx - length:idx]
                     # For backward extension, skip only when the first char is whitespace.
                     if not starts_with_whitespace(ext):
-                        backward_counts[length][ext] = backward_counts[length].get(ext, 0) + 1
+                        message_backward_seen[length].add(ext)
             
             start = idx + 1
+
+        for length in range(1, 6):
+            for ext in message_forward_seen[length]:
+                forward_counts[length][ext] = forward_counts[length].get(ext, 0) + 1
+            for ext in message_backward_seen[length]:
+                backward_counts[length][ext] = backward_counts[length].get(ext, 0) + 1
     
     # Convert to sorted top-N results
     forward_result = {}
@@ -158,24 +169,39 @@ def analyze_text_mining(
     the target word in both original and processed messages.
     """
     try:
-        # Query messages within time range
+        # Get total messages count for statistics
+        count_query = """
+            SELECT count(*)
+            FROM processed_chat_messages
+            WHERE published_at >= :start_time
+              AND published_at <= :end_time
+        """
+        total_messages = db.execute(
+            text(count_query),
+            {
+                "start_time": request.start_time,
+                "end_time": request.end_time
+            }
+        ).scalar()
+
+        # Query matching messages efficiently
         query = """
             SELECT original_message, processed_message
             FROM processed_chat_messages
             WHERE published_at >= :start_time
               AND published_at <= :end_time
+              AND (original_message LIKE :pattern OR processed_message LIKE :pattern)
         """
         
         result = db.execute(
             text(query),
             {
                 "start_time": request.start_time,
-                "end_time": request.end_time
+                "end_time": request.end_time,
+                "pattern": f"%{request.target_word}%"
             }
         )
         rows = result.fetchall()
-        
-        total_messages = len(rows)
         
         # Separate original and processed messages
         original_messages = []
