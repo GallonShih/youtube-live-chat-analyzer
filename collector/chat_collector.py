@@ -159,6 +159,20 @@ class ChatCollector:
         except Exception as e:
             logger.error(f"Failed to save buffer backup: {e}")
 
+    def _save_filtered_message(self, message_data):
+        """Append a filtered message (no timestamp/author) to a JSONL file for later analysis."""
+        try:
+            backup_root = os.getenv('CHAT_BACKUP_DIR', '/data/backup')
+            filtered_dir = os.path.join(backup_root, self.live_stream_id)
+            os.makedirs(filtered_dir, exist_ok=True)
+            from datetime import date
+            filepath = os.path.join(filtered_dir, f"filtered_messages_{date.today().isoformat()}.jsonl")
+
+            with open(filepath, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(message_data, ensure_ascii=False, default=str) + '\n')
+        except Exception as e:
+            logger.debug(f"Failed to save filtered message: {e}")
+
     def _import_backup_files(self):
         """Import leftover backup JSON files from previous runs into the database.
 
@@ -256,6 +270,7 @@ class ChatCollector:
 
         if chat_message is None:
             logger.debug(f"Skipping unsupported message type: {message_data.get('action_type')}")
+            self._save_filtered_message(message_data)
             return
 
         should_flush = False
