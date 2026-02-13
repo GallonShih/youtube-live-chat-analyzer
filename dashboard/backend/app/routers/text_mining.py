@@ -169,24 +169,39 @@ def analyze_text_mining(
     the target word in both original and processed messages.
     """
     try:
-        # Query messages within time range
+        # Get total messages count for statistics
+        count_query = """
+            SELECT count(*)
+            FROM processed_chat_messages
+            WHERE published_at >= :start_time
+              AND published_at <= :end_time
+        """
+        total_messages = db.execute(
+            text(count_query),
+            {
+                "start_time": request.start_time,
+                "end_time": request.end_time
+            }
+        ).scalar()
+
+        # Query matching messages efficiently
         query = """
             SELECT original_message, processed_message
             FROM processed_chat_messages
             WHERE published_at >= :start_time
               AND published_at <= :end_time
+              AND (original_message LIKE :pattern OR processed_message LIKE :pattern)
         """
         
         result = db.execute(
             text(query),
             {
                 "start_time": request.start_time,
-                "end_time": request.end_time
+                "end_time": request.end_time,
+                "pattern": f"%{request.target_word}%"
             }
         )
         rows = result.fetchall()
-        
-        total_messages = len(rows)
         
         # Separate original and processed messages
         original_messages = []
