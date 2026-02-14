@@ -1,58 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import text
 from datetime import datetime, timedelta
-from collections import defaultdict
 import logging
-import emoji
 
 from app.core.database import get_db
 from app.core.settings import get_current_video_id
-from app.models import ChatMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/emojis", tags=["emojis"])
-
-
-def extract_emojis_from_message(message_text: str) -> list[dict]:
-    """Extract Unicode emojis from message text using emoji package.
-    
-    Returns list of {name, emoji_char} dicts for each unique emoji.
-    """
-    if not message_text:
-        return []
-    
-    emoji_list = emoji.emoji_list(message_text)
-    unique_emojis = {}
-    for e in emoji_list:
-        emoji_char = e['emoji']
-        if emoji_char not in unique_emojis:
-            unique_emojis[emoji_char] = {
-                'name': emoji_char,
-                'emoji_char': emoji_char
-            }
-    return list(unique_emojis.values())
-
-
-def extract_youtube_emotes(emotes: list) -> list[dict]:
-    """Extract YouTube emotes from emotes JSON array.
-    
-    Returns list of {name, image_url} dicts for each unique emote.
-    """
-    if not emotes:
-        return []
-    
-    unique_emotes = {}
-    for emote in emotes:
-        name = emote.get('name')
-        if name and name not in unique_emotes:
-            images = emote.get('images', [])
-            image_url = images[0].get('url') if images else None
-            unique_emotes[name] = {
-                'name': name,
-                'image_url': image_url
-            }
-    return list(unique_emotes.values())
 
 
 @router.get("/stats")
@@ -66,100 +22,95 @@ def get_emoji_stats(
     db: Session = Depends(get_db)
 ):
     """Get emoji statistics for messages within the time range.
-    
-    Aggregates both:
-    - YouTube emotes (from emotes JSON field)
-    - Standard Unicode emojis (from message text)
-    
-    Returns unique emojis with message counts.
+
+    Uses the processed_chat_messages table (pre-extracted by ETL) with
+    SQL aggregation to avoid loading all messages into memory.
     """
-    try:
-        if limit > 500:
-            limit = 500
-        
-        # Build base query
-        query = db.query(ChatMessage)
-        
-        video_id = get_current_video_id(db)
-        if video_id:
-            query = query.filter(ChatMessage.live_stream_id == video_id)
-        
-        if start_time:
-            query = query.filter(ChatMessage.published_at >= start_time)
-        if end_time:
-            query = query.filter(ChatMessage.published_at <= end_time)
-        
-        # If no time filter, default to last 12 hours (matching frontend behavior)
-        if not start_time and not end_time:
-            twelve_hours_ago = datetime.utcnow() - timedelta(hours=12)
-            query = query.filter(ChatMessage.published_at >= twelve_hours_ago)
-        
-        messages = query.all()
-        
-        # Aggregate emoji counts
-        # Key: (name, is_youtube) -> {name, image_url, is_youtube_emoji, message_ids}
-        emoji_data = defaultdict(lambda: {
-            'name': '',
-            'image_url': None,
-            'is_youtube_emoji': False,
-            'message_ids': set()
-        })
-        
-        for msg in messages:
-            # Process YouTube emotes
-            youtube_emotes = extract_youtube_emotes(msg.emotes)
-            for emote in youtube_emotes:
-                key = (emote['name'], True)
-                emoji_data[key]['name'] = emote['name']
-                emoji_data[key]['image_url'] = emote['image_url']
-                emoji_data[key]['is_youtube_emoji'] = True
-                emoji_data[key]['message_ids'].add(msg.message_id)
-            
-            # Process Unicode emojis from message text
-            unicode_emojis = extract_emojis_from_message(msg.message)
-            for ue in unicode_emojis:
-                key = (ue['name'], False)
-                emoji_data[key]['name'] = ue['name']
-                emoji_data[key]['image_url'] = None
-                emoji_data[key]['is_youtube_emoji'] = False
-                emoji_data[key]['message_ids'].add(msg.message_id)
-        
-        # Convert to list with counts
-        emoji_list = []
-        for key, data in emoji_data.items():
+    if limit > 500:
+        limit = 500
+
+    video_id = get_current_video_id(db)
+
+    # Build WHERE conditions
+    conditions = []
+    params = {}
+
+    if video_id:
+        conditions.append("p.live_stream_id = :video_id")
+        params["video_id"] = video_id
+
+    if start_time:
+        conditions.append("p.published_at >= :start_time")
+        params["start_time"] = start_time
+    if end_time:
+        conditions.append("p.published_at <= :end_time")
+        params["end_time"] = end_time
+
+    if not start_time and not end_time:
+        conditions.append("p.published_at >= :default_start")
+        params["default_start"] = datetime.utcnow() - timedelta(hours=12)
+
+    where_clause = (" AND " + " AND ".join(conditions)) if conditions else ""
+
+    emoji_list = []
+
+    # Query Unicode emojis via unnest on TEXT[] column
+    if type_filter in ('all', 'unicode'):
+        unicode_sql = text(f"""
+            SELECT e.emoji_char AS name,
+                   COUNT(DISTINCT p.message_id) AS message_count
+            FROM processed_chat_messages p,
+                 unnest(p.unicode_emojis) AS e(emoji_char)
+            WHERE TRUE {where_clause}
+            GROUP BY e.emoji_char
+        """)
+        rows = db.execute(unicode_sql, params).fetchall()
+        for row in rows:
             emoji_list.append({
-                'name': data['name'],
-                'image_url': data['image_url'],
-                'is_youtube_emoji': data['is_youtube_emoji'],
-                'message_count': len(data['message_ids'])
+                'name': row.name,
+                'image_url': None,
+                'is_youtube_emoji': False,
+                'message_count': row.message_count,
             })
-        
-        # Apply filter
-        if filter:
-            filter_lower = filter.lower()
-            emoji_list = [e for e in emoji_list if filter_lower in e['name'].lower()]
-            
-        # Apply type filter
-        if type_filter == 'youtube':
-            emoji_list = [e for e in emoji_list if e['is_youtube_emoji']]
-        elif type_filter == 'unicode':
-            emoji_list = [e for e in emoji_list if not e['is_youtube_emoji']]
-        
-        # Sort by message_count descending
-        emoji_list.sort(key=lambda x: x['message_count'], reverse=True)
-        
-        total = len(emoji_list)
-        
-        # Apply pagination
-        paginated_list = emoji_list[offset:offset + limit]
-        
-        return {
-            "emojis": paginated_list,
-            "total": total,
-            "limit": limit,
-            "offset": offset
-        }
-        
-    except Exception as e:
-        logger.error(f"Error fetching emoji stats: {e}")
-        raise
+
+    # Query YouTube emotes via jsonb_array_elements on JSONB column
+    if type_filter in ('all', 'youtube'):
+        yt_sql = text(f"""
+            SELECT emote->>'name' AS name,
+                   MAX(emote->>'url') AS image_url,
+                   COUNT(DISTINCT p.message_id) AS message_count
+            FROM processed_chat_messages p,
+                 jsonb_array_elements(p.youtube_emotes) AS emote
+            WHERE p.youtube_emotes IS NOT NULL
+              AND jsonb_array_length(p.youtube_emotes) > 0
+              {where_clause}
+            GROUP BY emote->>'name'
+        """)
+        rows = db.execute(yt_sql, params).fetchall()
+        for row in rows:
+            emoji_list.append({
+                'name': row.name,
+                'image_url': row.image_url,
+                'is_youtube_emoji': True,
+                'message_count': row.message_count,
+            })
+
+    # Apply name filter
+    if filter:
+        filter_lower = filter.lower()
+        emoji_list = [e for e in emoji_list if filter_lower in e['name'].lower()]
+
+    # Sort by message_count descending
+    emoji_list.sort(key=lambda x: x['message_count'], reverse=True)
+
+    total = len(emoji_list)
+
+    # Apply pagination
+    paginated_list = emoji_list[offset:offset + limit]
+
+    return {
+        "emojis": paginated_list,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
