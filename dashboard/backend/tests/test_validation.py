@@ -29,10 +29,10 @@ class TestValidateReplaceWord:
 
     def test_source_in_special_words_case_insensitive(self, db):
         """Validation should detect conflict regardless of case."""
-        db.add(SpecialWord(word="hololive"))
+        db.add(SpecialWord(word="casematch特殊"))
         db.flush()
 
-        result = validate_replace_word(db, "HoloLive", "目標")
+        result = validate_replace_word(db, "CaseMatch特殊", "目標")
         assert result["valid"] == False
         assert any(c["type"] == "source_in_special_words" for c in result["conflicts"])
 
