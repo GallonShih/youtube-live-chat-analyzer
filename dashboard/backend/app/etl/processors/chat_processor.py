@@ -221,14 +221,14 @@ class ChatProcessor:
         with engine.connect() as conn:
             # 載入替換詞彙
             result = conn.execute(text("SELECT source_word, target_word FROM replace_words;"))
-            replace_dict = {row[0]: row[1] for row in result}
+            replace_dict = {row[0].lower(): row[1].lower() for row in result}
 
             # 載入特殊詞彙
             result = conn.execute(text("SELECT word FROM special_words;"))
-            special_words = [row[0] for row in result]
+            special_words = list({row[0].lower() for row in result})
 
-        logger.info(f"Loaded {len(replace_dict)} replace words")
-        logger.info(f"Loaded {len(special_words)} special words")
+        logger.info(f"Loaded {len(replace_dict)} replace words (lowercased)")
+        logger.info(f"Loaded {len(special_words)} special words (lowercased)")
 
         return replace_dict, special_words
 
