@@ -2,10 +2,18 @@
 Tests for dict_importer processor.
 """
 
+import os
 import pytest
 from unittest.mock import MagicMock, patch, mock_open
 import json
 from pathlib import Path
+from sqlalchemy import create_engine, text
+from app.etl.processors.dict_importer import DictImporter
+
+TEST_DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://hermes:hermes@localhost:5432/hermes_test",
+)
 
 
 class TestDictImporter:
@@ -226,6 +234,66 @@ class TestDictImporterDatabase:
         from app.etl.processors.dict_importer import DictImporter
         importer = DictImporter()
         importer._truncate_table('test_table')
-        
+
         mock_conn.execute.assert_called()
         mock_conn.commit.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Integration tests for case-insensitive import
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def temp_dicts(tmp_path):
+    """Create temp dict files with mixed-case entries."""
+    (tmp_path / "replace_words.json").write_text(
+        json.dumps({"replace_words": {"Die": "die", "KUSA": "草"}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "special_words.json").write_text(
+        json.dumps({"special_words": ["HoloLive", "hololive", "HOLOLIVE"]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "meaningless_words.json").write_text(
+        json.dumps({"meaningless_words": ["的", "了"]}),
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_import_lowercases_replace_words(setup_database, temp_dicts):
+    engine = create_engine(TEST_DB_URL)
+    with engine.connect() as conn:
+        conn.execute(text("TRUNCATE TABLE replace_words CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE special_words CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE meaningless_words CASCADE;"))
+        conn.commit()
+
+    importer = DictImporter(database_url=TEST_DB_URL, text_analysis_dir=temp_dicts)
+    result = importer.run()
+    assert result["status"] == "completed"
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT source_word, target_word FROM replace_words")).fetchall()
+        for source, target in rows:
+            assert source == source.lower(), f"source '{source}' not lowercase"
+            assert target == target.lower(), f"target '{target}' not lowercase"
+
+
+def test_import_deduplicates_special_words(setup_database, temp_dicts):
+    engine = create_engine(TEST_DB_URL)
+    with engine.connect() as conn:
+        conn.execute(text("TRUNCATE TABLE special_words CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE meaningless_words CASCADE;"))
+        conn.execute(text("TRUNCATE TABLE replace_words CASCADE;"))
+        conn.commit()
+
+    importer = DictImporter(database_url=TEST_DB_URL, text_analysis_dir=temp_dicts)
+    importer.run()
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT word FROM special_words")).fetchall()
+        words = [r[0] for r in rows]
+        # "HoloLive", "hololive", "HOLOLIVE" should all collapse to one "hololive"
+        assert len(words) == 1
+        assert words[0] == "hololive"

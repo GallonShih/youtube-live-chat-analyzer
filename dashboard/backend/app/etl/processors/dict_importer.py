@@ -241,7 +241,7 @@ class DictImporter:
                             target_word = EXCLUDED.target_word,
                             updated_at = NOW();
                     """),
-                    {"source": source, "target": target}
+                    {"source": source.lower(), "target": target.lower()}
                 )
             conn.commit()
 
@@ -279,7 +279,7 @@ class DictImporter:
                         VALUES (:word)
                         ON CONFLICT (word) DO NOTHING;
                     """),
-                    {"word": word}
+                    {"word": word.lower()}
                 )
             conn.commit()
 
