@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS word_trend_groups (
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for faster lookups by name
-CREATE INDEX IF NOT EXISTS idx_word_trend_groups_name ON word_trend_groups(name);
+-- Note: UNIQUE(name) already provides an implicit index for lookups by name.
 
 -- Comment for documentation
 COMMENT ON TABLE word_trend_groups IS 'Stores user-defined word groups for trend analysis. Each group tracks hourly message counts containing any of the specified words.';

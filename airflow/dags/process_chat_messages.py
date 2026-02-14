@@ -114,7 +114,7 @@ def create_tables_if_not_exists(**context):
     );
 
     -- 創建索引
-    CREATE INDEX IF NOT EXISTS idx_processed_chat_live_stream ON processed_chat_messages(live_stream_id);
+    CREATE INDEX IF NOT EXISTS idx_processed_chat_stream_published ON processed_chat_messages(live_stream_id, published_at);
     CREATE INDEX IF NOT EXISTS idx_processed_chat_published_at ON processed_chat_messages(published_at);
     CREATE INDEX IF NOT EXISTS idx_processed_chat_author_id ON processed_chat_messages(author_id);
     CREATE INDEX IF NOT EXISTS idx_processed_chat_tokens ON processed_chat_messages USING GIN(tokens);

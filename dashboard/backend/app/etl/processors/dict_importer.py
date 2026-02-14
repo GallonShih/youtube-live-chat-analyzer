@@ -154,10 +154,9 @@ class DictImporter:
         );
 
         -- 創建索引以提升查詢效能
-        CREATE INDEX IF NOT EXISTS idx_meaningless_words_word ON meaningless_words(word);
-        CREATE INDEX IF NOT EXISTS idx_replace_words_source ON replace_words(source_word);
+        -- Note: meaningless_words.word, replace_words.source_word, special_words.word
+        -- already have implicit indexes from their UNIQUE constraints.
         CREATE INDEX IF NOT EXISTS idx_replace_words_target ON replace_words(target_word);
-        CREATE INDEX IF NOT EXISTS idx_special_words_word ON special_words(word);
         """
 
         with engine.connect() as conn:

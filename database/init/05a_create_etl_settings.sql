@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS etl_execution_log (
     metadata JSONB
 );
 
-CREATE INDEX IF NOT EXISTS idx_etl_execution_log_job_id ON etl_execution_log(job_id);
+-- Composite index for (job_id, started_at DESC) — covers filtered + sorted queries.
+-- Also serves as an index on job_id alone (prefix matching).
+CREATE INDEX IF NOT EXISTS idx_etl_log_job_started ON etl_execution_log(job_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_status ON etl_execution_log(status);
 CREATE INDEX IF NOT EXISTS idx_etl_execution_log_started ON etl_execution_log(started_at DESC);
 

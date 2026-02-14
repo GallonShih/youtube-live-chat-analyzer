@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
 );
 
 -- 創建索引
+-- Note: UNIQUE(name) already provides an implicit index for lookups by name.
 CREATE INDEX IF NOT EXISTS idx_prompt_templates_active ON prompt_templates(is_active);
-CREATE INDEX IF NOT EXISTS idx_prompt_templates_name ON prompt_templates(name);
 
 -- 插入預設範本
 INSERT INTO prompt_templates (name, description, template, is_active) VALUES

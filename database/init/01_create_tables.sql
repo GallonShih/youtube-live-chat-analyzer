@@ -41,5 +41,9 @@ CREATE INDEX idx_chat_messages_published_at ON chat_messages(published_at);
 CREATE INDEX idx_chat_messages_author_id ON chat_messages(author_id);
 CREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp);
 
+-- Partial index for Super Chat (paid_message) queries — compact and fast
+CREATE INDEX idx_chat_messages_paid ON chat_messages(live_stream_id, published_at)
+    WHERE message_type = 'paid_message';
+
 CREATE INDEX idx_stream_stats_live_stream_collected ON stream_stats(live_stream_id, collected_at);
 CREATE INDEX idx_stream_stats_collected_at ON stream_stats(collected_at);

@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS processed_chat_checkpoint (
 );
 
 -- 創建索引以提升查詢效能
-CREATE INDEX IF NOT EXISTS idx_processed_chat_live_stream ON processed_chat_messages(live_stream_id);
+-- Composite index for (live_stream_id, published_at) — covers most wordcloud/playback queries.
+-- Also serves as an index on live_stream_id alone (prefix matching).
+CREATE INDEX IF NOT EXISTS idx_processed_chat_stream_published ON processed_chat_messages(live_stream_id, published_at);
 CREATE INDEX IF NOT EXISTS idx_processed_chat_published_at ON processed_chat_messages(published_at);
 CREATE INDEX IF NOT EXISTS idx_processed_chat_author_id ON processed_chat_messages(author_id);
 
