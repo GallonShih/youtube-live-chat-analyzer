@@ -8,7 +8,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.settings import get_current_video_id
-from app.models import StreamStats, ChatMessage, CurrencyRate
+from app.models import StreamStats, ChatMessage, CurrencyRate, PAID_MESSAGE_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/playback", tags=["playback"])
@@ -106,7 +106,7 @@ def get_playback_snapshots(
         
         # Helper to calculate revenue for a message
         def get_message_revenue(msg):
-            if msg.message_type != 'paid_message' or not msg.raw_data or 'money' not in msg.raw_data:
+            if msg.message_type not in PAID_MESSAGE_TYPES or not msg.raw_data or 'money' not in msg.raw_data:
                 return 0.0
             money_data = msg.raw_data.get('money', {})
             currency = money_data.get('currency')
@@ -197,7 +197,7 @@ def get_playback_snapshots(
                 msg_time = normalize_dt(msg.published_at)
                 if msg_time <= current_norm:
                     # This message is within range, add to cumulative
-                    if msg.message_type == 'paid_message':
+                    if msg.message_type in PAID_MESSAGE_TYPES:
                         revenue = get_message_revenue(msg)
                         if revenue > 0:
                             cumulative_paid_count += 1

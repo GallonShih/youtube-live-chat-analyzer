@@ -6,6 +6,8 @@ import datetime
 
 Base = declarative_base()
 
+PAID_MESSAGE_TYPES = ['paid_message', 'ticker_paid_message_item']
+
 class ChatMessage(Base):
     __tablename__ = 'chat_messages'
 

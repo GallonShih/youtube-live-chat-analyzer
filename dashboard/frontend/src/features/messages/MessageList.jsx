@@ -96,7 +96,8 @@ const MessageRow = ({ message }) => {
         );
     };
 
-    const moneyText = message.message_type === 'paid_message' && message.money ? message.money.text : '';
+    const isPaid = message.message_type === 'paid_message' || message.message_type === 'ticker_paid_message_item';
+    const moneyText = isPaid && message.money ? message.money.text : '';
 
     return (
         <>

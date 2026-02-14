@@ -156,8 +156,19 @@ def sample_stream_stats(db):
 @pytest.fixture
 def sample_chat_messages(db):
     from datetime import datetime, timezone
-    messages = [
-        ChatMessage(
+    messages = []
+    for i in range(10):
+        if i % 2 == 0:
+            msg_type = "text_message"
+            raw = None
+        elif i == 9:
+            # ticker_paid_message_item variant
+            msg_type = "ticker_paid_message_item"
+            raw = {"money": {"currency": "TWD", "amount": "100"}}
+        else:
+            msg_type = "paid_message"
+            raw = {"money": {"currency": "TWD", "amount": "100"}}
+        messages.append(ChatMessage(
             message_id=f"msg_{i}",
             live_stream_id="test_stream",
             message=f"Test message {i}",
@@ -165,11 +176,9 @@ def sample_chat_messages(db):
             published_at=datetime(2026, 1, 12, 10, i, 0, tzinfo=timezone.utc),
             author_name=f"User{i}",
             author_id=f"user_{i}",
-            message_type="text_message" if i % 2 == 0 else "paid_message",
-            raw_data={"money": {"currency": "TWD", "amount": "100"}} if i % 2 == 1 else None
-        )
-        for i in range(10)
-    ]
+            message_type=msg_type,
+            raw_data=raw,
+        ))
     db.add_all(messages)
     db.flush()
     return messages

@@ -144,6 +144,43 @@ class TestPlaybackSnapshots:
             data = response.json()
             assert data["snapshots"][0]["revenue_twd"] == 300.0
 
+    def test_get_playback_snapshots_ticker_paid(self, client, db):
+        """Test that ticker_paid_message_item is counted in paid messages and revenue."""
+        start_time = datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+        end_time = datetime(2024, 1, 1, 10, 10, 0, tzinfo=timezone.utc)
+        video_id = "video_ticker"
+
+        db.add(CurrencyRate(currency="TWD", rate_to_twd=1.0))
+        db.add(ChatMessage(
+            message_id="ticker_msg1",
+            live_stream_id=video_id,
+            message="Ticker SC",
+            published_at=start_time + timedelta(minutes=2),
+            timestamp=int((start_time + timedelta(minutes=2)).timestamp() * 1000000),
+            author_name="TickerUser",
+            author_id="tu1",
+            message_type="ticker_paid_message_item",
+            raw_data={"money": {"currency": "TWD", "amount": "200"}}
+        ))
+        db.commit()
+
+        with patch('app.routers.playback.get_current_video_id', return_value=video_id):
+            response = client.get(
+                "/api/playback/snapshots",
+                params={
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "step_seconds": 300
+                }
+            )
+            assert response.status_code == 200
+            data = response.json()
+            snapshots = data["snapshots"]
+
+            # Snapshot at 10:05 should include the ticker paid message (10:02)
+            assert snapshots[1]["paid_message_count"] == 1
+            assert snapshots[1]["revenue_twd"] == 200.0
+
     def test_get_playback_snapshots_hourly_messages(self, client, db):
         """Test hourly message calculation logic."""
         # 09:00:00 boundary test

@@ -6,7 +6,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.settings import get_current_video_id
-from app.models import StreamStats, ChatMessage, CurrencyRate
+from app.models import StreamStats, ChatMessage, CurrencyRate, PAID_MESSAGE_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -106,7 +106,7 @@ def get_money_summary(
 ):
     try:
         query = db.query(ChatMessage).filter(
-            ChatMessage.message_type == 'paid_message'
+            ChatMessage.message_type.in_(PAID_MESSAGE_TYPES)
         )
         
         video_id = get_current_video_id(db)

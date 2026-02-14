@@ -20,7 +20,7 @@ def test_get_message_stats_paid_only(client, sample_chat_messages):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    # Odd indices are paid messages (1,3,5,7,9) = 5 messages
+    # Odd indices are paid: 1,3,5,7 = paid_message, 9 = ticker_paid_message_item (5 total)
     assert data[0]["count"] == 5
 
 

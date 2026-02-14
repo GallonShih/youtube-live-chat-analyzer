@@ -38,15 +38,21 @@ def test_get_chat_messages_paid_only(client, sample_chat_messages):
     response = client.get("/api/chat/messages?paid_message_filter=paid_only")
     assert response.status_code == 200
     data = response.json()
+    # 4 paid_message (1,3,5,7) + 1 ticker_paid_message_item (9) = 5
+    assert data["total"] == 5
+    paid_types = {"paid_message", "ticker_paid_message_item"}
     for msg in data["messages"]:
-        assert msg["message_type"] == "paid_message"
+        assert msg["message_type"] in paid_types
 
 def test_get_chat_messages_non_paid_only(client, sample_chat_messages):
     response = client.get("/api/chat/messages?paid_message_filter=non_paid_only")
     assert response.status_code == 200
     data = response.json()
+    # 5 text_message (0,2,4,6,8)
+    assert data["total"] == 5
+    paid_types = {"paid_message", "ticker_paid_message_item"}
     for msg in data["messages"]:
-        assert msg["message_type"] != "paid_message"
+        assert msg["message_type"] not in paid_types
 
 def test_get_chat_messages_author_filter(client, sample_chat_messages):
     response = client.get("/api/chat/messages?author_filter=User1")

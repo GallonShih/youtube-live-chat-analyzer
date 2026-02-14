@@ -125,7 +125,7 @@ def test_get_money_summary_unknown_currency(client, db, sample_currency_rates):
     """Test money summary tracks unknown currencies."""
     from datetime import datetime, timezone
     from app.models import ChatMessage
-    
+
     msg = ChatMessage(
         message_id="paid_unknown_cur",
         live_stream_id="test_stream",
@@ -139,9 +139,37 @@ def test_get_money_summary_unknown_currency(client, db, sample_currency_rates):
     )
     db.add(msg)
     db.flush()
-    
+
     response = client.get("/api/stats/money-summary")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert "EUR" in data["unknown_currencies"]
+
+
+def test_get_money_summary_includes_ticker_paid(client, db, sample_currency_rates):
+    """Test money summary counts ticker_paid_message_item messages."""
+    from datetime import datetime, timezone
+    from app.models import ChatMessage
+
+    msg = ChatMessage(
+        message_id="ticker_paid_1",
+        live_stream_id="test_stream",
+        message="Ticker SC",
+        timestamp=1704067200000000,
+        published_at=datetime(2026, 1, 12, 10, 0, 0, tzinfo=timezone.utc),
+        author_name="TickerUser",
+        author_id="ticker_1",
+        message_type="ticker_paid_message_item",
+        raw_data={"money": {"currency": "USD", "amount": "5"}}
+    )
+    db.add(msg)
+    db.flush()
+
+    response = client.get("/api/stats/money-summary")
+    assert response.status_code == 200
+    data = response.json()
+
+    # USD rate is 31.5, so 5 USD = 157.5 TWD
+    assert data["paid_message_count"] >= 1
+    assert data["total_amount_twd"] >= 157.5

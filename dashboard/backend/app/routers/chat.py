@@ -6,7 +6,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.settings import get_current_video_id
-from app.models import ChatMessage
+from app.models import ChatMessage, PAID_MESSAGE_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -44,9 +44,9 @@ def get_chat_messages(
             query = query.filter(ChatMessage.message.ilike(f'%{message_filter}%'))
         
         if paid_message_filter == 'paid_only':
-            query = query.filter(ChatMessage.message_type == 'paid_message')
+            query = query.filter(ChatMessage.message_type.in_(PAID_MESSAGE_TYPES))
         elif paid_message_filter == 'non_paid_only':
-            query = query.filter(ChatMessage.message_type != 'paid_message')
+            query = query.filter(ChatMessage.message_type.notin_(PAID_MESSAGE_TYPES))
         
         total = query.count()
         
@@ -124,9 +124,9 @@ def get_message_stats(
             query = query.filter(ChatMessage.message.ilike(f'%{message_filter}%'))
         
         if paid_message_filter == 'paid_only':
-            query = query.filter(ChatMessage.message_type == 'paid_message')
+            query = query.filter(ChatMessage.message_type.in_(PAID_MESSAGE_TYPES))
         elif paid_message_filter == 'non_paid_only':
-            query = query.filter(ChatMessage.message_type != 'paid_message')
+            query = query.filter(ChatMessage.message_type.notin_(PAID_MESSAGE_TYPES))
         
         # Group by truncated hour and order
         hourly_counts = query.group_by(
@@ -191,9 +191,9 @@ def get_top_authors(
             query = query.filter(ChatMessage.message.ilike(f'%{message_filter}%'))
         
         if paid_message_filter == 'paid_only':
-            query = query.filter(ChatMessage.message_type == 'paid_message')
+            query = query.filter(ChatMessage.message_type.in_(PAID_MESSAGE_TYPES))
         elif paid_message_filter == 'non_paid_only':
-            query = query.filter(ChatMessage.message_type != 'paid_message')
+            query = query.filter(ChatMessage.message_type.notin_(PAID_MESSAGE_TYPES))
         
         # Group and order by count descending
         author_counts = query.group_by(
