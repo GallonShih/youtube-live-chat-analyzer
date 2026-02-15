@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models import ReplaceWord, SpecialWord, PendingReplaceWord, PendingSpecialWord
 import logging
 
@@ -14,14 +15,14 @@ def validate_replace_word(
     conflicts = []
     warnings = []
     
-    if source_word == target_word:
+    if source_word.lower() == target_word.lower():
         conflicts.append({
             "type": "same_word",
             "message": f"source_word 和 target_word 不能相同: '{source_word}'"
         })
     
     special = db.query(SpecialWord).filter(
-        SpecialWord.word == source_word
+        func.lower(SpecialWord.word) == source_word.lower()
     ).first()
     if special:
         conflicts.append({
@@ -30,7 +31,7 @@ def validate_replace_word(
         })
     
     existing_target = db.query(ReplaceWord).filter(
-        ReplaceWord.target_word == source_word
+        func.lower(ReplaceWord.target_word) == source_word.lower()
     ).first()
     if existing_target:
         conflicts.append({
@@ -39,7 +40,7 @@ def validate_replace_word(
         })
     
     existing_source = db.query(ReplaceWord).filter(
-        ReplaceWord.source_word == source_word
+        func.lower(ReplaceWord.source_word) == source_word.lower()
     ).first()
     if existing_source and existing_source.target_word != target_word:
         warnings.append({
@@ -54,8 +55,8 @@ def validate_replace_word(
     
     
     query = db.query(PendingReplaceWord).filter(
-        PendingReplaceWord.source_word == source_word,
-        PendingReplaceWord.target_word == target_word,
+        func.lower(PendingReplaceWord.source_word) == source_word.lower(),
+        func.lower(PendingReplaceWord.target_word) == target_word.lower(),
         PendingReplaceWord.status == 'pending'
     )
     if pending_id:
@@ -88,7 +89,7 @@ def validate_special_word(
     
     # ✅ 保留：檢查是否為 source_word（這是真正的衝突）
     source = db.query(ReplaceWord).filter(
-        ReplaceWord.source_word == word
+        func.lower(ReplaceWord.source_word) == word.lower()
     ).first()
     if source:
         conflicts.append({
@@ -97,7 +98,7 @@ def validate_special_word(
         })
     
     existing = db.query(SpecialWord).filter(
-        SpecialWord.word == word
+        func.lower(SpecialWord.word) == word.lower()
     ).first()
     if existing:
         warnings.append({  # 保持為 warning
@@ -106,7 +107,7 @@ def validate_special_word(
         })
     
     query = db.query(PendingSpecialWord).filter(
-        PendingSpecialWord.word == word,
+        func.lower(PendingSpecialWord.word) == word.lower(),
         PendingSpecialWord.status == 'pending'
     )
     if pending_id:

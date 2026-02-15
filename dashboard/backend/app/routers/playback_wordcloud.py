@@ -47,7 +47,7 @@ def build_replace_dict(replacements: List[Dict]) -> Dict[str, str]:
         return {}
     
     sorted_replacements = sorted(replacements, key=lambda r: len(r.get("source", "")), reverse=True)
-    return {r["source"]: r["target"] for r in sorted_replacements if r.get("source")}
+    return {r["source"].lower(): r["target"] for r in sorted_replacements if r.get("source")}
 
 
 @router.get("/word-frequency-snapshots")
@@ -114,7 +114,7 @@ def get_word_frequency_snapshots(
         
         # Add user-specified exclusion words
         if exclude_words:
-            user_excluded = set(w.strip() for w in exclude_words.split(",") if w.strip())
+            user_excluded = set(w.strip().lower() for w in exclude_words.split(",") if w.strip())
             excluded |= user_excluded
         
         # Add words from saved wordlist if specified
@@ -123,7 +123,7 @@ def get_word_frequency_snapshots(
                 ExclusionWordlist.id == wordlist_id
             ).first()
             if wordlist and wordlist.words:
-                excluded |= set(wordlist.words)
+                excluded |= set(w.lower() for w in wordlist.words)
         
         # Load replacement rules if specified
         replace_dict = {}

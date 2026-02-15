@@ -66,6 +66,49 @@ def setup_integration_data(setup_database):
         conn.execute(text("TRUNCATE TABLE processed_chat_messages CASCADE;")) 
         conn.commit()
 
+def test_chat_processor_case_insensitive(setup_integration_data):
+    """Verify ChatProcessor produces lowercase tokens regardless of input case."""
+    engine = create_engine(TEST_DB_URL)
+
+    # Insert a message with mixed case
+    now = datetime.datetime.now(datetime.timezone.utc)
+    msg_time = now - datetime.timedelta(minutes=30)
+    timestamp = int(msg_time.timestamp() * 1000000)
+
+    with engine.connect() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO chat_messages
+                (message_id, live_stream_id, message, timestamp, published_at, author_name, author_id, message_type)
+                VALUES (:mid, :sid, :msg, :ts, :pub_at, :auth_n, :auth_id, :type)
+            """),
+            {
+                "mid": "msg_case_test",
+                "sid": "stream_1",
+                "msg": "KUSA Hololive TEST",
+                "ts": timestamp,
+                "pub_at": msg_time,
+                "auth_n": "User2",
+                "auth_id": "user_2",
+                "type": "text_message",
+            },
+        )
+        conn.commit()
+
+    processor = ChatProcessor(database_url=TEST_DB_URL)
+    result = processor.run()
+    assert result["status"] == "completed"
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT tokens FROM processed_chat_messages WHERE message_id = 'msg_case_test'")
+        ).fetchone()
+        assert row is not None
+        tokens = row[0]
+        for t in tokens:
+            assert t == t.lower(), f"Token '{t}' is not lowercase"
+
+
 def test_chat_processor_integration(setup_integration_data):
     """Integration test for ChatProcessor."""
     

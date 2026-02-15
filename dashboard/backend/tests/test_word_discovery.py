@@ -75,10 +75,10 @@ class TestFilterAndValidateWords:
             gemini_replace, gemini_special, existing_replace, existing_special
         )
 
-        # Should transform: A->C => C->B
+        # Should transform: A->C => C->B (lowercased)
         assert len(filtered_replace) == 1
-        assert filtered_replace[0]['source'] == 'C'
-        assert filtered_replace[0]['target'] == 'B'
+        assert filtered_replace[0]['source'] == 'c'
+        assert filtered_replace[0]['target'] == 'b'
 
     def test_skip_duplicate_source_after_transformation(self):
         """Test skipping when transformed source already exists."""
@@ -86,14 +86,14 @@ class TestFilterAndValidateWords:
             {'source': 'A', 'target': 'C', 'confidence': 0.9}
         ]
         gemini_special = []
-        existing_replace = {'A': 'B', 'C': 'D'}  # C already exists
+        existing_replace = {'a': 'b', 'c': 'd'}  # c already exists (lowercase)
         existing_special = set()
 
         filtered_replace, filtered_special = filter_and_validate_words(
             gemini_replace, gemini_special, existing_replace, existing_special
         )
 
-        # After transform A->C => C->B, but C already exists as source
+        # After transform a->c => c->b, but c already exists as source
         assert len(filtered_replace) == 0
 
     def test_special_word_skip_existing(self):
@@ -178,18 +178,18 @@ class TestFilterAndValidateWords:
             gemini_replace, gemini_special, existing_replace, existing_special
         )
 
-        # A->B passes, C->C skipped, D->E swapped to E->D
+        # A->B passes (lowercased to a->b), C->C skipped, D->E swapped to e->d
         assert len(filtered_replace) == 2
-        
-        sources = {r['source'] for r in filtered_replace}
-        assert 'A' in sources
-        assert 'E' in sources  # Swapped from D->E
 
-        # F is new, G is skipped, plus auto-added targets (B, D)
+        sources = {r['source'] for r in filtered_replace}
+        assert 'a' in sources
+        assert 'e' in sources  # Swapped from d->e
+
+        # f is new, g is skipped, plus auto-added targets (b, d)
         special_words = {s['word'] for s in filtered_special}
-        assert 'F' in special_words
-        assert 'G' not in special_words
-        assert 'B' in special_words  # Auto-added from A->B
+        assert 'f' in special_words
+        assert 'g' not in special_words
+        assert 'b' in special_words  # Auto-added from a->b
 
     def test_empty_inputs(self):
         """Test with empty inputs."""
@@ -199,6 +199,25 @@ class TestFilterAndValidateWords:
 
         assert filtered_replace == []
         assert filtered_special == []
+
+    def test_case_insensitive_dedup(self):
+        """Existing words should be matched case-insensitively."""
+        gemini_replace = [
+            {'source': 'KUSA', 'target': '草', 'confidence': 0.9}
+        ]
+        gemini_special = [
+            {'word': 'HoloLive', 'confidence': 0.9}
+        ]
+        existing_replace = {'kusa': '草'}
+        existing_special = {'hololive'}
+
+        filtered_replace, filtered_special = filter_and_validate_words(
+            gemini_replace, gemini_special, existing_replace, existing_special
+        )
+
+        # Both should be filtered out (already exist, just different case)
+        assert len(filtered_replace) == 0
+        assert len(filtered_special) == 0
 
     def test_target_is_replace_target_protected(self):
         """Test that replace targets are also protected."""

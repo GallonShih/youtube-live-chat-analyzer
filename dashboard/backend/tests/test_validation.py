@@ -27,6 +27,15 @@ class TestValidateReplaceWord:
         assert result["valid"] == False
         assert any(c["type"] == "source_in_special_words" for c in result["conflicts"])
 
+    def test_source_in_special_words_case_insensitive(self, db):
+        """Validation should detect conflict regardless of case."""
+        db.add(SpecialWord(word="casematch特殊"))
+        db.flush()
+
+        result = validate_replace_word(db, "CaseMatch特殊", "目標")
+        assert result["valid"] == False
+        assert any(c["type"] == "source_in_special_words" for c in result["conflicts"])
+
     def test_source_in_target_words(self, db):
         db.add(ReplaceWord(source_word="原詞", target_word="中間詞"))
         db.commit()
@@ -79,6 +88,15 @@ class TestValidateSpecialWord:
         assert result["valid"] == True
         assert result["conflicts"] == []
 
+
+    def test_word_in_source_words_case_insensitive(self, db):
+        """Validation should detect conflict regardless of case."""
+        db.add(ReplaceWord(source_word="hololive", target_word="正字"))
+        db.flush()
+
+        result = validate_special_word(db, "HoloLive")
+        assert result["valid"] == False
+        assert any(c["type"] == "word_in_source_words" for c in result["conflicts"])
 
     def test_word_in_source_words(self, db):
         db.add(ReplaceWord(source_word="錯字", target_word="正字"))

@@ -34,7 +34,7 @@ def build_replace_dict(replacements: List[Dict]) -> Dict[str, str]:
     
     # Sort by source length descending
     sorted_replacements = sorted(replacements, key=lambda r: len(r.get("source", "")), reverse=True)
-    return {r["source"]: r["target"] for r in sorted_replacements if r.get("source")}
+    return {r["source"].lower(): r["target"] for r in sorted_replacements if r.get("source")}
 
 
 def apply_replacement(word: str, replace_dict: Dict[str, str]) -> str:
@@ -111,7 +111,7 @@ def get_word_frequency(
         # 解析用戶指定的排除詞
         user_excluded = set()
         if exclude_words:
-            user_excluded = set(w.strip() for w in exclude_words.split(",") if w.strip())
+            user_excluded = set(w.strip().lower() for w in exclude_words.split(",") if w.strip())
         
         # 合併排除詞
         excluded = DEFAULT_EXCLUDED | user_excluded

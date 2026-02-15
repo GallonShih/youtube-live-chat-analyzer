@@ -213,21 +213,21 @@ def approve_replace_word(
         pending.notes = notes
         
         existing = db.query(ReplaceWord).filter(
-            ReplaceWord.source_word == pending.source_word
+            func.lower(ReplaceWord.source_word) == pending.source_word.lower()
         ).first()
-        
+
         if existing:
-            existing.target_word = pending.target_word
+            existing.target_word = pending.target_word.lower()
             existing.updated_at = func.now()
         else:
             new_word = ReplaceWord(
-                source_word=pending.source_word,
-                target_word=pending.target_word
+                source_word=pending.source_word.lower(),
+                target_word=pending.target_word.lower()
             )
             db.add(new_word)
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "message": "替換詞彙已批准並加入正式表",
@@ -237,7 +237,7 @@ def approve_replace_word(
             },
             "validation": validation
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -275,15 +275,15 @@ def approve_special_word(
         pending.notes = notes
         
         existing = db.query(SpecialWord).filter(
-            SpecialWord.word == pending.word
+            func.lower(SpecialWord.word) == pending.word.lower()
         ).first()
-        
+
         if not existing:
-            new_word = SpecialWord(word=pending.word)
+            new_word = SpecialWord(word=pending.word.lower())
             db.add(new_word)
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "message": "特殊詞彙已批准並加入正式表",
@@ -293,7 +293,7 @@ def approve_special_word(
             },
             "validation": validation
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -419,30 +419,30 @@ def batch_approve_replace_words(
             pending.notes = notes
             
             existing = db.query(ReplaceWord).filter(
-                ReplaceWord.source_word == pending.source_word
+                func.lower(ReplaceWord.source_word) == pending.source_word.lower()
             ).first()
-            
+
             if existing:
-                existing.target_word = pending.target_word
+                existing.target_word = pending.target_word.lower()
                 existing.updated_at = func.now()
             else:
                 new_word = ReplaceWord(
-                    source_word=pending.source_word,
-                    target_word=pending.target_word
+                    source_word=pending.source_word.lower(),
+                    target_word=pending.target_word.lower()
                 )
                 db.add(new_word)
-            
+
             approved += 1
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "approved": approved,
             "failed": failed,
             "errors": errors
         }
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error batch approving replace words: {e}")
@@ -616,24 +616,24 @@ def batch_approve_special_words(
             pending.notes = notes
             
             existing = db.query(SpecialWord).filter(
-                SpecialWord.word == pending.word
+                func.lower(SpecialWord.word) == pending.word.lower()
             ).first()
-            
+
             if not existing:
-                new_word = SpecialWord(word=pending.word)
+                new_word = SpecialWord(word=pending.word.lower())
                 db.add(new_word)
-            
+
             approved += 1
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "approved": approved,
             "failed": failed,
             "errors": errors
         }
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error batch approving special words: {e}")
@@ -732,20 +732,20 @@ def add_replace_word(
             }
         
         existing = db.query(ReplaceWord).filter(
-            ReplaceWord.source_word == source_word,
-            ReplaceWord.target_word == target_word
+            func.lower(ReplaceWord.source_word) == source_word.lower(),
+            func.lower(ReplaceWord.target_word) == target_word.lower()
         ).first()
-        
+
         if existing:
             return {
                 "success": False,
                 "message": "Replace word already exists",
                 "warnings": validation_result['warnings']  # 包含警告信息
             }
-        
+
         new_word = ReplaceWord(
-            source_word=source_word,
-            target_word=target_word
+            source_word=source_word.lower(),
+            target_word=target_word.lower()
         )
         db.add(new_word)
         db.commit()
@@ -910,18 +910,18 @@ def add_special_word(
             }
         
         existing = db.query(SpecialWord).filter(
-            SpecialWord.word == word
+            func.lower(SpecialWord.word) == word.lower()
         ).first()
-        
+
         if existing:
             return {
                 "success": False,
                 "message": "Special word already exists",
                 "warnings": validation_result['warnings']  # 包含警告信息
             }
-        
+
         new_word = SpecialWord(
-            word=word
+            word=word.lower()
         )
         db.add(new_word)
         db.commit()

@@ -51,7 +51,7 @@ def load_stopwords(stopwords_path: Optional[Path] = None) -> Set[str]:
 
     if path.exists():
         with open(path, 'r', encoding='utf-8') as f:
-            _stopwords_cache = set(line.rstrip() for line in f if line.rstrip())
+            _stopwords_cache = set(line.rstrip().lower() for line in f if line.rstrip())
         logger.info(f"Loaded {len(_stopwords_cache)} stopwords from {path}")
     else:
         logger.warning(f"Stopwords file not found at {path}")
@@ -137,7 +137,7 @@ def apply_replace_words(text: str, replace_dict: Dict[str, str]) -> str:
     Returns:
         替換後的文字
     """
-    result = text
+    result = text.lower()
     # 按照 source 長度降序排列，優先替換較長的詞
     sorted_sources = sorted(replace_dict.keys(), key=len, reverse=True)
     for source in sorted_sources:
@@ -242,7 +242,7 @@ def tokenize_text(
     tokens = list(jieba.cut(text))
 
     # 過濾空白和空字串
-    tokens = [t.strip() for t in tokens if t.strip()]
+    tokens = [t.strip().lower() for t in tokens if t.strip()]
 
     # 過濾停用詞
     if stopwords:
@@ -273,17 +273,20 @@ def process_message(
     unicode_emojis = extract_unicode_emojis(message)
     youtube_emotes = extract_youtube_emotes(emotes_json)
 
-    # 2. 套用替換詞彙
-    processed = apply_replace_words(message, replace_dict)
+    # 2. 正規化文字（全形轉半形、清理空白）— 移到 replace 之前
+    processed = normalize_text(message)
 
-    # 3. 移除 emoji 和 YouTube emotes
+    # 3. 套用替換詞彙（內部會 .lower()）
+    processed = apply_replace_words(processed, replace_dict)
+
+    # 4. 移除 emoji 和 YouTube emotes
     processed = remove_emojis(processed)
     processed = remove_youtube_emotes(processed, emotes_json)
 
-    # 4. 正規化文字（全形轉半形、清理空白）
-    processed = normalize_text(processed)
+    # 5. 清理多餘空白
+    processed = re.sub(r'\s+', ' ', processed).strip()
 
-    # 5. 載入停用詞並斷詞
+    # 6. 載入停用詞並斷詞
     stopwords = load_stopwords()
     tokens = tokenize_text(processed, special_words, stopwords)
 

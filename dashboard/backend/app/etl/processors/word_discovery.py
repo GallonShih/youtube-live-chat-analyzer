@@ -29,29 +29,25 @@ def filter_and_validate_words(
     existing_special_words: Set[str]
 ) -> Tuple[List[Dict], List[Dict]]:
     """
-    過濾和驗證 Gemini 發現的詞彙
-
-    規則：
-    1. Protected Words 自動顛倒：如果 source 在 protected_words 中，顛倒 source 和 target
-    2. Source 已存在自動轉換：DB: A->B, Gemini: A->C => C->B
-    3. 跳過重複的 source：轉換後的 source 如果已存在，跳過
-    4. Target 自動加入 special words：替換詞彙的 target 自動加入特殊詞彙（如果不在 DB）
-    5. 跳過已存在的 special words
+    過濾和驗證 Gemini 發現的詞彙（大小寫不敏感）
     """
-    # 計算衍生集合
-    replace_sources_set = set(existing_replace_mapping.keys())
-    replace_targets_set = set(existing_replace_mapping.values())
-    protected_words_set = replace_targets_set | existing_special_words
+    # Lowercase all existing data for comparison
+    lower_replace_mapping = {k.lower(): v.lower() for k, v in existing_replace_mapping.items()}
+    lower_special_words = {w.lower() for w in existing_special_words}
 
-    # 過濾替換詞彙
+    replace_sources_set = set(lower_replace_mapping.keys())
+    replace_targets_set = set(lower_replace_mapping.values())
+    protected_words_set = replace_targets_set | lower_special_words
+
     filtered_replace = []
     auto_add_special = []
 
     for item in gemini_replace_words:
-        source = item.get('source', '')
-        target = item.get('target', '')
+        source = item.get('source', '').lower()
+        target = item.get('target', '').lower()
+        item['source'] = source
+        item['target'] = target
 
-        # 基礎規則: 如果 source 和 target 相同，則跳過
         if source == target:
             continue
 
@@ -65,32 +61,31 @@ def filter_and_validate_words(
             item['target'] = target
             item['_transformation'] = f'swapped (protected): {original_source} <-> {original_target}'
 
-            # Swap 後檢查是否完全重複
-            if source in replace_sources_set and existing_replace_mapping[source] == target:
+            if source in replace_sources_set and lower_replace_mapping[source] == target:
                 continue
 
         # 規則 2: Source 已存在自動轉換
         if source in replace_sources_set:
-            db_target = existing_replace_mapping[source]
+            db_target = lower_replace_mapping[source]
+
+            # 完全重複：source->target 已存在於 DB
+            if db_target == target:
+                continue
+
             new_source = target
             new_target = db_target
-
             item['source'] = new_source
             item['target'] = new_target
             item['_transformation'] = f'transformed: {original_source}->{original_target} => {new_source}->{new_target}'
-
             source = new_source
             target = new_target
 
-            # 規則 3: 檢查轉換後的 source 是否已經存在
             if source in replace_sources_set:
                 continue
 
-        # 通過所有檢查，加入過濾後的列表
         filtered_replace.append(item)
 
-        # 規則 4: Target 自動加入 special words
-        if target not in existing_special_words:
+        if target not in lower_special_words:
             auto_add_special.append({
                 'word': target,
                 'type': 'auto_from_replace',
@@ -99,23 +94,18 @@ def filter_and_validate_words(
                 'reason': f'自動從替換詞彙的目標詞彙加入',
                 '_auto_added': True
             })
-            existing_special_words.add(target)
+            lower_special_words.add(target)
 
-    # 過濾特殊詞彙
     filtered_special = []
-
     for item in gemini_special_words:
-        word = item.get('word', '')
+        word = item.get('word', '').lower()
+        item['word'] = word
 
-        # 規則 5: 跳過已存在的 special words
-        if word in existing_special_words:
+        if word in lower_special_words:
             continue
-
         filtered_special.append(item)
 
-    # 合併自動加入的 special words
     all_special = filtered_special + auto_add_special
-
     return filtered_replace, all_special
 
 
@@ -422,8 +412,8 @@ class WordDiscoveryProcessor:
             result = conn.execute(text("SELECT word FROM special_words;"))
             special_records = result.fetchall()
 
-        replace_mapping = {r[0]: r[1] for r in replace_records}
-        existing_special_words = {r[0] for r in special_records}
+        replace_mapping = {r[0].lower(): r[1].lower() for r in replace_records}
+        existing_special_words = {r[0].lower() for r in special_records}
 
         logger.info(f"Loaded dictionaries: {len(replace_mapping)} replace, {len(existing_special_words)} special")
 
@@ -683,7 +673,7 @@ class WordDiscoveryProcessor:
                     text("""
                         SELECT COUNT(*)
                         FROM chat_messages
-                        WHERE message LIKE :pattern
+                        WHERE message ILIKE :pattern
                         AND published_at > NOW() - INTERVAL '7 days'
                     """),
                     {"pattern": f"%{source}%"}
@@ -726,7 +716,7 @@ class WordDiscoveryProcessor:
                     text("""
                         SELECT COUNT(*)
                         FROM chat_messages
-                        WHERE message LIKE ANY(:patterns)
+                        WHERE message ILIKE ANY(:patterns)
                         AND published_at > NOW() - INTERVAL '7 days'
                     """),
                     {"patterns": [f"%{s}%" for s in synonyms]}
