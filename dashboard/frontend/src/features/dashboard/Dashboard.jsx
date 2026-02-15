@@ -3,10 +3,12 @@ import { Chart } from 'react-chartjs-2';
 import {
     MagnifyingGlassIcon,
     XMarkIcon,
+    FlagIcon,
 } from '@heroicons/react/24/outline';
 import { useToast } from '../../components/common/Toast';
 import Navigation from '../../components/common/Navigation';
 import { registerChartComponents, hourGridPlugin } from '../../utils/chartSetup';
+import eventMarkerPlugin from '../../utils/eventMarkerPlugin';
 import { fetchViewersStats, fetchCommentsStats } from '../../api/stats';
 import { formatLocalHour } from '../../utils/formatters';
 
@@ -15,6 +17,7 @@ import WordCloudPanel from '../wordcloud/WordCloudPanel';
 import MoneyStats from './MoneyStats';
 import EmojiStatsPanel from './EmojiStatsPanel';
 import StreamInfoBar from './StreamInfoBar';
+import EventMarkerModal from './EventMarkerModal';
 import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
 
 registerChartComponents();
@@ -24,6 +27,12 @@ function Dashboard() {
     const [viewData, setViewData] = useState([]);
     const [commentData, setCommentData] = useState([]);
     const [barFlash, setBarFlash] = useState(false);
+
+    // Event Markers
+    const [eventMarkers, setEventMarkers] = useState([]);
+    const [showMarkerModal, setShowMarkerModal] = useState(false);
+    const [showMarkerLabels, setShowMarkerLabels] = useState(true);
+    const [markerOpacity, setMarkerOpacity] = useState(20);
 
     // Filter States
     const [startDate, setStartDate] = useState('');
@@ -246,6 +255,11 @@ function Dashboard() {
         plugins: {
             legend: { position: 'top' },
             title: { display: true, text: 'Real-time Analytics' },
+            eventMarker: {
+                markers: eventMarkers.filter((m) => m.startTime && m.endTime),
+                showLabels: showMarkerLabels,
+                opacity: markerOpacity,
+            },
             tooltip: {
                 enabled: false,
                 external: (context) => {
@@ -347,7 +361,7 @@ function Dashboard() {
                 ticks: { precision: 0 },
             },
         },
-    }), [timeAxisConfig, commentData, viewData, endDate, barFlash]);
+    }), [timeAxisConfig, commentData, viewData, endDate, barFlash, eventMarkers, showMarkerLabels, markerOpacity]);
 
     return (
         <div className="min-h-screen font-sans text-gray-900">
@@ -437,10 +451,37 @@ function Dashboard() {
                         </div>
                     </div>
 
+                    {/* Event Marker Button */}
+                    <button
+                        onClick={() => setShowMarkerModal(true)}
+                        className="absolute top-4 sm:top-6 right-4 sm:right-6 z-10 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm hover:bg-white px-3 py-1.5 rounded-lg shadow-md border border-gray-200 text-xs sm:text-sm font-medium text-gray-700 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        title="事件標記"
+                    >
+                        <FlagIcon className="w-4 h-4" />
+                        <span className="hidden sm:inline">事件標記</span>
+                        {eventMarkers.length > 0 && (
+                            <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                {eventMarkers.length}
+                            </span>
+                        )}
+                    </button>
+
                     <div className="flex-1 w-full min-h-0 pt-12">
-                        <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin]} />
+                        <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin, eventMarkerPlugin]} />
                     </div>
                 </div>
+
+                {/* Event Marker Modal */}
+                <EventMarkerModal
+                    isOpen={showMarkerModal}
+                    onClose={() => setShowMarkerModal(false)}
+                    markers={eventMarkers}
+                    setMarkers={setEventMarkers}
+                    showLabels={showMarkerLabels}
+                    opacity={markerOpacity}
+                    setOpacity={setMarkerOpacity}
+                    setShowLabels={setShowMarkerLabels}
+                />
 
                 {/* Money Statistics */}
                 <MoneyStats
