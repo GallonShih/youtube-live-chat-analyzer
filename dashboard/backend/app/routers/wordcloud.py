@@ -34,7 +34,7 @@ def build_replace_dict(replacements: List[Dict]) -> Dict[str, str]:
     
     # Sort by source length descending
     sorted_replacements = sorted(replacements, key=lambda r: len(r.get("source", "")), reverse=True)
-    return {r["source"].lower(): r["target"].lower() for r in sorted_replacements if r.get("source")}
+    return {r["source"].lower(): r["target"] for r in sorted_replacements if r.get("source")}
 
 
 def apply_replacement(word: str, replace_dict: Dict[str, str]) -> str:

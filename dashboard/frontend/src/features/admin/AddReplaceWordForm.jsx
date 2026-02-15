@@ -125,13 +125,13 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                             type="text"
                             value={sourceWord}
                             onChange={(e) => {
-                                const val = e.target.value;
+                                const val = e.target.value.toLowerCase();
                                 setSourceWord(val);
                                 setSourceWhitespaceError(/^\s|\s$/.test(val));
                                 handleInputChange();
                             }}
                             className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${sourceWhitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
-                            placeholder="輸入原始詞彙"
+                            placeholder="輸入原始詞彙（自動轉小寫）"
                             required
                             aria-required="true"
                         />
@@ -148,13 +148,13 @@ const AddReplaceWordForm = ({ onSuccess, onCancel }) => {
                             type="text"
                             value={targetWord}
                             onChange={(e) => {
-                                const val = e.target.value;
+                                const val = e.target.value.toLowerCase();
                                 setTargetWord(val);
                                 setTargetWhitespaceError(/^\s|\s$/.test(val));
                                 handleInputChange();
                             }}
                             className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${targetWhitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
-                            placeholder="輸入替換詞彙"
+                            placeholder="輸入替換詞彙（自動轉小寫）"
                             required
                             aria-required="true"
                         />

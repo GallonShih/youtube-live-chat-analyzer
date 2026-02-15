@@ -14,6 +14,10 @@ SET source_word = lower(source_word),
 WHERE source_word != lower(source_word)
    OR target_word != lower(target_word);
 
+-- Remove replace_words where source = target after lowercasing (no-op rules)
+DELETE FROM replace_words
+WHERE source_word = target_word;
+
 -- 2. Lowercase special_words (handle dedup)
 DELETE FROM special_words a
 USING special_words b
@@ -37,6 +41,8 @@ SET word = lower(word),
 WHERE word != lower(word);
 
 -- 4. Lowercase tokens in processed_chat_messages
+-- Simple UPDATE — safe for small-to-medium tables.
+-- For large tables (1M+), run in batches manually or use psql with the PROCEDURE version.
 UPDATE processed_chat_messages
 SET tokens = (
     SELECT array_agg(lower(t))
@@ -53,6 +59,10 @@ SET source_word = lower(source_word),
     target_word = lower(target_word)
 WHERE source_word != lower(source_word)
    OR target_word != lower(target_word);
+
+-- Remove pending_replace_words where source = target after lowercasing
+DELETE FROM pending_replace_words
+WHERE source_word = target_word;
 
 DELETE FROM pending_special_words a
 USING pending_special_words b

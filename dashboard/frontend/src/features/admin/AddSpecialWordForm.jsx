@@ -120,13 +120,13 @@ const AddSpecialWordForm = ({ onSuccess, onCancel }) => {
                         type="text"
                         value={word}
                         onChange={(e) => {
-                            const val = e.target.value;
+                            const val = e.target.value.toLowerCase();
                             setWord(val);
                             setWhitespaceError(/^\s|\s$/.test(val));
                             handleInputChange();
                         }}
                         className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${whitespaceError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'}`}
-                        placeholder="輸入詞彙"
+                        placeholder="輸入詞彙（自動轉小寫）"
                         required
                         aria-required="true"
                     />

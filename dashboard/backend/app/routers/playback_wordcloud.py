@@ -47,7 +47,7 @@ def build_replace_dict(replacements: List[Dict]) -> Dict[str, str]:
         return {}
     
     sorted_replacements = sorted(replacements, key=lambda r: len(r.get("source", "")), reverse=True)
-    return {r["source"].lower(): r["target"].lower() for r in sorted_replacements if r.get("source")}
+    return {r["source"].lower(): r["target"] for r in sorted_replacements if r.get("source")}
 
 
 @router.get("/word-frequency-snapshots")
