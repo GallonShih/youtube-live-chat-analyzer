@@ -683,12 +683,13 @@ class WordDiscoveryProcessor:
                 conn.execute(
                     text("""
                         INSERT INTO pending_replace_words
-                            (source_word, target_word, confidence_score, example_messages, occurrence_count)
-                        VALUES (:source, :target, :confidence, :examples, :count)
+                            (source_word, target_word, confidence_score, example_messages, occurrence_count, discovered_at, status)
+                        VALUES (:source, :target, :confidence, :examples, :count, NOW(), 'pending')
                         ON CONFLICT (source_word, target_word)
                         DO UPDATE SET
                             occurrence_count = EXCLUDED.occurrence_count,
                             confidence_score = GREATEST(pending_replace_words.confidence_score, EXCLUDED.confidence_score),
+                            discovered_at = COALESCE(pending_replace_words.discovered_at, NOW()),
                             status = 'pending';
                     """),
                     {
@@ -726,12 +727,13 @@ class WordDiscoveryProcessor:
                 conn.execute(
                     text("""
                         INSERT INTO pending_special_words
-                            (word, word_type, confidence_score, example_messages, occurrence_count)
-                        VALUES (:word, :word_type, :confidence, :examples, :count)
+                            (word, word_type, confidence_score, example_messages, occurrence_count, discovered_at, status)
+                        VALUES (:word, :word_type, :confidence, :examples, :count, NOW(), 'pending')
                         ON CONFLICT (word)
                         DO UPDATE SET
                             occurrence_count = EXCLUDED.occurrence_count,
                             confidence_score = GREATEST(pending_special_words.confidence_score, EXCLUDED.confidence_score),
+                            discovered_at = COALESCE(pending_special_words.discovered_at, NOW()),
                             status = 'pending';
                     """),
                     {
