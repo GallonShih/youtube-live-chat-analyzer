@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 
 const DEFAULT_COLORS = ['#ff4d4f', '#faad14', '#52c41a', '#1677ff', '#722ed1', '#eb2f96'];
 
@@ -13,8 +13,63 @@ const createEmptyMarker = () => ({
     color: DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)],
 });
 
+/**
+ * Normalize a date string to datetime-local format (YYYY-MM-DDTHH:mm).
+ * Accepts ISO 8601, "YYYY/MM/DD HH:mm", "YYYY-MM-DD HH:mm", etc.
+ */
+function normalizeDateTime(raw) {
+    if (!raw) return '';
+    // Replace slashes with dashes for Date parsing
+    const cleaned = raw.trim().replace(/\//g, '-');
+    const d = new Date(cleaned);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return [];
+
+    const header = lines[0].split(',').map((h) => h.trim().toLowerCase());
+    const startIdx = header.findIndex((h) => ['starttime', 'start_time', 'start'].includes(h));
+    const endIdx = header.findIndex((h) => ['endtime', 'end_time', 'end'].includes(h));
+    const labelIdx = header.findIndex((h) => ['label', 'name', 'description', 'text'].includes(h));
+    const colorIdx = header.findIndex((h) => ['color', 'colour'].includes(h));
+
+    if (startIdx === -1 || endIdx === -1) return [];
+
+    return lines.slice(1).map((line) => {
+        const cols = line.split(',').map((c) => c.trim());
+        return {
+            id: nextId++,
+            startTime: normalizeDateTime(cols[startIdx]),
+            endTime: normalizeDateTime(cols[endIdx]),
+            label: labelIdx !== -1 ? cols[labelIdx] || '' : '',
+            color: (colorIdx !== -1 && cols[colorIdx]?.startsWith('#'))
+                ? cols[colorIdx]
+                : DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)],
+        };
+    }).filter((m) => m.startTime && m.endTime);
+}
+
+function parseJSON(text) {
+    const data = JSON.parse(text);
+    const arr = Array.isArray(data) ? data : [];
+    return arr.map((item) => ({
+        id: nextId++,
+        startTime: normalizeDateTime(item.startTime || item.start_time || item.start || ''),
+        endTime: normalizeDateTime(item.endTime || item.end_time || item.end || ''),
+        label: item.label || item.name || item.description || item.text || '',
+        color: (item.color && item.color.startsWith('#'))
+            ? item.color
+            : DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)],
+    })).filter((m) => m.startTime && m.endTime);
+}
+
 const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, setShowLabels }) => {
     const modalRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -40,6 +95,37 @@ const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, se
         setMarkers((prev) =>
             prev.map((m) => (m.id === id ? { ...m, [field]: value } : m))
         );
+    };
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const text = evt.target.result;
+            let imported = [];
+            try {
+                if (file.name.endsWith('.json')) {
+                    imported = parseJSON(text);
+                } else {
+                    imported = parseCSV(text);
+                }
+            } catch {
+                alert('檔案格式錯誤，請確認格式是否正確');
+                return;
+            }
+
+            if (imported.length === 0) {
+                alert('未找到有效的標記資料');
+                return;
+            }
+
+            setMarkers((prev) => [...prev, ...imported]);
+        };
+        reader.readAsText(file);
+        // Reset so the same file can be re-uploaded
+        e.target.value = '';
     };
 
     return (
@@ -70,7 +156,7 @@ const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, se
                 <div className="p-4 max-h-[60vh] overflow-y-auto">
                     {markers.length === 0 ? (
                         <p className="text-center text-gray-400 py-8 text-sm">
-                            尚無事件標記，點擊下方按鈕新增
+                            尚無事件標記，點擊下方按鈕新增或上傳檔案
                         </p>
                     ) : (
                         <table className="w-full text-sm">
@@ -147,13 +233,30 @@ const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, se
 
                 {/* Footer */}
                 <div className="flex items-center justify-between p-4 border-t border-gray-200">
-                    <button
-                        onClick={handleAdd}
-                        className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                        <PlusIcon className="w-4 h-4" />
-                        新增標記
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleAdd}
+                            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        >
+                            <PlusIcon className="w-4 h-4" />
+                            新增標記
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".json,.csv"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center gap-1.5 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                            title="支援 JSON 或 CSV 格式"
+                        >
+                            <ArrowUpTrayIcon className="w-4 h-4" />
+                            上傳檔案
+                        </button>
+                    </div>
                     <div className="flex items-center gap-4">
                         <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input

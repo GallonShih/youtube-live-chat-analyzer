@@ -6,6 +6,10 @@
  *   showLabels: boolean — true = always show, false = show on hover only
  */
 
+const LABEL_H = 16;
+const LABEL_PAD = 4;
+const LABEL_GAP = 2;
+
 function getMarkerBounds(marker, xAxis, chartArea) {
     const startTs = new Date(marker.startTime).getTime();
     const endTs = new Date(marker.endTime).getTime();
@@ -16,25 +20,59 @@ function getMarkerBounds(marker, xAxis, chartArea) {
     return { x1, x2 };
 }
 
-function drawLabel(ctx, text, centerX, labelY, color) {
+/**
+ * Assign vertical rows to labels so overlapping bands don't stack on top of each other.
+ * Returns an array of row indices (0-based) corresponding to each entry in `items`.
+ */
+function assignRows(items) {
+    const rows = []; // rows[r] = rightmost x2 pixel placed in that row
+    const result = new Array(items.length);
+    for (let i = 0; i < items.length; i++) {
+        const { labelLeft, labelRight } = items[i];
+        let placed = false;
+        for (let r = 0; r < rows.length; r++) {
+            if (labelLeft > rows[r] + LABEL_GAP) {
+                rows[r] = labelRight;
+                result[i] = r;
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            result[i] = rows.length;
+            rows.push(labelRight);
+        }
+    }
+    return result;
+}
+
+function drawLabel(ctx, text, centerX, labelY, color, maxWidth) {
     if (!text) return;
     ctx.font = 'bold 11px sans-serif';
-    const textWidth = ctx.measureText(text).width;
-    const padding = 4;
-    const bgX = centerX - textWidth / 2 - padding;
-    const bgY = labelY - 10;
-    const bgW = textWidth + padding * 2;
-    const bgH = 16;
+
+    // Truncate text if it exceeds maxWidth
+    let displayText = text;
+    if (maxWidth && ctx.measureText(text).width > maxWidth) {
+        while (displayText.length > 1 && ctx.measureText(displayText + '...').width > maxWidth) {
+            displayText = displayText.slice(0, -1);
+        }
+        displayText += '...';
+    }
+
+    const textWidth = ctx.measureText(displayText).width;
+    const bgX = centerX - textWidth / 2 - LABEL_PAD;
+    const bgY = labelY - LABEL_H / 2;
+    const bgW = textWidth + LABEL_PAD * 2;
 
     ctx.fillStyle = color + 'CC';
     ctx.beginPath();
-    ctx.roundRect(bgX, bgY, bgW, bgH, 3);
+    ctx.roundRect(bgX, bgY, bgW, LABEL_H, 3);
     ctx.fill();
 
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, centerX, labelY - 2);
+    ctx.fillText(displayText, centerX, labelY);
 }
 
 const eventMarkerPlugin = {
@@ -53,13 +91,36 @@ const eventMarkerPlugin = {
         const chartArea = chart.chartArea;
         const hoverX = chart._eventMarkerHoverX;
 
+        // Pre-compute bounds for all visible markers
+        const visible = [];
+        markers.forEach((marker) => {
+            const bounds = getMarkerBounds(marker, xAxis, chartArea);
+            if (bounds) visible.push({ marker, ...bounds });
+        });
+
+        if (visible.length === 0) return;
+
+        // Compute label positions and assign rows to avoid overlap
+        ctx.font = 'bold 11px sans-serif';
+        const labelItems = visible.map(({ marker, x1, x2 }) => {
+            const bandWidth = x2 - x1;
+            const text = marker.label || '';
+            const textWidth = Math.min(ctx.measureText(text).width, bandWidth);
+            const centerX = (x1 + x2) / 2;
+            const halfW = textWidth / 2 + LABEL_PAD;
+            return {
+                centerX,
+                labelLeft: centerX - halfW,
+                labelRight: centerX + halfW,
+                bandWidth,
+            };
+        });
+
+        const rows = assignRows(labelItems);
+
         ctx.save();
 
-        markers.forEach((marker, i) => {
-            const bounds = getMarkerBounds(marker, xAxis, chartArea);
-            if (!bounds) return;
-            const { x1, x2 } = bounds;
-
+        visible.forEach(({ marker, x1, x2 }, i) => {
             // Draw semi-transparent band
             ctx.fillStyle = marker.color + '33';
             ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
@@ -77,12 +138,16 @@ const eventMarkerPlugin = {
             ctx.setLineDash([]);
 
             // Label
-            const centerX = (x1 + x2) / 2;
-            const labelY = chartArea.top + 16 + i * 20;
+            const row = rows[i];
+            const labelY = chartArea.top + 10 + row * (LABEL_H + LABEL_GAP);
+            const centerX = labelItems[i].centerX;
+            const maxWidth = labelItems[i].bandWidth - LABEL_PAD * 2;
+
             if (showLabels) {
-                drawLabel(ctx, marker.label, centerX, labelY, marker.color);
+                drawLabel(ctx, marker.label, centerX, labelY, marker.color, maxWidth);
             } else if (hoverX != null && hoverX >= x1 && hoverX <= x2) {
-                drawLabel(ctx, marker.label, centerX, labelY, marker.color);
+                // On hover, allow label to exceed band width for readability
+                drawLabel(ctx, marker.label, centerX, labelY, marker.color, null);
             }
         });
 
