@@ -32,6 +32,7 @@ function Dashboard() {
     const [eventMarkers, setEventMarkers] = useState([]);
     const [showMarkerModal, setShowMarkerModal] = useState(false);
     const [showMarkerLabels, setShowMarkerLabels] = useState(true);
+    const [markerOpacity, setMarkerOpacity] = useState(20);
 
     // Filter States
     const [startDate, setStartDate] = useState('');
@@ -257,6 +258,7 @@ function Dashboard() {
             eventMarker: {
                 markers: eventMarkers.filter((m) => m.startTime && m.endTime),
                 showLabels: showMarkerLabels,
+                opacity: markerOpacity,
             },
             tooltip: {
                 enabled: false,
@@ -359,7 +361,7 @@ function Dashboard() {
                 ticks: { precision: 0 },
             },
         },
-    }), [timeAxisConfig, commentData, viewData, endDate, barFlash, eventMarkers, showMarkerLabels]);
+    }), [timeAxisConfig, commentData, viewData, endDate, barFlash, eventMarkers, showMarkerLabels, markerOpacity]);
 
     return (
         <div className="min-h-screen font-sans text-gray-900">
@@ -476,6 +478,8 @@ function Dashboard() {
                     markers={eventMarkers}
                     setMarkers={setEventMarkers}
                     showLabels={showMarkerLabels}
+                    opacity={markerOpacity}
+                    setOpacity={setMarkerOpacity}
                     setShowLabels={setShowMarkerLabels}
                 />
 

@@ -84,6 +84,9 @@ const eventMarkerPlugin = {
         if (!markers || markers.length === 0) return;
 
         const showLabels = opts?.showLabels ?? true;
+        const opacityPct = opts?.opacity ?? 20; // 0-100
+        const bandAlpha = Math.round(opacityPct * 2.55).toString(16).padStart(2, '0');
+        const borderAlpha = Math.round(Math.min(opacityPct + 30, 100) * 2.55).toString(16).padStart(2, '0');
         const ctx = chart.ctx;
         const xAxis = chart.scales.x;
         if (!xAxis) return;
@@ -122,11 +125,11 @@ const eventMarkerPlugin = {
 
         visible.forEach(({ marker, x1, x2 }, i) => {
             // Draw semi-transparent band
-            ctx.fillStyle = marker.color + '33';
+            ctx.fillStyle = marker.color + bandAlpha;
             ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
 
             // Draw left and right border lines
-            ctx.strokeStyle = marker.color + '99';
+            ctx.strokeStyle = marker.color + borderAlpha;
             ctx.lineWidth = 1.5;
             ctx.setLineDash([4, 3]);
             ctx.beginPath();

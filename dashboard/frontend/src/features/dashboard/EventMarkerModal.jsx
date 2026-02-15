@@ -67,7 +67,7 @@ function parseJSON(text) {
     })).filter((m) => m.startTime && m.endTime);
 }
 
-const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, setShowLabels }) => {
+const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, setShowLabels, opacity, setOpacity }) => {
     const modalRef = useRef(null);
     const fileInputRef = useRef(null);
 
@@ -258,6 +258,18 @@ const EventMarkerModal = ({ isOpen, onClose, markers, setMarkers, showLabels, se
                         </button>
                     </div>
                     <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+                            透明度
+                            <input
+                                type="range"
+                                min="5"
+                                max="80"
+                                value={opacity}
+                                onChange={(e) => setOpacity(Number(e.target.value))}
+                                className="w-20 h-1.5 accent-blue-600 cursor-pointer"
+                            />
+                            <span className="text-xs text-gray-500 w-8">{opacity}%</span>
+                        </label>
                         <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input
                                 type="checkbox"
