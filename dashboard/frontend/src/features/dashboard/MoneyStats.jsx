@@ -12,6 +12,8 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [activeAuthorId, setActiveAuthorId] = useState(null);
+    const [copiedAuthorId, setCopiedAuthorId] = useState(null);
 
     useEffect(() => {
         const getStats = async () => {
@@ -19,6 +21,13 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
                 setLoading(true);
                 const data = await fetchMoneySummary({ startTime, endTime });
                 setStats(data);
+                setActiveAuthorId((prev) => {
+                    if (!prev || !data?.top_authors?.some((author) => author.author_id === prev)) {
+                        return null;
+                    }
+                    return prev;
+                });
+                setCopiedAuthorId(null);
                 setError(null);
             } catch (err) {
                 console.error('Error fetching money stats:', err);
@@ -53,6 +62,24 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
     }
 
     if (!stats) return null;
+
+    const toggleAuthorPopover = (authorId) => {
+        setActiveAuthorId((prev) => (prev === authorId ? null : authorId));
+        setCopiedAuthorId(null);
+    };
+
+    const copyAuthorId = async (authorId) => {
+        if (!authorId || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+        try {
+            await navigator.clipboard.writeText(authorId);
+            setCopiedAuthorId(authorId);
+            setTimeout(() => {
+                setCopiedAuthorId((prev) => (prev === authorId ? null : prev));
+            }, 1500);
+        } catch (copyError) {
+            console.error('Copy author_id failed:', copyError);
+        }
+    };
 
     return (
         <div className="mt-6 sm:mt-8 space-y-4">
@@ -100,10 +127,50 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
                             {stats.top_authors.map((author, index) => {
                                 const maxAmount = stats.top_authors[0].amount_twd;
                                 const barWidth = (author.amount_twd / maxAmount) * 100;
+                                const popoverPositionClass = index >= 2 ? 'bottom-full mb-1' : 'top-full mt-1';
                                 return (
                                     <div key={author.author_id || `${author.author}-${index}`} className="space-y-1">
                                         <div className="flex justify-between items-baseline text-xs sm:text-sm">
-                                            <span className="font-medium text-gray-700 truncate flex-1">{index + 1}. {author.author}</span>
+                                            <div className="relative flex-1 min-w-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+                                                        toggleAuthorPopover(author.author_id);
+                                                    }}
+                                                    className="font-medium text-gray-700 truncate w-full text-left hover:underline cursor-pointer"
+                                                    title="點擊查看 author_id"
+                                                >
+                                                    {index + 1}. {author.author}
+                                                </button>
+                                                {activeAuthorId === author.author_id && (
+                                                    <div
+                                                        onClick={(event) => event.stopPropagation()}
+                                                        className={`absolute left-0 z-20 w-56 max-w-[80vw] rounded-lg border border-gray-200 bg-white p-2 shadow-lg ${popoverPositionClass}`}
+                                                    >
+                                                        <div className="text-[11px] text-gray-500">author_id</div>
+                                                        <div className="mt-1 font-mono text-xs text-gray-700 break-all">
+                                                            {author.author_id || 'Unknown'}
+                                                        </div>
+                                                        <div className="mt-2 flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => copyAuthorId(author.author_id)}
+                                                                className="text-xs px-2 py-1 rounded bg-green-600 text-white hover:bg-green-500"
+                                                            >
+                                                                {copiedAuthorId === author.author_id ? '已複製' : '複製 ID'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setActiveAuthorId(null)}
+                                                                className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                                            >
+                                                                關閉
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <span className="font-semibold text-green-700 ml-2">{formatCurrency(author.amount_twd)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
