@@ -152,13 +152,24 @@ def get_money_summary(
             if currency in rate_map:
                 amount_twd = amount * rate_map[currency]
                 total_twd += amount_twd
-                
-                author = msg.author_name or 'Unknown'
-                if author not in author_amounts:
-                    author_amounts[author] = {'amount_twd': 0.0, 'count': 0}
-                
-                author_amounts[author]['amount_twd'] += amount_twd
-                author_amounts[author]['count'] += 1
+
+                author_id = msg.author_id or 'Unknown'
+                author_name = msg.author_name or 'Unknown'
+                latest_timestamp = msg.timestamp or 0
+
+                if author_id not in author_amounts:
+                    author_amounts[author_id] = {
+                        'amount_twd': 0.0,
+                        'count': 0,
+                        'latest_author_name': author_name,
+                        'latest_timestamp': latest_timestamp
+                    }
+
+                author_amounts[author_id]['amount_twd'] += amount_twd
+                author_amounts[author_id]['count'] += 1
+                if latest_timestamp >= author_amounts[author_id]['latest_timestamp']:
+                    author_amounts[author_id]['latest_author_name'] = author_name
+                    author_amounts[author_id]['latest_timestamp'] = latest_timestamp
                 paid_count += 1
             else:
                 unknown_currencies.add(currency)
@@ -166,14 +177,14 @@ def get_money_summary(
         sorted_authors = sorted(
             [
                 {
-                    'author': author,
+                    'author_id': author_id,
+                    'author': data['latest_author_name'] or 'Unknown',
                     'amount_twd': round(data['amount_twd'], 2),
                     'message_count': data['count']
                 }
-                for author, data in author_amounts.items()
+                for author_id, data in author_amounts.items()
             ],
-            key=lambda x: x['amount_twd'],
-            reverse=True
+            key=lambda x: (-x['amount_twd'], x['author_id'])
         )
         
         if len(sorted_authors) > 5:

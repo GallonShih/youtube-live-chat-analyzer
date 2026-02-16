@@ -101,7 +101,7 @@ const MoneyStats = ({ startTime, endTime, hasTimeFilter = false }) => {
                                 const maxAmount = stats.top_authors[0].amount_twd;
                                 const barWidth = (author.amount_twd / maxAmount) * 100;
                                 return (
-                                    <div key={index} className="space-y-1">
+                                    <div key={author.author_id || `${author.author}-${index}`} className="space-y-1">
                                         <div className="flex justify-between items-baseline text-xs sm:text-sm">
                                             <span className="font-medium text-gray-700 truncate flex-1">{index + 1}. {author.author}</span>
                                             <span className="font-semibold text-green-700 ml-2">{formatCurrency(author.amount_twd)}</span>
