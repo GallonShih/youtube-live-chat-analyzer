@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Tuple
-from collections import defaultdict
+from collections import Counter, defaultdict
 import logging
 
 from app.core.database import get_db
@@ -135,36 +135,20 @@ def get_word_frequency_snapshots(
                 replace_dict = build_replace_dict(replacement_wordlist.replacements)
         
         video_id = get_current_video_id(db)
-        window_delta = timedelta(hours=window_hours)
-        
-        # Generate snapshots
-        snapshots = []
-        current_time = start_time
-        step_delta = timedelta(seconds=step_seconds)
-        
-        while current_time <= end_time:
-            # Calculate window bounds for this snapshot
-            window_end = current_time
-            window_start = current_time - window_delta
-            
-            # Query word frequency for this window
-            words = _get_word_frequency_for_window(
-                db=db,
-                window_start=window_start,
-                window_end=window_end,
-                video_id=video_id,
-                excluded=excluded,
-                replace_dict=replace_dict,
-                limit=word_limit
-            )
-            
-            snapshots.append({
-                "timestamp": current_time.isoformat(),
-                "words": words
-            })
-            
-            current_time += step_delta
-        
+
+        # Generate all snapshots via single-query sliding window
+        snapshots = _compute_all_snapshots(
+            db=db,
+            start_time=start_time,
+            end_time=end_time,
+            step_seconds=step_seconds,
+            window_hours=window_hours,
+            video_id=video_id,
+            excluded=excluded,
+            replace_dict=replace_dict,
+            word_limit=word_limit,
+        )
+
         return {
             "snapshots": snapshots,
             "metadata": {
@@ -177,7 +161,7 @@ def get_word_frequency_snapshots(
                 "video_id": video_id
             }
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -185,60 +169,106 @@ def get_word_frequency_snapshots(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _get_word_frequency_for_window(
+def _compute_all_snapshots(
     db: Session,
-    window_start: datetime,
-    window_end: datetime,
+    start_time: datetime,
+    end_time: datetime,
+    step_seconds: int,
+    window_hours: int,
     video_id: Optional[str],
     excluded: set,
     replace_dict: Dict[str, str],
-    limit: int
+    word_limit: int,
 ) -> List[dict]:
     """
-    Get word frequency for a specific time window with post-replacement per-message deduplication.
-    
-    Returns list of {word, size} dictionaries.
+    Compute all word-frequency snapshots using a single SQL query
+    and a sliding-window algorithm over time buckets.
+
+    Complexity: O(N_total + S * k) where N_total = total rows,
+    S = number of snapshots, k = word_limit.
     """
-    # Build query to get (message_id, word) pairs
+    window_seconds = window_hours * 3600
+    query_start = start_time - timedelta(seconds=window_seconds)
+
+    # Step 1: Single SQL query for the entire range
     query = """
-        SELECT DISTINCT message_id, unnest(tokens) as word
+        SELECT DISTINCT message_id, published_at, unnest(tokens) AS word
         FROM processed_chat_messages
-        WHERE published_at >= :window_start
-          AND published_at < :window_end
+        WHERE published_at >= :query_start
+          AND published_at < :end_time
     """
-    
-    params = {
-        "window_start": window_start,
-        "window_end": window_end
-    }
-    
+    params: dict = {"query_start": query_start, "end_time": end_time}
     if video_id:
         query += " AND live_stream_id = :video_id"
         params["video_id"] = video_id
-    
+    query += " ORDER BY published_at"
+
     result = db.execute(text(query), params)
     rows = result.fetchall()
-    
-    # Apply replacement and dedupe per message
-    seen_pairs = set()
-    word_counts = defaultdict(int)
-    
-    for message_id, word in rows:
-        # Apply replacement
+
+    # Step 2: Pre-process rows — replace, filter, dedupe, bucket
+    # Bucket index 0 corresponds to query_start.
+    bucket_counters: Dict[int, Counter] = defaultdict(Counter)
+    seen_pairs: set = set()
+
+    for message_id, published_at, word in rows:
         replaced_word = replace_dict.get(word, word) if replace_dict else word
-        
-        # Skip excluded words
         if replaced_word in excluded:
             continue
-        
-        # Per-message deduplication
         pair = (message_id, replaced_word)
-        if pair not in seen_pairs:
-            seen_pairs.add(pair)
-            word_counts[replaced_word] += 1
-    
-    # Sort by count descending and limit
-    sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
-    
-    return [{"word": word, "size": count} for word, count in sorted_words]
+        if pair in seen_pairs:
+            continue
+        seen_pairs.add(pair)
+
+        pub = normalize_dt(published_at)
+        bucket_idx = int((pub - query_start).total_seconds()) // step_seconds
+        bucket_counters[bucket_idx][replaced_word] += 1
+
+    # Step 3: Sliding window over buckets
+    window_buckets = window_seconds // step_seconds
+    # Generate snapshot timestamps
+    step_delta = timedelta(seconds=step_seconds)
+    snapshot_times: List[datetime] = []
+    t = start_time
+    while t <= end_time:
+        snapshot_times.append(t)
+        t += step_delta
+
+    if not snapshot_times:
+        return []
+
+    # Snapshot i at time T = start_time + i*step covers window [T-window, T).
+    # In bucket space: T-window = query_start + i*step → bucket i
+    #                  T = query_start + window + i*step → bucket window_buckets + i
+    # So snapshot i covers buckets [i, window_buckets + i) (exclusive upper).
+
+    # Initialize running counter for first snapshot: buckets [0, window_buckets)
+    running = Counter()
+    for b in range(0, window_buckets):
+        if b in bucket_counters:
+            running += bucket_counters[b]
+
+    snapshots: List[dict] = []
+    for i, snap_time in enumerate(snapshot_times):
+        # Extract top words
+        top_words = running.most_common(word_limit)
+        snapshots.append({
+            "timestamp": snap_time.isoformat(),
+            "words": [{"word": w, "size": c} for w, c in top_words],
+        })
+
+        # Slide window for next snapshot: [i+1, window_buckets+i+1)
+        if i + 1 < len(snapshot_times):
+            # Add entering bucket (was just past the old window's end)
+            entering = window_buckets + i
+            if entering in bucket_counters:
+                running += bucket_counters[entering]
+            # Subtract leaving bucket (was the old window's start)
+            leaving = i
+            if leaving in bucket_counters:
+                running -= bucket_counters[leaving]
+                # Remove zero-count keys to keep Counter clean
+                running += Counter()  # idiom to drop zero/negative entries
+
+    return snapshots
 
