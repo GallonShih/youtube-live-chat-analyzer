@@ -154,6 +154,15 @@ const AuthorStatsPanel = ({
         }
     };
 
+    const MIN_CHART_HEIGHT = 192;
+    const MAX_CHART_HEIGHT = 560;
+    const ROW_HEIGHT = 32;
+    const CHART_PADDING = 56;
+    const chartHeight = Math.min(
+        MAX_CHART_HEIGHT,
+        Math.max(MIN_CHART_HEIGHT, topAuthors.length * ROW_HEIGHT + CHART_PADDING)
+    );
+
     if (error) {
         return (
             <div className="mt-4 p-4 bg-red-50 rounded-lg text-red-600 text-sm">
@@ -176,7 +185,7 @@ const AuthorStatsPanel = ({
                     </span>
                 )}
             </div>
-            <div className="h-48">
+            <div style={{ height: `${chartHeight}px` }}>
                 {loading && topAuthors.length === 0 ? (
                     <div className="flex justify-center h-full items-center text-gray-500">
                         載入中...
