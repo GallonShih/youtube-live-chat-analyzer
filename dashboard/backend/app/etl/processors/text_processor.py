@@ -211,10 +211,19 @@ def remove_youtube_emotes(text: str, emotes_json: Optional[List[Dict[str, Any]]]
         return text
 
     result = text
+    emote_names: List[str] = []
     for emote in emotes_json:
         name = emote.get('name', '')
-        if name:
-            result = result.replace(name, '')
+        if not name:
+            continue
+        # Keep removal matching aligned with message normalization pipeline.
+        normalized_name = normalize_text(name)
+        if normalized_name:
+            emote_names.append(normalized_name)
+
+    # Remove longer names first to avoid partial leftovers on overlapping names.
+    for name in sorted(set(emote_names), key=len, reverse=True):
+        result = re.sub(re.escape(name), '', result, flags=re.IGNORECASE)
     return result
 
 
