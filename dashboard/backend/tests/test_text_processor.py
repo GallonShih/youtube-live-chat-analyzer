@@ -112,6 +112,27 @@ def test_remove_youtube_emotes():
     assert remove_youtube_emotes(text, None) == text
 
 
+def test_remove_youtube_emotes_case_insensitive_and_normalized():
+    """Should remove emotes even when message/emote case or width differs."""
+    text = " :_gtvemojirrr: and :test_emote: "
+    emotes_json = [{"name": ":_gtvemojiRRR:"}, {"name": "：TEST_EMOTE："}]
+    assert remove_youtube_emotes(text, emotes_json) == "  and  "
+
+
+def test_remove_youtube_emotes_overlapping_names_longest_first():
+    """Longer emote names should be removed first to avoid partial leftovers."""
+    text = " :abcde: :abc: "
+    emotes_json = [{"name": ":abc:"}, {"name": ":abcde:"}]
+    assert remove_youtube_emotes(text, emotes_json) == "   "
+
+
+def test_remove_youtube_emotes_escapes_regex_chars():
+    """Regex metacharacters in emote names must be treated as literals."""
+    text = " :a+b?: end"
+    emotes_json = [{"name": ":a+b?:"}]
+    assert remove_youtube_emotes(text, emotes_json) == "  end"
+
+
 def test_tokenize_text():
     """Test tokenization using jieba."""
     text = "我愛hololive"
@@ -225,3 +246,43 @@ class TestProcessMessage:
             special_words=[],
         )
         assert "草" in processed
+
+    @patch('app.etl.processors.text_processor.load_stopwords')
+    def test_remove_youtube_emotes_case_insensitive_after_lower(self, mock_load_stopwords):
+        """Emote removal should still work after lowercase transformation."""
+        mock_load_stopwords.return_value = set()
+        processed, _, _, emotes = process_message(
+            message=":_gtvemojiRRR: hello",
+            emotes_json=[{"name": ":_gtvemojiRRR:", "images": [{"url": "u"}]}],
+            replace_dict={},
+            special_words=[],
+        )
+        assert emotes[0]["name"] == ":_gtvemojiRRR:"
+        assert processed == "hello"
+
+    @patch('app.etl.processors.text_processor.load_stopwords')
+    def test_remove_youtube_emotes_fullwidth_and_case_mixed(self, mock_load_stopwords):
+        """Fullwidth + mixed-case emotes should be removed in process pipeline."""
+        mock_load_stopwords.return_value = set()
+        processed, _, _, _ = process_message(
+            message="：TeSt_EmOtE： HELLO",
+            emotes_json=[{"name": ":test_emote:", "images": [{"url": "u"}]}],
+            replace_dict={},
+            special_words=[],
+        )
+        assert processed == "hello"
+
+    @patch('app.etl.processors.text_processor.load_stopwords')
+    def test_keep_time_format_when_message_has_emojis(self, mock_load_stopwords):
+        """Time-like text (e.g. 12:01) should remain after emoji/emote cleanup."""
+        mock_load_stopwords.return_value = set()
+        processed, _, unicode_emojis, emotes = process_message(
+            message="12:01 :_gtvemojiRRR: 😀 開始",
+            emotes_json=[{"name": ":_gtvemojiRRR:", "images": [{"url": "u"}]}],
+            replace_dict={},
+            special_words=[],
+        )
+        assert "😀" in unicode_emojis
+        assert emotes[0]["name"] == ":_gtvemojiRRR:"
+        assert "12:01" in processed
+        assert ":_gtvemoji" not in processed
