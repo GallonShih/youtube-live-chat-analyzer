@@ -235,7 +235,7 @@ const WordDetailModal = ({ isOpen, onClose, word, wordType, sourceWord, targetWo
                                                     </p>
                                                     {textMiningData.processed_message.forward['1'] && textMiningData.processed_message.forward['1'].length > 0 && (
                                                         <div className="mt-2">
-                                                            <p className="text-xs font-semibold text-gray-600">前向延伸 (1字):</p>
+                                                            <p className="text-xs font-semibold text-gray-600">向後延伸 (1字):</p>
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {textMiningData.processed_message.forward['1'].slice(0, 5).map((item, i) => (
                                                                     <span key={i} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
@@ -247,7 +247,7 @@ const WordDetailModal = ({ isOpen, onClose, word, wordType, sourceWord, targetWo
                                                     )}
                                                     {textMiningData.processed_message.backward['1'] && textMiningData.processed_message.backward['1'].length > 0 && (
                                                         <div className="mt-2">
-                                                            <p className="text-xs font-semibold text-gray-600">後向延伸 (1字):</p>
+                                                            <p className="text-xs font-semibold text-gray-600">向前延伸 (1字):</p>
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {textMiningData.processed_message.backward['1'].slice(0, 5).map((item, i) => (
                                                                     <span key={i} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
@@ -267,7 +267,7 @@ const WordDetailModal = ({ isOpen, onClose, word, wordType, sourceWord, targetWo
                                                     </p>
                                                     {textMiningData.original_message.forward['1'] && textMiningData.original_message.forward['1'].length > 0 && (
                                                         <div className="mt-2">
-                                                            <p className="text-xs font-semibold text-gray-600">前向延伸 (1字):</p>
+                                                            <p className="text-xs font-semibold text-gray-600">向後延伸 (1字):</p>
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {textMiningData.original_message.forward['1'].slice(0, 5).map((item, i) => (
                                                                     <span key={i} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
@@ -279,7 +279,7 @@ const WordDetailModal = ({ isOpen, onClose, word, wordType, sourceWord, targetWo
                                                     )}
                                                     {textMiningData.original_message.backward['1'] && textMiningData.original_message.backward['1'].length > 0 && (
                                                         <div className="mt-2">
-                                                            <p className="text-xs font-semibold text-gray-600">後向延伸 (1字):</p>
+                                                            <p className="text-xs font-semibold text-gray-600">向前延伸 (1字):</p>
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {textMiningData.original_message.backward['1'].slice(0, 5).map((item, i) => (
                                                                     <span key={i} className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
