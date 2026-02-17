@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 from collections import Counter, defaultdict
 import logging
 
@@ -267,8 +267,6 @@ def _compute_all_snapshots(
             leaving = i
             if leaving in bucket_counters:
                 running -= bucket_counters[leaving]
-                # Remove zero-count keys to keep Counter clean
-                running += Counter()  # idiom to drop zero/negative entries
 
     return snapshots
 

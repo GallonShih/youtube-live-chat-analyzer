@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from collections import defaultdict
 import bisect
 import logging
@@ -151,7 +150,7 @@ def get_playback_snapshots(
 
         # Helper to calculate revenue for a paid message tuple
         def get_message_revenue(msg_type, raw_data):
-            if msg_type not in PAID_MESSAGE_TYPES or not raw_data or 'money' not in raw_data:
+            if not raw_data or 'money' not in raw_data:
                 return 0.0
             money_data = raw_data.get('money', {})
             currency = money_data.get('currency')
@@ -185,8 +184,10 @@ def get_playback_snapshots(
         hourly_message_count = 0  # Count messages in current partial hour
 
         while current_time <= end_time:
+            current_norm = normalize_dt(current_time)
+
             # Find nearest viewer count via binary search O(log v)
-            target_ts = normalize_dt(current_time).timestamp()
+            target_ts = current_norm.timestamp()
             viewer_count = _find_nearest_viewer(viewer_times, viewer_counts, target_ts)
 
             # ========== Calculate hourly_messages ==========
@@ -203,15 +204,10 @@ def get_playback_snapshots(
                 if last_hour_start != current_hour_key:
                     last_hour_start = current_hour_key
                     hourly_message_count = 0
-                    # Find starting index for this hour
-                    hour_message_index = 0
-                    for i, ts in enumerate(sorted_timestamps):
-                        if get_hour_bucket_key(ts) >= current_hour_key:
-                            hour_message_index = i
-                            break
+                    # Find starting index for this hour via binary search O(log n)
+                    hour_message_index = bisect.bisect_left(sorted_timestamps, current_hour_key)
 
                 # Count messages from hour_start to current_time
-                current_norm = normalize_dt(current_time)
                 while hour_message_index < len(sorted_timestamps):
                     ts = sorted_timestamps[hour_message_index]
                     ts_bucket = get_hour_bucket_key(ts)
@@ -226,7 +222,6 @@ def get_playback_snapshots(
                 hourly_messages = hourly_message_count
 
             # Update cumulative paid values
-            current_norm = normalize_dt(current_time)
             while paid_index < len(paid_messages):
                 pub_time, msg_type, raw_data = paid_messages[paid_index]
                 if pub_time <= current_norm:
