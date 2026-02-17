@@ -204,14 +204,14 @@ def _compute_all_snapshots(
     query += " ORDER BY published_at"
 
     result = db.execute(text(query), params)
-    rows = result.fetchall()
 
     # Step 2: Pre-process rows — replace, filter, dedupe, bucket
-    # Bucket index 0 corresponds to query_start.
+    # Iterate directly over result (client-side cursor) to avoid
+    # materializing all rows as a Python list (~2.8 GB at 10M rows).
     bucket_counters: Dict[int, Counter] = defaultdict(Counter)
     seen_pairs: set = set()
 
-    for message_id, published_at, word in rows:
+    for message_id, published_at, word in result:
         replaced_word = replace_dict.get(word, word) if replace_dict else word
         if replaced_word in excluded:
             continue

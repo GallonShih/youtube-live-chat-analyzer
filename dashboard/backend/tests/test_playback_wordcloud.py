@@ -8,6 +8,14 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone, timedelta
 
 
+def _make_mock_result(rows):
+    """Create a mock DB result that supports both iteration and fetchall."""
+    mock_result = MagicMock()
+    mock_result.__iter__ = lambda self: iter(rows)
+    mock_result.fetchall.return_value = rows
+    return mock_result
+
+
 class TestWordFrequencySnapshots:
     """Tests for the /api/playback/word-frequency-snapshots endpoint."""
 
@@ -91,8 +99,7 @@ class TestWordFrequencySnapshots:
     def test_empty_result(self, client):
         """Test endpoint returns empty snapshots when no data."""
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = []
+            mock_result = _make_mock_result([])
 
             from app.core.database import get_db
             from main import app
@@ -133,16 +140,15 @@ class TestWordFrequencySnapshots:
         # All messages at 09:00 — within the 4h window for both snapshots (10:00, 10:05)
         pub = datetime(2024, 1, 2, 9, 0, 0, tzinfo=timezone.utc)
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
             # Returns (message_id, published_at, word) 3-tuples
-            mock_result.fetchall.return_value = [
+            mock_result = _make_mock_result([
                 ("msg1", pub, "哈哈"),
                 ("msg2", pub, "哈哈"),
                 ("msg3", pub, "哈哈"),
                 ("msg1", pub, "好"),
                 ("msg2", pub, "好"),
                 ("msg1", pub, "讚"),
-            ]
+            ])
 
             from app.core.database import get_db
             from main import app
@@ -188,14 +194,13 @@ class TestWordFrequencySnapshots:
         """Test endpoint excludes punctuation from results."""
         pub = datetime(2024, 1, 2, 9, 0, 0, tzinfo=timezone.utc)
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = [
+            mock_result = _make_mock_result([
                 ("msg1", pub, "哈哈"),
                 ("msg2", pub, "哈哈"),
                 ("msg1", pub, "!"),  # Should be excluded
                 ("msg2", pub, "。"),  # Should be excluded
                 ("msg1", pub, "好"),
-            ]
+            ])
 
             from app.core.database import get_db
             from main import app
@@ -236,13 +241,12 @@ class TestWordFrequencySnapshots:
         """Test endpoint with custom exclude_words parameter."""
         pub = datetime(2024, 1, 2, 9, 0, 0, tzinfo=timezone.utc)
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = [
+            mock_result = _make_mock_result([
                 ("msg1", pub, "哈哈"),
                 ("msg2", pub, "哈哈"),
                 ("msg1", pub, "好"),
                 ("msg1", pub, "讚"),
-            ]
+            ])
 
             from app.core.database import get_db
             from main import app
@@ -294,13 +298,12 @@ class TestWordFrequencySnapshots:
 
         pub = datetime(2024, 1, 2, 9, 0, 0, tzinfo=timezone.utc)
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = [
+            mock_result = _make_mock_result([
                 ("msg1", pub, "哈哈"),
                 ("msg2", pub, "哈哈"),
                 ("msg1", pub, "好"),
                 ("msg1", pub, "讚"),
-            ]
+            ])
 
             from app.core.database import get_db
             from main import app
@@ -342,8 +345,7 @@ class TestWordFrequencySnapshots:
     def test_metadata_response(self, client):
         """Test metadata in response is correct."""
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value="video123"):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = []
+            mock_result = _make_mock_result([])
 
             from app.core.database import get_db
             from main import app
@@ -428,11 +430,10 @@ class TestWordFrequencySnapshots:
         late = datetime(2024, 1, 2, 9, 56, 0, tzinfo=timezone.utc)
 
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = [
+            mock_result = _make_mock_result([
                 ("msg1", early, "early_word"),
                 ("msg2", late, "late_word"),
-            ]
+            ])
 
             from app.core.database import get_db
             from main import app
@@ -479,8 +480,7 @@ class TestWordFrequencySnapshots:
     def test_single_query_execution(self, client):
         """Assert db.execute is called exactly once (not per-snapshot)."""
         with patch('app.routers.playback_wordcloud.get_current_video_id', return_value=None):
-            mock_result = MagicMock()
-            mock_result.fetchall.return_value = []
+            mock_result = _make_mock_result([])
 
             from app.core.database import get_db
             from main import app
