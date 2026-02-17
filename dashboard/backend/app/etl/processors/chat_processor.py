@@ -352,22 +352,22 @@ class ChatProcessor:
         """
 
         with engine.connect() as conn:
-            for msg in processed_messages:
-                conn.execute(
-                    text(upsert_sql),
-                    {
-                        'message_id': msg['message_id'],
-                        'live_stream_id': msg['live_stream_id'],
-                        'original_message': msg['original_message'],
-                        'processed_message': msg['processed_message'],
-                        'tokens': msg['tokens'],
-                        'unicode_emojis': msg['unicode_emojis'],
-                        'youtube_emotes': json.dumps(msg['youtube_emotes']) if msg['youtube_emotes'] else None,
-                        'author_name': msg['author_name'],
-                        'author_id': msg['author_id'],
-                        'published_at': msg['published_at']
-                    }
-                )
+            params = [
+                {
+                    'message_id': msg['message_id'],
+                    'live_stream_id': msg['live_stream_id'],
+                    'original_message': msg['original_message'],
+                    'processed_message': msg['processed_message'],
+                    'tokens': msg['tokens'],
+                    'unicode_emojis': msg['unicode_emojis'],
+                    'youtube_emotes': json.dumps(msg['youtube_emotes']) if msg['youtube_emotes'] else None,
+                    'author_name': msg['author_name'],
+                    'author_id': msg['author_id'],
+                    'published_at': msg['published_at']
+                }
+                for msg in processed_messages
+            ]
+            conn.execute(text(upsert_sql), params)
             conn.commit()
 
         return len(processed_messages)
