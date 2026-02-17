@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from app.models import StreamStats, ChatMessage, CurrencyRate
+from app.routers.playback import _find_nearest_viewer
 
 class TestPlaybackSnapshots:
     """Tests for the /api/playback/snapshots endpoint using in-memory SQLite."""
@@ -220,3 +221,80 @@ class TestPlaybackSnapshots:
             
             # 09:05 snapshot: hour start 09:00. msg (08:59) is not in range.
             assert snapshots[2]["hourly_messages"] == 0
+
+
+class TestFindNearestViewer:
+    """Unit tests for _find_nearest_viewer binary search helper."""
+
+    def test_empty_list(self):
+        assert _find_nearest_viewer([], [], 100.0) is None
+
+    def test_exact_match(self):
+        times = [100.0, 200.0, 300.0]
+        counts = [10, 20, 30]
+        assert _find_nearest_viewer(times, counts, 200.0) == 20
+
+    def test_between_two_picks_nearest(self):
+        times = [100.0, 200.0, 300.0]
+        counts = [10, 20, 30]
+        # 190 is closer to 200 than 100
+        assert _find_nearest_viewer(times, counts, 190.0) == 20
+        # 110 is closer to 100 than 200
+        assert _find_nearest_viewer(times, counts, 110.0) == 10
+
+    def test_before_first(self):
+        times = [100.0, 200.0]
+        counts = [10, 20]
+        # 50 is 50s before first → within 600s default max
+        assert _find_nearest_viewer(times, counts, 50.0) == 10
+
+    def test_after_last(self):
+        times = [100.0, 200.0]
+        counts = [10, 20]
+        # 250 is 50s after last → within 600s default max
+        assert _find_nearest_viewer(times, counts, 250.0) == 20
+
+    def test_too_far_returns_none(self):
+        times = [100.0, 200.0]
+        counts = [10, 20]
+        # 900 is 700s away from last → exceeds 600s
+        assert _find_nearest_viewer(times, counts, 900.0) is None
+
+    def test_single_entry(self):
+        times = [500.0]
+        counts = [42]
+        assert _find_nearest_viewer(times, counts, 500.0) == 42
+        assert _find_nearest_viewer(times, counts, 600.0) == 42  # 100s away, within 600
+        assert _find_nearest_viewer(times, counts, 1200.0) is None  # 700s away
+
+    def test_viewer_stats_in_snapshot(self, client, db):
+        """Integration: viewer far from all stats returns None."""
+        start_time = datetime(2024, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+        end_time = datetime(2024, 1, 1, 10, 30, 0, tzinfo=timezone.utc)
+        video_id = "v_viewer"
+
+        # Single stat at 10:00 — 10:25 and 10:30 are >600s away
+        db.add(StreamStats(
+            live_stream_id=video_id,
+            concurrent_viewers=999,
+            collected_at=start_time
+        ))
+        db.commit()
+
+        with patch('app.routers.playback.get_current_video_id', return_value=video_id):
+            response = client.get(
+                "/api/playback/snapshots",
+                params={
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "step_seconds": 300
+                }
+            )
+            assert response.status_code == 200
+            snapshots = response.json()["snapshots"]
+            # 10:00 → exact match
+            assert snapshots[0]["viewer_count"] == 999
+            # 10:10 → 600s away, at boundary
+            assert snapshots[2]["viewer_count"] == 999
+            # 10:15 → 900s away, beyond max_diff
+            assert snapshots[3]["viewer_count"] is None
