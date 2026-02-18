@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastProvider } from './components/common/Toast';
+import Spinner from './components/common/Spinner';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './features/dashboard/Dashboard';
 import AdminPanel from './features/admin/AdminPanel';
@@ -9,12 +10,21 @@ import TrendsPage from './features/trends/TrendsPage';
 
 // Protected Route component for admin-only pages
 const ProtectedRoute = ({ children }) => {
-    const { isAdmin } = useAuth();
-    
+    const { isAdmin, isLoading } = useAuth();
+
+    // Wait for auth initialization before deciding whether to redirect.
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Spinner size="lg" />
+            </div>
+        );
+    }
+
     if (!isAdmin) {
         return <Navigate to="/" replace />;
     }
-    
+
     return children;
 };
 
