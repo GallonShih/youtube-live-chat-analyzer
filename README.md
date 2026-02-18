@@ -169,6 +169,29 @@ docker-compose up -d --build dashboard-backend
 docker-compose exec postgres psql -U hermes -d hermes
 ```
 
+### Frontend Unit Tests (Local, no Docker required)
+
+Frontend tests use `Vitest + React Testing Library + MSW` and run directly on local Node.js.
+
+```bash
+cd dashboard/frontend
+
+# Install dependencies
+npm install
+
+# Run tests once
+npm run test:run
+
+# Or watch mode during development
+npm run test:watch
+```
+
+Current test focus includes:
+- Author detail UI rendering (avatar/badges)
+- Message rendering (emoji + paid amount)
+- Error handling for author detail API
+- Dashboard author drawer interaction flow
+
 ---
 
 ## 📄 License

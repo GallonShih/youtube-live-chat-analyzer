@@ -97,7 +97,8 @@ const AuthorDetailContent = ({
     const [summaryLoading, setSummaryLoading] = useState(true);
     const [trendLoading, setTrendLoading] = useState(true);
     const [messagesLoading, setMessagesLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [summaryError, setSummaryError] = useState(null);
+    const [messagesError, setMessagesError] = useState(null);
     const [copied, setCopied] = useState(false);
 
     const renderMessageWithEmojis = (messageText, emotes) => {
@@ -196,7 +197,8 @@ const AuthorDetailContent = ({
         setTrend([]);
         setMessages([]);
         setTotalMessages(0);
-        setError(null);
+        setSummaryError(null);
+        setMessagesError(null);
         setStartDate(nextStart);
         setEndDate(nextEnd);
         setAppliedRange(buildRangeFromLocal(nextStart, nextEnd));
@@ -211,7 +213,7 @@ const AuthorDetailContent = ({
         const load = async () => {
             setSummaryLoading(true);
             setTrendLoading(true);
-            setError(null);
+            setSummaryError(null);
 
             try {
                 const [summaryData, trendData] = await Promise.all([
@@ -232,7 +234,7 @@ const AuthorDetailContent = ({
                 setTrend(Array.isArray(trendData) ? trendData : []);
             } catch (err) {
                 if (cancelled) return;
-                setError(err.message || '載入作者資訊失敗');
+                setSummaryError(err.message || '載入作者資訊失敗');
             } finally {
                 if (cancelled) return;
                 setSummaryLoading(false);
@@ -267,10 +269,10 @@ const AuthorDetailContent = ({
                 if (cancelled) return;
                 setMessages(response.messages || []);
                 setTotalMessages(response.total || 0);
-                setError(null);
+                setMessagesError(null);
             } catch (err) {
                 if (cancelled) return;
-                setError(err.message || '載入訊息失敗');
+                setMessagesError(err.message || '載入訊息失敗');
             } finally {
                 if (cancelled) return;
                 setMessagesLoading(false);
@@ -380,6 +382,7 @@ const AuthorDetailContent = ({
     }, [authorId, appliedRange]);
 
     const authorImageUrl = getAuthorImageUrl(summary?.author_images);
+    const error = summaryError || messagesError;
 
     if (!authorId) {
         return <div className="p-4 text-sm text-gray-500">尚未選擇作者</div>;

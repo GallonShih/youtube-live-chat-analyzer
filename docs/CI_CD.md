@@ -8,7 +8,7 @@ This document describes the GitHub Actions CI/CD pipeline for the YouTube Live C
 
 The pipeline (`.github/workflows/ci.yml`) automates:
 
-1. **Testing** - Run backend unit tests with PostgreSQL
+1. **Testing** - Run backend + frontend unit tests
 2. **Building** - Build Docker images for modified components
 3. **Deploying** - Push images to Docker Hub (manual trigger)
 
@@ -18,9 +18,9 @@ The pipeline (`.github/workflows/ci.yml`) automates:
 
 | Trigger | Behavior |
 |---------|----------|
-| `push` to **任何分支** | 偵測變更，backend 有變更時執行測試 |
+| `push` to **任何分支** | 偵測變更，backend/frontend 有變更時執行對應測試 |
 | `push` to `master` | 測試通過後 build images |
-| `pull_request` to `master` | 偵測變更，backend 有變更時執行測試 |
+| `pull_request` to `master` | 偵測變更，backend/frontend 有變更時執行對應測試 |
 | `workflow_dispatch` | 手動部署到 Docker Hub |
 
 ---
@@ -47,7 +47,21 @@ pytest --cov=app --cov-report=term-missing --cov-report=html
 - Uploads coverage report as artifact
 - Required for backend build job
 
-### 3. build-* (backend/frontend/worker)
+### 3. test-frontend
+
+Runs frontend unit tests with Vitest (只在 frontend 有變更時執行):
+
+```bash
+cd dashboard/frontend
+npm ci
+npm run test:run
+```
+
+- Uses Node.js 20
+- Uses npm cache for faster installs
+- Does not require Docker Compose or backend services
+
+### 4. build-* (backend/frontend/worker)
 
 Builds Docker images using `docker/build-push-action`:
 
@@ -56,7 +70,7 @@ Builds Docker images using `docker/build-push-action`:
 - Uses GitHub Actions cache for faster builds
 - Does NOT push to registry (PR/push only)
 
-### 4. deploy
+### 5. deploy
 
 Manual deployment to Docker Hub:
 
@@ -142,4 +156,12 @@ docker run --rm \
   --network hermes_analyzer-network \
   python:3.11 \
   bash -c "pip install -r requirements.txt pytest pytest-cov httpx && pytest"
+```
+
+Frontend unit tests (no Docker needed):
+
+```bash
+cd dashboard/frontend
+npm install
+npm run test:run
 ```

@@ -67,3 +67,7 @@ logs/
 # Coverage
 .coverage
 htmlcov/
+coverage/
+
+# Frontend test cache
+.vitest/

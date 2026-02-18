@@ -9,5 +9,11 @@ export default defineConfig({
   server: {
     host: true, // Listen on all addresses
     port: 3000,
-  }
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setupTests.js',
+    css: true,
+    globals: true,
+  },
 })
