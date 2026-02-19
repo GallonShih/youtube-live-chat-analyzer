@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+    ArrowDownTrayIcon,
     ArrowTopRightOnSquareIcon,
     ClipboardDocumentIcon,
     UserCircleIcon,
@@ -18,6 +19,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { fetchAuthorMessages, fetchAuthorSummary, fetchAuthorTrend } from '../../api/chat';
+import { fetchAllMessages, downloadAsCSV, downloadAsJSON, buildFilename } from '../../utils/downloadMessages';
 import { formatLocalHour, formatMessageTime, formatNumber } from '../../utils/formatters';
 
 ChartJS.register(
@@ -100,6 +102,42 @@ const AuthorDetailContent = ({
     const [summaryError, setSummaryError] = useState(null);
     const [messagesError, setMessagesError] = useState(null);
     const [copied, setCopied] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+    const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const downloadMenuRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+                setShowDownloadMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleDownload = useCallback(async (format) => {
+        setShowDownloadMenu(false);
+        setDownloading(true);
+        try {
+            const allMessages = await fetchAllMessages(
+                authorId,
+                appliedRange.startTime,
+                appliedRange.endTime,
+            );
+            const name = summary?.display_name || 'author';
+            const filename = buildFilename(name, authorId, format);
+            if (format === 'csv') {
+                downloadAsCSV(allMessages, filename);
+            } else {
+                downloadAsJSON(allMessages, filename);
+            }
+        } catch (err) {
+            console.error('Download failed:', err);
+        } finally {
+            setDownloading(false);
+        }
+    }, [authorId, appliedRange, summary]);
 
     const renderMessageWithEmojis = (messageText, emotes) => {
         if (!messageText) return null;
@@ -449,6 +487,35 @@ const AuthorDetailContent = ({
                             開新頁
                         </a>
                     )}
+                    <div className="relative" ref={downloadMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setShowDownloadMenu((v) => !v)}
+                            disabled={downloading || !summary}
+                            className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ArrowDownTrayIcon className="w-4 h-4 inline-block mr-1" />
+                            {downloading ? '下載中...' : '下載'}
+                        </button>
+                        {showDownloadMenu && (
+                            <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded shadow-lg z-10">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownload('csv')}
+                                    className="block w-full text-left text-xs px-3 py-2 hover:bg-gray-50"
+                                >
+                                    CSV
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDownload('json')}
+                                    className="block w-full text-left text-xs px-3 py-2 hover:bg-gray-50"
+                                >
+                                    JSON
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
