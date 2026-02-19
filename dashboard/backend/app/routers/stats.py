@@ -20,12 +20,14 @@ def get_viewer_stats(
     db: Session = Depends(get_db)
 ):
     try:
-        query = db.query(StreamStats).order_by(StreamStats.collected_at.desc())
-        
+        query = db.query(
+            StreamStats.collected_at, StreamStats.concurrent_viewers
+        ).order_by(StreamStats.collected_at.desc())
+
         video_id = get_current_video_id(db)
         if video_id:
             query = query.filter(StreamStats.live_stream_id == video_id)
-        
+
         if start_time and end_time:
             query = query.filter(StreamStats.collected_at >= start_time, StreamStats.collected_at <= end_time)
         elif hours:
@@ -33,9 +35,9 @@ def get_viewer_stats(
             query = query.filter(StreamStats.collected_at >= since)
         else:
             query = query.limit(limit)
-            
+
         stats = query.all()
-        
+
         result = []
         for s in reversed(stats):
             if s.concurrent_viewers is not None:
@@ -105,19 +107,24 @@ def get_money_summary(
     db: Session = Depends(get_db)
 ):
     try:
-        query = db.query(ChatMessage).filter(
+        query = db.query(
+            ChatMessage.author_id,
+            ChatMessage.author_name,
+            ChatMessage.timestamp,
+            ChatMessage.raw_data
+        ).filter(
             ChatMessage.message_type.in_(PAID_MESSAGE_TYPES)
         )
-        
+
         video_id = get_current_video_id(db)
         if video_id:
             query = query.filter(ChatMessage.live_stream_id == video_id)
-        
+
         if start_time:
             query = query.filter(ChatMessage.published_at >= start_time)
         if end_time:
             query = query.filter(ChatMessage.published_at <= end_time)
-        
+
         messages = query.all()
         
         rates_query = db.query(CurrencyRate).all()
@@ -128,34 +135,34 @@ def get_money_summary(
         unknown_currencies = set()
         paid_count = 0
         
-        for msg in messages:
-            if not msg.raw_data or 'money' not in msg.raw_data:
+        for row in messages:
+            if not row.raw_data or 'money' not in row.raw_data:
                 continue
-            
-            money_data = msg.raw_data.get('money')
+
+            money_data = row.raw_data.get('money')
             if not money_data:
                 continue
-            
+
             currency = money_data.get('currency')
             amount_str = money_data.get('amount')
-            
+
             if not currency or not amount_str:
                 continue
-            
+
             try:
                 amount_str = str(amount_str).replace(',', '').replace('$', '').strip()
                 amount = float(amount_str)
             except (ValueError, TypeError):
                 logger.warning(f"Could not parse amount: {amount_str}")
                 continue
-            
+
             if currency in rate_map:
                 amount_twd = amount * rate_map[currency]
                 total_twd += amount_twd
 
-                author_id = msg.author_id or 'Unknown'
-                author_name = msg.author_name or 'Unknown'
-                latest_timestamp = msg.timestamp or 0
+                author_id = row.author_id or 'Unknown'
+                author_name = row.author_name or 'Unknown'
+                latest_timestamp = row.timestamp or 0
 
                 if author_id not in author_amounts:
                     author_amounts[author_id] = {
