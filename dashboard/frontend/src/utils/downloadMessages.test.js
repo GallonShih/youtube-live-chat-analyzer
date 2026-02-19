@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchAllMessages, downloadAsCSV, downloadAsJSON, buildFilename } from './downloadMessages';
+import { fetchAllMessages, downloadAsCSV, downloadAsJSON, buildFilename, buildCopyText, MAX_COPY_MESSAGES } from './downloadMessages';
 
 vi.mock('../api/chat', () => ({
     fetchAuthorMessages: vi.fn(),
@@ -239,6 +239,47 @@ describe('downloadMessages', () => {
         test('preserves Chinese characters in filename', () => {
             const result = buildFilename('測試用戶', 'id_1', 'csv');
             expect(result).toBe('測試用戶_id_1_2026-02-19.csv');
+        });
+    });
+
+    describe('buildCopyText', () => {
+        test('joins messages with semicolons', () => {
+            const messages = [
+                { message: 'hello' },
+                { message: 'world' },
+                { message: 'foo' },
+            ];
+            expect(buildCopyText(messages)).toBe('hello;world;foo');
+        });
+
+        test('replaces semicolons in message content with commas', () => {
+            const messages = [
+                { message: 'a;b' },
+                { message: 'c' },
+            ];
+            expect(buildCopyText(messages)).toBe('a,b;c');
+        });
+
+        test('handles null or empty message fields', () => {
+            const messages = [
+                { message: null },
+                { message: '' },
+                { message: 'ok' },
+            ];
+            expect(buildCopyText(messages)).toBe(';;ok');
+        });
+
+        test('caps at MAX_COPY_MESSAGES', () => {
+            const messages = Array.from({ length: MAX_COPY_MESSAGES + 100 }, (_, i) => ({ message: `m${i}` }));
+            const result = buildCopyText(messages);
+            const parts = result.split(';');
+            expect(parts).toHaveLength(MAX_COPY_MESSAGES);
+            expect(parts[0]).toBe('m0');
+            expect(parts[MAX_COPY_MESSAGES - 1]).toBe(`m${MAX_COPY_MESSAGES - 1}`);
+        });
+
+        test('returns empty string for empty array', () => {
+            expect(buildCopyText([])).toBe('');
         });
     });
 });

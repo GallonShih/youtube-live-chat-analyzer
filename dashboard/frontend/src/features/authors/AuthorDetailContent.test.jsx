@@ -189,4 +189,66 @@ describe('AuthorDetailContent', () => {
             expect(screen.queryByRole('button', { name: 'CSV' })).not.toBeInTheDocument();
         });
     });
+
+    test('copy messages button is disabled before summary loads', () => {
+        render(<AuthorDetailContent authorId="author_1" />);
+
+        const btn = screen.getByRole('button', { name: /複製訊息/ });
+        expect(btn).toBeDisabled();
+    });
+
+    test('copy messages fetches all messages and copies to clipboard', async () => {
+        const user = userEvent.setup();
+        const mockFetchAll = vi.spyOn(downloadUtils, 'fetchAllMessages').mockResolvedValue([
+            { message: 'hello' },
+            { message: 'world' },
+        ]);
+        const mockBuildCopy = vi.spyOn(downloadUtils, 'buildCopyText').mockReturnValue('hello;world');
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+        render(<AuthorDetailContent authorId="author_1" />);
+        await screen.findByText('@AuthorOne');
+
+        await user.click(screen.getByRole('button', { name: /複製訊息/ }));
+
+        await waitFor(() => {
+            expect(mockFetchAll).toHaveBeenCalledWith('author_1', expect.any(String), expect.any(String));
+        });
+        expect(mockBuildCopy).toHaveBeenCalledWith([{ message: 'hello' }, { message: 'world' }]);
+        expect(writeText).toHaveBeenCalledWith('hello;world');
+
+        // Shows 已複製 feedback
+        expect(await screen.findByRole('button', { name: /已複製/ })).toBeInTheDocument();
+
+        mockFetchAll.mockRestore();
+        mockBuildCopy.mockRestore();
+    });
+
+    test('copy messages shows loading state during fetch', async () => {
+        const user = userEvent.setup();
+        let resolveFetch;
+        const fetchPromise = new Promise((resolve) => { resolveFetch = resolve; });
+        const mockFetchAll = vi.spyOn(downloadUtils, 'fetchAllMessages').mockReturnValue(fetchPromise);
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+        render(<AuthorDetailContent authorId="author_1" />);
+        await screen.findByText('@AuthorOne');
+
+        await user.click(screen.getByRole('button', { name: /複製訊息/ }));
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /複製中/ })).toBeInTheDocument();
+        });
+        expect(screen.getByRole('button', { name: /複製中/ })).toBeDisabled();
+
+        resolveFetch([{ message: 'msg' }]);
+
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /已複製/ })).toBeInTheDocument();
+        });
+
+        mockFetchAll.mockRestore();
+    });
 });

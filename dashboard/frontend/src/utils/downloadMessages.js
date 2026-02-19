@@ -71,6 +71,15 @@ const triggerDownload = (content, filename, mimeType) => {
     URL.revokeObjectURL(url);
 };
 
+export const MAX_COPY_MESSAGES = 500;
+
+export const buildCopyText = (messages) => {
+    return messages
+        .slice(0, MAX_COPY_MESSAGES)
+        .map((msg) => (msg.message || '').replace(/;/g, ','))
+        .join(';');
+};
+
 export const buildFilename = (authorName, authorId, ext) => {
     const date = new Date().toISOString().slice(0, 10);
     const safeName = (authorName || 'author').replace(/[^\w\u4e00-\u9fff-]/g, '_');

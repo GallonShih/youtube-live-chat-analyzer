@@ -19,7 +19,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { fetchAuthorMessages, fetchAuthorSummary, fetchAuthorTrend } from '../../api/chat';
-import { fetchAllMessages, downloadAsCSV, downloadAsJSON, buildFilename } from '../../utils/downloadMessages';
+import { fetchAllMessages, downloadAsCSV, downloadAsJSON, buildFilename, buildCopyText } from '../../utils/downloadMessages';
 import { formatLocalHour, formatMessageTime, formatNumber } from '../../utils/formatters';
 
 ChartJS.register(
@@ -104,6 +104,8 @@ const AuthorDetailContent = ({
     const [copied, setCopied] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [copyingMessages, setCopyingMessages] = useState(false);
+    const [copiedMessages, setCopiedMessages] = useState(false);
     const downloadMenuRef = useRef(null);
 
     useEffect(() => {
@@ -138,6 +140,26 @@ const AuthorDetailContent = ({
             setDownloading(false);
         }
     }, [authorId, appliedRange, summary]);
+
+    const handleCopyMessages = useCallback(async () => {
+        if (!navigator.clipboard?.writeText) return;
+        setCopyingMessages(true);
+        try {
+            const allMessages = await fetchAllMessages(
+                authorId,
+                appliedRange.startTime,
+                appliedRange.endTime,
+            );
+            const text = buildCopyText(allMessages);
+            await navigator.clipboard.writeText(text);
+            setCopiedMessages(true);
+            setTimeout(() => setCopiedMessages(false), 1200);
+        } catch (err) {
+            console.error('Copy messages failed:', err);
+        } finally {
+            setCopyingMessages(false);
+        }
+    }, [authorId, appliedRange]);
 
     const renderMessageWithEmojis = (messageText, emotes) => {
         if (!messageText) return null;
@@ -475,6 +497,15 @@ const AuthorDetailContent = ({
                     >
                         <ClipboardDocumentIcon className="w-4 h-4 inline-block mr-1" />
                         {copied ? '已複製' : '複製 ID'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleCopyMessages}
+                        disabled={copyingMessages || !summary}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <ClipboardDocumentIcon className="w-4 h-4 inline-block mr-1" />
+                        {copiedMessages ? '已複製' : copyingMessages ? '複製中...' : '複製訊息'}
                     </button>
                     {showOpenInNewPage && (
                         <a
