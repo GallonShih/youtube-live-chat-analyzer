@@ -19,6 +19,7 @@ import EmojiStatsPanel from './EmojiStatsPanel';
 import StreamInfoBar from './StreamInfoBar';
 import EventMarkerModal from './EventMarkerModal';
 import AuthorDetailDrawer from '../authors/AuthorDetailDrawer';
+import MessageContextModal from '../messages/MessageContextModal';
 import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
 
 registerChartComponents();
@@ -41,6 +42,7 @@ function Dashboard() {
     const [toggleRefresh, setToggleRefresh] = useState(true);
     const [selectedAuthorId, setSelectedAuthorId] = useState(null);
     const [isAuthorDrawerOpen, setIsAuthorDrawerOpen] = useState(false);
+    const [contextMessage, setContextMessage] = useState(null);
 
     // Default period
     const { defaultStartTime, loading: defaultPeriodLoading } = useDefaultStartTime();
@@ -527,6 +529,7 @@ function Dashboard() {
                     endTime={detailEndTime}
                     hasTimeFilter={!!endDate}
                     onAuthorSelect={handleAuthorSelect}
+                    onViewInContext={setContextMessage}
                 />
 
                 <AuthorDetailDrawer
@@ -535,6 +538,14 @@ function Dashboard() {
                     authorId={selectedAuthorId}
                     initialStartTime={detailStartTime}
                     initialEndTime={detailEndTime}
+                />
+
+                <MessageContextModal
+                    isOpen={contextMessage !== null}
+                    onClose={() => setContextMessage(null)}
+                    targetMessage={contextMessage}
+                    startTime={detailStartTime}
+                    endTime={detailEndTime}
                 />
             </div>
         </div>
