@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { XMarkIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import { fetchChatMessages } from '../../api/chat';
 import { formatMessageTime } from '../../utils/formatters';
@@ -18,19 +18,29 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
 
     const totalPages = Math.ceil(total / PAGE_SIZE);
 
+    // Mirror the 12h default that useChatMessages applies on the frontend when no time filter is
+    // set (MessageList uses useChatMessages which auto-applies this; the modal calls
+    // fetchChatMessages directly so we must replicate it here to stay consistent).
+    const effectiveStart = useMemo(
+        () => startTime || new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+        [startTime]
+    );
+
     // On open: compute target page then load it in one sequential flow
     useEffect(() => {
         if (!isOpen || !targetMessage) return;
 
         setHighlightId(targetMessage.id);
         setLoading(true);
+        // Set PENDING immediately (synchronously) so manual-pagination effect skips on this render
+        initialPageRef.current = 'PENDING';
 
         // Fetch in parallel: messages up-to-target (N) and total in full range (M).
         // Messages are ordered DESC (newest first), so the target sits at position
         // (M - N) from the top. Page = floor((M-N) / PAGE_SIZE) + 1.
         Promise.all([
-            fetchChatMessages({ limit: 1, offset: 0, startTime, endTime: targetMessage.time }),
-            fetchChatMessages({ limit: 1, offset: 0, startTime, endTime }),
+            fetchChatMessages({ limit: 1, offset: 0, startTime: effectiveStart, endTime: targetMessage.time }),
+            fetchChatMessages({ limit: 1, offset: 0, startTime: effectiveStart, endTime }),
         ])
             .then(([{ total: countUpTo }, { total: totalInRange }]) => {
                 const messagesAfterTarget = totalInRange - countUpTo;
@@ -40,24 +50,32 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
                 return fetchChatMessages({
                     limit: PAGE_SIZE,
                     offset: (targetPage - 1) * PAGE_SIZE,
-                    startTime,
+                    startTime: effectiveStart,
                     endTime,
                 });
             })
             .then(({ messages: msgs, total: t }) => {
                 setMessages(msgs);
                 setTotal(t);
+                // Always clear the skip signal so user-initiated pagination works.
+                // If targetPage !== initial page, Effect 2 already consumed it.
+                // If targetPage === initial page, setPage(1) was a no-op and Effect 2
+                // never fired — we must clear the signal manually here.
+                initialPageRef.current = null;
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [isOpen, targetMessage, startTime, endTime]);
+    }, [isOpen, targetMessage, effectiveStart, endTime]);
 
     // Manual pagination: load messages when user changes page (skip initial computed page)
     useEffect(() => {
         if (!isOpen) return;
-        if (initialPageRef.current === page) {
-            // This page was just set by the target computation — skip to avoid double fetch
-            initialPageRef.current = null;
+        // Skip while compute-page effect is in-flight ('PENDING') or has just set this page (number)
+        if (initialPageRef.current !== null) {
+            if (initialPageRef.current === page) {
+                // Consume the skip signal — next page change is user-initiated
+                initialPageRef.current = null;
+            }
             return;
         }
 
@@ -65,7 +83,7 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
         fetchChatMessages({
             limit: PAGE_SIZE,
             offset: (page - 1) * PAGE_SIZE,
-            startTime,
+            startTime: effectiveStart,
             endTime,
         })
             .then(({ messages: msgs, total: t }) => {
@@ -74,7 +92,7 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [isOpen, page, startTime, endTime]);
+    }, [isOpen, page, effectiveStart, endTime]);
 
     // Scroll to highlighted message after messages load
     useEffect(() => {
@@ -104,6 +122,66 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
 
     const isPaid = (msg) =>
         msg.message_type === 'paid_message' || msg.message_type === 'ticker_paid_message_item';
+
+    const renderMessageWithEmojis = (messageText, emotes) => {
+        if (!messageText) return null;
+        if (!emotes || emotes.length === 0) return <span>{messageText}</span>;
+
+        const emoteMap = {};
+        emotes.forEach(e => {
+            if (e.name && e.images && e.images.length > 0) {
+                emoteMap[e.name] = e.images[0].url;
+            }
+        });
+
+        const emojiPositions = [];
+        Object.keys(emoteMap).forEach(emojiName => {
+            let searchPos = 0;
+            while (true) {
+                const pos = messageText.indexOf(emojiName, searchPos);
+                if (pos === -1) break;
+                emojiPositions.push({ start: pos, end: pos + emojiName.length, name: emojiName, url: emoteMap[emojiName] });
+                searchPos = pos + 1;
+            }
+        });
+
+        if (emojiPositions.length === 0) return <span>{messageText}</span>;
+
+        emojiPositions.sort((a, b) => a.start - b.start);
+        const validPositions = [];
+        let lastEnd = -1;
+        for (const pos of emojiPositions) {
+            if (pos.start >= lastEnd) {
+                validPositions.push(pos);
+                lastEnd = pos.end;
+            }
+        }
+
+        const parts = [];
+        let lastIndex = 0;
+        validPositions.forEach((pos) => {
+            if (pos.start > lastIndex) {
+                parts.push({ type: 'text', content: messageText.substring(lastIndex, pos.start), key: `text-${lastIndex}` });
+            }
+            parts.push({ type: 'emoji', name: pos.name, url: pos.url, key: `emoji-${pos.start}` });
+            lastIndex = pos.end;
+        });
+        if (lastIndex < messageText.length) {
+            parts.push({ type: 'text', content: messageText.substring(lastIndex), key: `text-${lastIndex}` });
+        }
+
+        return (
+            <span>
+                {parts.map((part) =>
+                    part.type === 'emoji' ? (
+                        <img key={part.key} src={part.url} alt={part.name} className="inline-block align-middle mx-0.5" style={{ height: '1.5em', width: 'auto' }} loading="lazy" />
+                    ) : (
+                        <span key={part.key}>{part.content}</span>
+                    )
+                )}
+            </span>
+        );
+    };
 
     return (
         <div
@@ -168,14 +246,14 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
                                         </span>
                                         <span className="text-xs text-gray-400">{formatMessageTime(msg.time)}</span>
                                     </div>
-                                    <div className="text-sm text-gray-900 break-words">{msg.message}</div>
+                                    <div className="text-sm text-gray-900 break-words">{renderMessageWithEmojis(msg.message, msg.emotes)}</div>
                                     {moneyText && <div className="text-sm font-semibold text-green-600">{moneyText}</div>}
                                 </div>
                                 {/* Desktop grid */}
                                 <div className="hidden md:grid grid-cols-[140px_minmax(100px,1fr)_minmax(200px,2fr)_100px] lg:grid-cols-[180px_minmax(150px,1fr)_minmax(300px,2fr)_120px] gap-2 lg:gap-4 px-4 text-sm border-b border-gray-200 py-2">
                                     <span className="text-gray-500 whitespace-nowrap text-xs lg:text-sm">{formatMessageTime(msg.time)}</span>
                                     <span className="font-semibold text-gray-700 truncate">{msg.author || 'Unknown'}</span>
-                                    <span className="text-gray-900 break-words">{msg.message}</span>
+                                    <span className="text-gray-900 break-words">{renderMessageWithEmojis(msg.message, msg.emotes)}</span>
                                     <span className={`font-semibold ${moneyText ? 'text-green-600' : 'text-gray-400'}`}>{moneyText || '-'}</span>
                                 </div>
                             </div>
