@@ -57,11 +57,14 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
             .then(({ messages: msgs, total: t }) => {
                 setMessages(msgs);
                 setTotal(t);
-                // Always clear the skip signal so user-initiated pagination works.
-                // If targetPage !== initial page, Effect 2 already consumed it.
-                // If targetPage === initial page, setPage(1) was a no-op and Effect 2
-                // never fired — we must clear the signal manually here.
-                initialPageRef.current = null;
+                // Clear the skip signal only when targetPage === 1.
+                // When targetPage === 1, setPage(1) is a no-op (page was already 1),
+                // so Effect 2 won't re-run and we must clear the signal here.
+                // When targetPage > 1, setPage triggers a re-render and Effect 2 runs;
+                // it will clear initialPageRef.current after detecting the initial-page match.
+                if (initialPageRef.current === 1) {
+                    initialPageRef.current = null;
+                }
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -94,16 +97,18 @@ function MessageContextModal({ isOpen, onClose, targetMessage, startTime, endTim
             .finally(() => setLoading(false));
     }, [isOpen, page, effectiveStart, endTime]);
 
-    // Scroll to highlighted message after messages load
+    // Scroll to highlighted message after messages load.
+    // Read the ref inside the timer callback (not at effect time) so the lookup
+    // always uses the current ref map even if React defers ref attachment slightly.
     useEffect(() => {
         if (!highlightId || messages.length === 0) return;
-        const el = rowRefs.current[highlightId];
-        if (el) {
-            const timerId = setTimeout(() => {
+        const timerId = setTimeout(() => {
+            const el = rowRefs.current[highlightId];
+            if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 100);
-            return () => clearTimeout(timerId);
-        }
+            }
+        }, 100);
+        return () => clearTimeout(timerId);
     }, [messages, highlightId]);
 
     // Reset state when modal closes
