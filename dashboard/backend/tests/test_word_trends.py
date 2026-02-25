@@ -432,6 +432,33 @@ def test_get_trend_stats_with_exclude_words(mock_get_video_id, client, db, sampl
 
 
 @patch('app.routers.word_trends.get_current_video_id')
+def test_get_trend_stats_word_with_percent_does_not_match_all(mock_get_video_id, client, db, sample_messages_for_trends):
+    """A word containing % should be treated as literal, not as a LIKE wildcard."""
+    from app.models import WordTrendGroup
+    mock_get_video_id.return_value = 'test_stream'
+
+    # "%" as a word should match nothing (no message contains a literal %)
+    group = WordTrendGroup(
+        name="Percent Test",
+        words=["%"],
+        color="#000000"
+    )
+    db.add(group)
+    db.flush()
+
+    request_data = {
+        "group_ids": [group.id],
+        "start_time": "2026-01-12T09:00:00Z",
+        "end_time": "2026-01-12T13:00:00Z"
+    }
+    response = client.post("/api/word-trends/stats", json=request_data)
+    assert response.status_code == 200
+    data = response.json()
+    # Without escaping, "%" would match every message. With escaping, no messages match.
+    assert data["groups"][0]["data"] == []
+
+
+@patch('app.routers.word_trends.get_current_video_id')
 def test_get_trend_stats_empty_exclude_words_no_effect(mock_get_video_id, client, db, sample_messages_for_trends):
     """None exclude_words has no effect on counts."""
     from app.models import WordTrendGroup

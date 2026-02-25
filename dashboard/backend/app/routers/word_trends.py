@@ -6,7 +6,7 @@ for trend analysis, and query hourly message counts for those words.
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta, timezone
@@ -19,6 +19,11 @@ from app.models import WordTrendGroup, ChatMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/word-trends", tags=["word-trends"])
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so user input is treated as literal text."""
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
 class WordGroupCreate(BaseModel):
@@ -280,8 +285,7 @@ def get_trend_stats(data: TrendStatsRequest, db: Session = Depends(get_db)):
             trunc_func = func.date_trunc('hour', ChatMessage.published_at)
             
             # Create OR conditions for word matching
-            from sqlalchemy import or_
-            word_conditions = [ChatMessage.message.ilike(f'%{word}%') for word in words]
+            word_conditions = [ChatMessage.message.ilike(f'%{_escape_like(word)}%') for word in words]
             
             query = db.query(
                 trunc_func.label('hour'),
@@ -298,7 +302,7 @@ def get_trend_stats(data: TrendStatsRequest, db: Session = Depends(get_db)):
             # Apply exclude_words filter: messages matching any exclude word are not counted
             exclude_words_list = group.exclude_words or []
             if exclude_words_list:
-                exclude_conditions = [ChatMessage.message.ilike(f'%{w}%') for w in exclude_words_list]
+                exclude_conditions = [ChatMessage.message.ilike(f'%{_escape_like(w)}%') for w in exclude_words_list]
                 query = query.filter(~or_(*exclude_conditions))
 
             results = query.group_by(trunc_func).order_by(trunc_func).all()
