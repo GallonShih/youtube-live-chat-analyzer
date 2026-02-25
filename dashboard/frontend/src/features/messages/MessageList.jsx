@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, ChatBubbleLeftRightIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import { SkeletonMessageList } from '../../components/common/Skeleton';
 import Spinner from '../../components/common/Spinner';
 import {
@@ -30,7 +30,7 @@ ChartJS.register(
     Legend
 );
 
-const MessageRow = ({ message, onAuthorSelect }) => {
+const MessageRow = ({ message, onAuthorSelect, onViewInContext }) => {
     const renderMessageWithEmojis = (messageText, emotes) => {
         if (!messageText) return null;
         if (!emotes || emotes.length === 0) {
@@ -112,7 +112,17 @@ const MessageRow = ({ message, onAuthorSelect }) => {
                     >
                         {message.author || 'Unknown'}
                     </button>
-                    <span className="text-xs text-gray-400">{formatMessageTime(message.time)}</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">{formatMessageTime(message.time)}</span>
+                        <button
+                            type="button"
+                            onClick={() => onViewInContext?.(message)}
+                            className="text-gray-400 hover:text-blue-600 cursor-pointer"
+                            title="在列表中定位"
+                        >
+                            <ArrowsPointingOutIcon className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                 </div>
                 <div className="text-sm text-gray-900 break-words">{renderMessageWithEmojis(message.message, message.emotes)}</div>
                 {moneyText && (
@@ -120,7 +130,7 @@ const MessageRow = ({ message, onAuthorSelect }) => {
                 )}
             </div>
             {/* Desktop: Grid layout */}
-            <div className="hidden md:grid grid-cols-[140px_minmax(100px,1fr)_minmax(200px,2fr)_100px] lg:grid-cols-[180px_minmax(150px,1fr)_minmax(300px,2fr)_120px] gap-2 lg:gap-4 text-sm border-b border-gray-200 py-2 hover:bg-gray-50">
+            <div className="hidden md:grid group grid-cols-[140px_minmax(100px,1fr)_minmax(200px,2fr)_100px_32px] lg:grid-cols-[180px_minmax(150px,1fr)_minmax(300px,2fr)_120px_32px] gap-2 lg:gap-4 text-sm border-b border-gray-200 py-2 hover:bg-gray-50">
                 <span className="text-gray-500 whitespace-nowrap text-xs lg:text-sm">{formatMessageTime(message.time)}</span>
                 <button
                     type="button"
@@ -132,12 +142,20 @@ const MessageRow = ({ message, onAuthorSelect }) => {
                 </button>
                 <span className="text-gray-900 break-words">{renderMessageWithEmojis(message.message, message.emotes)}</span>
                 <span className={`font-semibold ${moneyText ? 'text-green-600' : 'text-gray-400'}`}>{moneyText || '-'}</span>
+                <button
+                    type="button"
+                    onClick={() => onViewInContext?.(message)}
+                    className="opacity-0 group-hover:opacity-100 flex items-center justify-center text-gray-400 hover:text-blue-600 transition-opacity cursor-pointer"
+                    title="在列表中定位"
+                >
+                    <ArrowsPointingOutIcon className="w-4 h-4" />
+                </button>
             </div>
         </>
     );
 };
 
-const MessageList = ({ startTime, endTime, hasTimeFilter = false, onAuthorSelect }) => {
+const MessageList = ({ startTime, endTime, hasTimeFilter = false, onAuthorSelect, onViewInContext }) => {
     // Local UI state
     const [currentPage, setCurrentPage] = useState(1);
     const [pageInput, setPageInput] = useState('');
@@ -404,11 +422,18 @@ const MessageList = ({ startTime, endTime, hasTimeFilter = false, onAuthorSelect
                     </div>
 
                     {/* Desktop header - hidden on mobile */}
-                    <div className="hidden md:grid grid-cols-[140px_minmax(100px,1fr)_minmax(200px,2fr)_100px] lg:grid-cols-[180px_minmax(150px,1fr)_minmax(300px,2fr)_120px] gap-2 lg:gap-4 mb-2 text-sm font-semibold text-gray-600 border-b-2 border-gray-300 pb-2">
-                        <span>時間</span><span>作者</span><span>訊息</span><span>金額</span>
+                    <div className="hidden md:grid grid-cols-[140px_minmax(100px,1fr)_minmax(200px,2fr)_100px_32px] lg:grid-cols-[180px_minmax(150px,1fr)_minmax(300px,2fr)_120px_32px] gap-2 lg:gap-4 mb-2 text-sm font-semibold text-gray-600 border-b-2 border-gray-300 pb-2">
+                        <span>時間</span><span>作者</span><span>訊息</span><span>金額</span><span></span>
                     </div>
                     <div className="space-y-0 max-h-96 overflow-y-auto">
-                        {messages.length === 0 ? <div className="text-center py-8 text-gray-500">暫無訊息</div> : messages.map((msg) => <MessageRow key={msg.id} message={msg} onAuthorSelect={onAuthorSelect} />)}
+                        {messages.length === 0 ? <div className="text-center py-8 text-gray-500">暫無訊息</div> : messages.map((msg) => (
+                            <MessageRow
+                                key={msg.id}
+                                message={msg}
+                                onAuthorSelect={onAuthorSelect}
+                                onViewInContext={onViewInContext}
+                            />
+                        ))}
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-4 p-3 bg-gray-50 rounded">

@@ -46,6 +46,18 @@ class CollectorWorker:
         self._stream_ended = threading.Event()
         self._stream_upcoming = threading.Event()
 
+    def _start_chat_thread(self):
+        """Start chat collection thread if it is not running."""
+        if self.chat_thread and self.chat_thread.is_alive():
+            return
+        self.chat_thread = threading.Thread(
+            target=self._run_chat_collection,
+            name="ChatCollector",
+            daemon=True,
+        )
+        self.chat_thread.start()
+        logger.info("Chat collection thread started")
+
     def start(self):
         """Start the Collector worker"""
         logger.info("=== Starting Collector Worker ===")
@@ -76,12 +88,7 @@ class CollectorWorker:
         backup_thread.start()
 
         # Start chat collection in separate thread
-        self.chat_thread = threading.Thread(
-            target=self._run_chat_collection,
-            name="ChatCollector"
-        )
-        self.chat_thread.daemon = True
-        self.chat_thread.start()
+        self._start_chat_thread()
 
         # Start stats polling in separate thread
         self.stats_thread = threading.Thread(
@@ -332,19 +339,30 @@ class CollectorWorker:
                         logger.warning(f"Chat watchdog: collector appears hung (no activity for {idle_time:.0f}s, threshold: {Config.CHAT_WATCHDOG_TIMEOUT}s)")
                         logger.info("Chat watchdog: restarting collector...")
 
-                        # Stop current collector
-                        self.chat_collector.stop_collection()
+                        with self._restart_lock:
+                            # Stop current collector and give chat thread time to unwind
+                            self.chat_collector.stop_collection()
+                            if self.chat_thread and self.chat_thread.is_alive():
+                                self.chat_thread.join(timeout=10)
 
-                        # Wait a moment for cleanup
-                        time.sleep(2)
+                            # Create new collector (no signal registration from non-main thread)
+                            self.chat_collector = ChatCollector(self.video_id, register_signals=False)
+                            # Ensure collection loop is running after replacement
+                            self._start_chat_thread()
+                            # Wake any waits immediately
+                            self._url_changed.set()
 
-                        # Create new collector (no signal registration from non-main thread)
+                        logger.info("Chat watchdog: collector restarted and collection loop resumed")
+                else:
+                    # Self-heal when heartbeat is missing but worker should still run
+                    if not self.chat_thread or not self.chat_thread.is_alive():
+                        logger.warning("Chat watchdog: missing heartbeat and chat thread is not running, restarting chat loop")
                         with self._restart_lock:
                             self.chat_collector = ChatCollector(self.video_id, register_signals=False)
-
-                        logger.info("Chat watchdog: collector restarted")
-                else:
-                    logger.debug("Chat watchdog: collector or last_activity_time not initialized yet")
+                            self._start_chat_thread()
+                            self._url_changed.set()
+                    else:
+                        logger.debug("Chat watchdog: collector or last_activity_time not initialized yet")
                         
             except Exception as e:
                 logger.error(f"Chat watchdog error: {e}")

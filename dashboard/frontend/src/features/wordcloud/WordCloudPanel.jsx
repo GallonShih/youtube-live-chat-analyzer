@@ -59,8 +59,31 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
         isDestructive: false
     });
 
-    // Fetch frequency on change
+    // Suppress auto-render when time range exceeds 24 hours
+    // When endTime is absent, compare startTime against now (rolling window)
+    const isOver24Hours = useMemo(() => {
+        if (!startTime) return false;
+        const start = new Date(startTime);
+        const end = endTime ? new Date(endTime) : new Date();
+        return end - start > 24 * 60 * 60 * 1000;
+    }, [startTime, endTime]);
+
+    // Tracks which specific time range the user has manually enabled the cloud for.
+    // Using startTime+endTime as key ensures it resets when the range changes.
+    const [manuallyEnabledRange, setManuallyEnabledRange] = useState(null);
+
+    // Pure derived value — computed synchronously in the same render,
+    // avoiding the race condition caused by state+useEffect sync patterns.
+    const shouldShowCloud = useMemo(() => {
+        if (!isOver24Hours) return true;
+        if (!manuallyEnabledRange) return false;
+        return manuallyEnabledRange.startTime === startTime &&
+            manuallyEnabledRange.endTime === endTime;
+    }, [isOver24Hours, startTime, endTime, manuallyEnabledRange]);
+
+    // Fetch frequency on change (skipped when shouldShowCloud is false)
     useEffect(() => {
+        if (!shouldShowCloud) return;
         getWordFrequency({
             startTime,
             endTime,
@@ -68,7 +91,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
             replacementWordlistId: selectedReplacementWordlistId,
             replacementRules
         });
-    }, [startTime, endTime, excludeWords, selectedReplacementWordlistId, replacementRules, getWordFrequency]);
+    }, [startTime, endTime, excludeWords, selectedReplacementWordlistId, replacementRules, getWordFrequency, shouldShowCloud]);
 
     // Handle exclude
     const handleAddExcludeWord = () => {
@@ -243,6 +266,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
     const currentWordlistName = useMemo(() => savedWordlists.find(w => w.id === selectedWordlistId)?.name, [selectedWordlistId, savedWordlists]);
 
     const handleReplacementUpdate = useCallback(() => {
+        if (!shouldShowCloud) return;
         // Refresh word frequency when replacement rules change
         getWordFrequency({
             startTime,
@@ -251,7 +275,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
             replacementWordlistId: selectedReplacementWordlistId,
             replacementRules
         });
-    }, [getWordFrequency, startTime, endTime, excludeWords, selectedReplacementWordlistId, replacementRules]);
+    }, [shouldShowCloud, getWordFrequency, startTime, endTime, excludeWords, selectedReplacementWordlistId, replacementRules]);
 
     const handleSetReplacementSource = (text) => {
         setReplacementSource(text);
@@ -262,6 +286,15 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
         setReplacementTarget(text);
         setConfigTab('replacement');
     };
+
+    const handleReload = useCallback(() => {
+        if (!shouldShowCloud) {
+            // Enable cloud for this specific range — useEffect will fetch
+            setManuallyEnabledRange({ startTime, endTime });
+        } else {
+            getWordFrequency({ startTime, endTime, excludeWords, replacementWordlistId: selectedReplacementWordlistId, replacementRules });
+        }
+    }, [shouldShowCloud, setManuallyEnabledRange, getWordFrequency, startTime, endTime, excludeWords, selectedReplacementWordlistId, replacementRules]);
 
 
     return (
@@ -307,7 +340,7 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
                         <ArrowPathIcon className="w-4 h-4" />
                         <span className="hidden sm:inline">重繪</span>
                     </button>
-                    <button onClick={() => getWordFrequency({ startTime, endTime, excludeWords, replacementWordlistId: selectedReplacementWordlistId })} className="flex items-center gap-1 bg-blue-600 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm hover:bg-blue-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    <button onClick={handleReload} className="flex items-center gap-1 bg-blue-600 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm hover:bg-blue-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                         <ArrowPathIcon className="w-4 h-4" />
                         <span>重新載入</span>
                     </button>
@@ -317,7 +350,15 @@ function WordCloudPanel({ startTime, endTime, hasTimeFilter }) {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
                 <div className="lg:col-span-3 border border-white/30 rounded-2xl bg-white/50 relative min-h-[400px]">
                     {loading && <LoadingOverlay message="載入文字雲..." transparent />}
-                    {wordData.length > 0 ? (
+                    {!shouldShowCloud ? (
+                        <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-gray-400 gap-3">
+                            <CloudIcon className="w-14 h-14 opacity-25" />
+                            <div className="text-sm text-center leading-relaxed">
+                                <div>時間範圍超過 24 小時</div>
+                                <div className="text-xs mt-1 text-gray-400">點擊「重新載入」以繪製文字雲</div>
+                            </div>
+                        </div>
+                    ) : wordData.length > 0 ? (
                         <WordCloud key={seed} data={displayWords} width={600} height={400} fontSize={fontSize} rotate={rotate} fill={fill} padding={2} random={seededRandom} />
                     ) : (
                         <div className="flex items-center justify-center h-full text-gray-500">{error || '無資料'}</div>
