@@ -24,16 +24,20 @@ const WordGroupCard = ({
     const [words, setWords] = useState(group?.words || []);
     const [color, setColor] = useState(group?.color || '#5470C6');
     const [newWord, setNewWord] = useState('');
+    const [excludeWords, setExcludeWords] = useState(group?.exclude_words || []);
+    const [newExcludeWord, setNewExcludeWord] = useState('');
     const [isEditing, setIsEditing] = useState(isNew);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
 
     const newWordInputRef = useRef(null);
+    const excludeWordInputRef = useRef(null);
 
     useEffect(() => {
         if (group) {
             setName(group.name || '');
             setWords(group.words || []);
+            setExcludeWords(group.exclude_words || []);
             setColor(group.color || '#5470C6');
         }
     }, [group]);
@@ -58,6 +62,26 @@ const WordGroupCard = ({
         }
     };
 
+    const handleAddExcludeWord = () => {
+        const trimmed = newExcludeWord.trim();
+        if (trimmed && !excludeWords.includes(trimmed) && !words.includes(trimmed)) {
+            setExcludeWords([...excludeWords, trimmed]);
+            setNewExcludeWord('');
+            excludeWordInputRef.current?.focus();
+        }
+    };
+
+    const handleRemoveExcludeWord = (word) => {
+        setExcludeWords(excludeWords.filter(w => w !== word));
+    };
+
+    const handleExcludeKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            handleAddExcludeWord();
+        }
+    };
+
     const handleSave = async () => {
         if (!name.trim()) {
             setError('請輸入詞彙組名稱');
@@ -75,6 +99,7 @@ const WordGroupCard = ({
                 id: group?.id,
                 name: name.trim(),
                 words,
+                exclude_words: excludeWords,
                 color
             });
             setIsEditing(false);
@@ -91,6 +116,7 @@ const WordGroupCard = ({
         } else {
             setName(group.name);
             setWords(group.words);
+            setExcludeWords(group.exclude_words || []);
             setColor(group.color);
             setIsEditing(false);
             setError('');
@@ -212,6 +238,47 @@ const WordGroupCard = ({
                     </div>
                 )}
             </div>
+
+            {/* Exclude Words (edit mode only) */}
+            {isEditing && (
+                <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-1">排除詞彙</p>
+                    <div className="flex flex-wrap gap-2">
+                        {excludeWords.map((word, idx) => (
+                            <span
+                                key={idx}
+                                className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-50 text-red-500"
+                            >
+                                {word}
+                                <button
+                                    onClick={() => handleRemoveExcludeWord(word)}
+                                    className="ml-2 text-current opacity-60 hover:opacity-100"
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        ))}
+                        <div className="inline-flex items-center">
+                            <input
+                                ref={excludeWordInputRef}
+                                type="text"
+                                value={newExcludeWord}
+                                onChange={(e) => setNewExcludeWord(e.target.value)}
+                                onKeyDown={handleExcludeKeyDown}
+                                placeholder="新增排除詞..."
+                                className="px-3 py-1 border border-dashed border-red-300 rounded-full text-sm focus:outline-none focus:border-red-400 w-32"
+                            />
+                            <button
+                                onClick={handleAddExcludeWord}
+                                className="ml-1 px-2 py-1 text-red-500 hover:bg-red-50 rounded-full text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-400"
+                                aria-label="新增排除詞"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Color Picker (only in edit mode) */}
             {isEditing && (

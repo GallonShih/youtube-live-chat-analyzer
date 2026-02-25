@@ -55,12 +55,14 @@ describe('WordGroupCard', () => {
         await user.click(screen.getByRole('button', { name: '儲存' }));
 
         await waitFor(() => {
-            expect(onSave).toHaveBeenCalledWith({
-                id: 2,
-                name: 'NewName',
-                words: ['x', 'y'],
-                color: '#5470C6',
-            });
+            expect(onSave).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    id: 2,
+                    name: 'NewName',
+                    words: ['x', 'y'],
+                    color: '#5470C6',
+                })
+            );
         });
     });
 
@@ -73,5 +75,75 @@ describe('WordGroupCard', () => {
 
         expect(screen.getByText('請輸入詞彙組名稱')).toBeInTheDocument();
         expect(onSave).not.toHaveBeenCalled();
+    });
+
+    test('shows exclude words section in edit mode and hides in view mode', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <WordGroupCard
+                group={{ id: 1, name: 'G', words: ['吉祥'], exclude_words: ['吉祥天'], color: '#5470C6' }}
+                isAdmin
+                isVisible
+                onToggleVisibility={vi.fn()}
+                onDelete={vi.fn()}
+                onSave={vi.fn()}
+            />,
+        );
+
+        // View mode: exclude word NOT visible
+        expect(screen.queryByText('吉祥天')).not.toBeInTheDocument();
+
+        // Enter edit mode
+        await user.click(screen.getByLabelText('編輯詞彙組'));
+
+        // Edit mode: exclude word visible
+        expect(screen.getByText('吉祥天')).toBeInTheDocument();
+    });
+
+    test('can add exclude word and it appears in onSave payload', async () => {
+        const onSave = vi.fn().mockResolvedValue({});
+        const user = userEvent.setup();
+
+        render(
+            <WordGroupCard
+                group={{ id: 2, name: 'G2', words: ['w'], exclude_words: [], color: '#5470C6' }}
+                isAdmin
+                onSave={onSave}
+            />,
+        );
+
+        await user.click(screen.getByLabelText('編輯詞彙組'));
+
+        await user.type(screen.getByPlaceholderText('新增排除詞...'), '吉祥物');
+        await user.keyboard('{Enter}');
+
+        await user.click(screen.getByRole('button', { name: '儲存' }));
+
+        await waitFor(() => {
+            expect(onSave).toHaveBeenCalledWith(
+                expect.objectContaining({ exclude_words: ['吉祥物'] })
+            );
+        });
+    });
+
+    test('exclude word can be removed with × button', async () => {
+        const user = userEvent.setup();
+
+        render(
+            <WordGroupCard
+                group={{ id: 3, name: 'G3', words: ['w'], exclude_words: ['bad'], color: '#5470C6' }}
+                isAdmin
+                onSave={vi.fn().mockResolvedValue({})}
+            />,
+        );
+
+        await user.click(screen.getByLabelText('編輯詞彙組'));
+        expect(screen.getByText('bad')).toBeInTheDocument();
+
+        const badTag = screen.getByText('bad').closest('span');
+        await user.click(badTag.querySelector('button'));
+
+        expect(screen.queryByText('bad')).not.toBeInTheDocument();
     });
 });
