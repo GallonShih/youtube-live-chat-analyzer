@@ -25,6 +25,7 @@ class WordGroupCreate(BaseModel):
     """Schema for creating a new word group."""
     name: str = Field(..., min_length=1, max_length=100)
     words: List[str] = Field(..., min_items=1)
+    exclude_words: Optional[List[str]] = []
     color: str = Field(default='#5470C6', max_length=20)
 
 
@@ -32,6 +33,7 @@ class WordGroupUpdate(BaseModel):
     """Schema for updating an existing word group."""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     words: Optional[List[str]] = Field(None, min_items=0)
+    exclude_words: Optional[List[str]] = None
     color: Optional[str] = Field(None, max_length=20)
 
 
@@ -40,6 +42,7 @@ class WordGroupResponse(BaseModel):
     id: int
     name: str
     words: List[str]
+    exclude_words: List[str]
     color: str
     created_at: str
     updated_at: str
@@ -86,6 +89,7 @@ def list_word_groups(db: Session = Depends(get_db)):
                 id=g.id,
                 name=g.name,
                 words=g.words or [],
+                exclude_words=g.exclude_words or [],
                 color=g.color or '#5470C6',
                 created_at=g.created_at.isoformat() if g.created_at else "",
                 updated_at=g.updated_at.isoformat() if g.updated_at else ""
@@ -108,6 +112,7 @@ def get_word_group(group_id: int, db: Session = Depends(get_db)):
         id=group.id,
         name=group.name,
         words=group.words or [],
+        exclude_words=group.exclude_words or [],
         color=group.color or '#5470C6',
         created_at=group.created_at.isoformat() if group.created_at else "",
         updated_at=group.updated_at.isoformat() if group.updated_at else ""
@@ -127,19 +132,23 @@ def create_word_group(data: WordGroupCreate, db: Session = Depends(get_db)):
         words = [w.strip() for w in data.words if w.strip()]
         if not words:
             raise HTTPException(status_code=400, detail="At least one non-empty word is required")
-        
+
+        exclude_words = [w.strip() for w in data.exclude_words if w.strip()] if data.exclude_words else []
+
         group = WordTrendGroup(
             name=data.name.strip(),
             words=words,
+            exclude_words=exclude_words or None,
             color=data.color
         )
         db.add(group)
         db.flush()
-        
+
         return WordGroupResponse(
             id=group.id,
             name=group.name,
             words=group.words or [],
+            exclude_words=group.exclude_words or [],
             color=group.color or '#5470C6',
             created_at=group.created_at.isoformat() if group.created_at else "",
             updated_at=group.updated_at.isoformat() if group.updated_at else ""
@@ -180,13 +189,18 @@ def update_word_group(group_id: int, data: WordGroupUpdate, db: Session = Depend
         
         if data.color is not None:
             group.color = data.color
-        
+
+        if data.exclude_words is not None:
+            exclude_words = [w.strip() for w in data.exclude_words if w.strip()]
+            group.exclude_words = exclude_words or None
+
         db.flush()
-        
+
         return WordGroupResponse(
             id=group.id,
             name=group.name,
             words=group.words or [],
+            exclude_words=group.exclude_words or [],
             color=group.color or '#5470C6',
             created_at=group.created_at.isoformat() if group.created_at else "",
             updated_at=group.updated_at.isoformat() if group.updated_at else ""

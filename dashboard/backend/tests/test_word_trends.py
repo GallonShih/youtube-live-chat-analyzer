@@ -346,6 +346,51 @@ def test_get_trend_stats_empty_group_ids(client, db):
     request_data = {
         "group_ids": []
     }
-    
+
     response = client.post("/api/word-trends/stats", json=request_data)
     assert response.status_code == 422  # Validation error
+
+
+def test_create_word_group_with_exclude_words(admin_client, db):
+    """Test creating a word group with exclude words."""
+    data = {
+        "name": "Group With Exclude",
+        "words": ["吉祥"],
+        "exclude_words": ["吉祥天", "吉祥物"],
+        "color": "#5470C6"
+    }
+    response = admin_client.post("/api/word-trends/groups", json=data)
+    assert response.status_code == 201
+    result = response.json()
+    assert result["exclude_words"] == ["吉祥天", "吉祥物"]
+
+
+def test_create_word_group_without_exclude_words_defaults_to_empty(admin_client, db):
+    """Test that exclude_words defaults to [] when not provided."""
+    data = {"name": "No Exclude", "words": ["word1"]}
+    response = admin_client.post("/api/word-trends/groups", json=data)
+    assert response.status_code == 201
+    assert response.json()["exclude_words"] == []
+
+
+def test_update_word_group_exclude_words(admin_client, sample_word_groups):
+    """Test updating exclude_words on an existing group."""
+    group_id = sample_word_groups[0]["id"]
+    response = admin_client.put(f"/api/word-trends/groups/{group_id}", json={
+        "exclude_words": ["bad_word"]
+    })
+    assert response.status_code == 200
+    assert response.json()["exclude_words"] == ["bad_word"]
+
+
+def test_list_word_groups_includes_exclude_words(client, db):
+    """Test that GET /groups returns exclude_words field."""
+    from app.models import WordTrendGroup
+    g = WordTrendGroup(name="G", words=["w"], exclude_words=["x"], color="#000000")
+    db.add(g)
+    db.flush()
+
+    response = client.get("/api/word-trends/groups")
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["exclude_words"] == ["x"]
