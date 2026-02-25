@@ -394,3 +394,66 @@ def test_list_word_groups_includes_exclude_words(client, db):
     assert response.status_code == 200
     data = response.json()
     assert data[0]["exclude_words"] == ["x"]
+
+
+@patch('app.routers.word_trends.get_current_video_id')
+def test_get_trend_stats_with_exclude_words(mock_get_video_id, client, db, sample_messages_for_trends):
+    """Messages matching an exclude word are not counted even if they match an include word."""
+    from app.models import WordTrendGroup
+    mock_get_video_id.return_value = 'test_stream'
+
+    # msg_1 "This contains word1", msg_2 "Another word1 message", msg_3 "Yet another word1"
+    # all match word1. Excluding "Yet another" removes msg_3 → count drops from 3 to 2.
+    group = WordTrendGroup(
+        name="Exclude Test",
+        words=["word1"],
+        exclude_words=["Yet another"],
+        color="#000000"
+    )
+    db.add(group)
+    db.flush()
+
+    request_data = {
+        "group_ids": [group.id],
+        "start_time": "2026-01-12T09:00:00Z",
+        "end_time": "2026-01-12T13:00:00Z"
+    }
+    response = client.post("/api/word-trends/stats", json=request_data)
+    assert response.status_code == 200
+    data = response.json()
+
+    group_data = data["groups"][0]
+    hourly_counts = {item["hour"]: item["count"] for item in group_data["data"]}
+
+    # "Yet another word1" (msg_3) excluded → count is 2, not 3
+    assert hourly_counts.get("2026-01-12T10:00:00+00:00") == 2
+    # Hour 1: "word1 in hour 1" (msg_6) still counted
+    assert hourly_counts.get("2026-01-12T11:00:00+00:00") == 1
+
+
+@patch('app.routers.word_trends.get_current_video_id')
+def test_get_trend_stats_empty_exclude_words_no_effect(mock_get_video_id, client, db, sample_messages_for_trends):
+    """None exclude_words has no effect on counts."""
+    from app.models import WordTrendGroup
+    mock_get_video_id.return_value = 'test_stream'
+
+    group = WordTrendGroup(
+        name="No Exclude",
+        words=["word1"],
+        exclude_words=None,
+        color="#000000"
+    )
+    db.add(group)
+    db.flush()
+
+    request_data = {
+        "group_ids": [group.id],
+        "start_time": "2026-01-12T09:00:00Z",
+        "end_time": "2026-01-12T13:00:00Z"
+    }
+    response = client.post("/api/word-trends/stats", json=request_data)
+    assert response.status_code == 200
+    data = response.json()
+
+    hourly_counts = {item["hour"]: item["count"] for item in data["groups"][0]["data"]}
+    assert hourly_counts.get("2026-01-12T10:00:00+00:00") == 3  # unchanged

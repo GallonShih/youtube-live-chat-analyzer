@@ -294,7 +294,13 @@ def get_trend_stats(data: TrendStatsRequest, db: Session = Depends(get_db)):
             
             if video_id:
                 query = query.filter(ChatMessage.live_stream_id == video_id)
-            
+
+            # Apply exclude_words filter: messages matching any exclude word are not counted
+            exclude_words_list = group.exclude_words or []
+            if exclude_words_list:
+                exclude_conditions = [ChatMessage.message.ilike(f'%{w}%') for w in exclude_words_list]
+                query = query.filter(~or_(*exclude_conditions))
+
             results = query.group_by(trunc_func).order_by(trunc_func).all()
             
             hourly_data = [
