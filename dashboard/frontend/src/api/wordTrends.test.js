@@ -45,16 +45,26 @@ describe('wordTrends api helpers', () => {
                 json: async () => ({ id: 1, name: 'A' }),
             });
 
-        await expect(createWordTrendGroup({ name: 'A', words: ['x'], color: '#fff' })).rejects.toThrow('duplicate name');
+        await expect(
+            createWordTrendGroup({ name: 'A', words: ['x'], exclude_words: ['y'], color: '#fff' })
+        ).rejects.toThrow('duplicate name');
+        expect(authFetch).toHaveBeenNthCalledWith(
+            1,
+            'http://localhost:8000/api/word-trends/groups',
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ name: 'A', words: ['x'], exclude_words: ['y'], color: '#fff' }),
+            }),
+        );
 
-        const data = await updateWordTrendGroup(1, { words: ['y'] });
+        const data = await updateWordTrendGroup(1, { words: ['y'], exclude_words: ['z'] });
         expect(data.id).toBe(1);
         expect(authFetch).toHaveBeenNthCalledWith(
             2,
             'http://localhost:8000/api/word-trends/groups/1',
             expect.objectContaining({
                 method: 'PUT',
-                body: JSON.stringify({ words: ['y'] }),
+                body: JSON.stringify({ words: ['y'], exclude_words: ['z'] }),
             }),
         );
     });
@@ -87,4 +97,3 @@ describe('wordTrends api helpers', () => {
         );
     });
 });
-

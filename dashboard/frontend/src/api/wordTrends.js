@@ -12,13 +12,13 @@ export const fetchWordTrendGroup = async (id) => {
     return res.json();
 };
 
-export const createWordTrendGroup = async ({ name, words, color }) => {
+export const createWordTrendGroup = async ({ name, words, exclude_words, color }) => {
     const res = await authFetch(`${API_BASE_URL}/api/word-trends/groups`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, words, color })
+        body: JSON.stringify({ name, words, exclude_words, color })
     });
     if (!res.ok) {
         const err = await res.json();
@@ -27,10 +27,11 @@ export const createWordTrendGroup = async ({ name, words, color }) => {
     return res.json();
 };
 
-export const updateWordTrendGroup = async (id, { name, words, color }) => {
+export const updateWordTrendGroup = async (id, { name, words, exclude_words, color }) => {
     const body = {};
     if (name !== undefined) body.name = name;
     if (words !== undefined) body.words = words;
+    if (exclude_words !== undefined) body.exclude_words = exclude_words;
     if (color !== undefined) body.color = color;
 
     const res = await authFetch(`${API_BASE_URL}/api/word-trends/groups/${id}`, {
