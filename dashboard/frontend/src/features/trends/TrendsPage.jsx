@@ -179,6 +179,24 @@ const TrendsPage = () => {
         setQuickRange(24);
     };
 
+    const handleSortByMessageVolume = () => {
+        setChartOrder(prev => {
+            const visibleIds = prev.filter(id => visibleGroups.has(id));
+            const hiddenIds = prev.filter(id => !visibleGroups.has(id));
+
+            const getTotalCount = (groupId) => {
+                const groupData = trendData[groupId];
+                if (!groupData) return 0;
+                if (typeof groupData.total_count === 'number') return groupData.total_count;
+                if (!Array.isArray(groupData.data)) return 0;
+                return groupData.data.reduce((sum, item) => sum + (item.count || 0), 0);
+            };
+
+            visibleIds.sort((a, b) => getTotalCount(b) - getTotalCount(a));
+            return [...visibleIds, ...hiddenIds];
+        });
+    };
+
     // Quick time range setters
     const setQuickRange = (hours) => {
         const end = new Date();
@@ -387,6 +405,13 @@ const TrendsPage = () => {
                                         />
                                         顯示資料點
                                     </label>
+                                    <button
+                                        onClick={handleSortByMessageVolume}
+                                        disabled={visibleGroups.size < 2}
+                                        className="px-2.5 py-1.5 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    >
+                                        依訊息量排序
+                                    </button>
                                     {loadingTrends && (
                                         <div className="flex items-center gap-2 text-sm text-indigo-600">
                                             <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />

@@ -57,8 +57,8 @@ describe('TrendsPage', () => {
         ]);
         fetchTrendStats.mockResolvedValue({
             groups: [
-                { group_id: 1, data: [{ ts: 't1', value: 1 }] },
-                { group_id: 2, data: [{ ts: 't2', value: 2 }] },
+                { group_id: 1, total_count: 1, data: [{ hour: '2026-02-18T00:00:00Z', count: 1 }] },
+                { group_id: 2, total_count: 2, data: [{ hour: '2026-02-18T00:00:00Z', count: 2 }] },
             ],
         });
         createWordTrendGroup.mockResolvedValue({ id: 3, name: 'NewGroup', color: '#000', words: ['x'] });
@@ -105,5 +105,28 @@ describe('TrendsPage', () => {
         await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
         await user.click(screen.getAllByRole('button', { name: 'delete-group' })[0]);
         await waitFor(() => expect(deleteWordTrendGroup).toHaveBeenCalledWith(1));
+    });
+
+    test('sorts visible charts by message volume when sort button is clicked', async () => {
+        const user = userEvent.setup();
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[1]);
+
+        await waitFor(() => {
+            const charts = screen.getAllByTestId('trend-chart');
+            expect(charts[0]).toHaveTextContent('A:1');
+            expect(charts[1]).toHaveTextContent('B:1');
+        });
+
+        await user.click(screen.getByRole('button', { name: '依訊息量排序' }));
+
+        await waitFor(() => {
+            const charts = screen.getAllByTestId('trend-chart');
+            expect(charts[0]).toHaveTextContent('B:1');
+            expect(charts[1]).toHaveTextContent('A:1');
+        });
     });
 });
