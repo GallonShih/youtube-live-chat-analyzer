@@ -42,8 +42,10 @@ const TrendsPage = () => {
     const [trendData, setTrendData] = useState({});
     const [loadingTrends, setLoadingTrends] = useState(false);
     const inFlightTrendRequestsRef = useRef(new Map());
+    const trendCacheRef = useRef(new Map());
     const pendingTrendRequestCountRef = useRef(0);
-    const latestTrendRequestIdRef = useRef(0);
+    const currentRangeKeyRef = useRef('');
+    const visibleGroupsRef = useRef(visibleGroups);
 
     // Chart display options
     const [lineWidth, setLineWidth] = useState(2);
@@ -64,6 +66,31 @@ const TrendsPage = () => {
     useEffect(() => {
         loadGroups();
     }, []);
+
+    useEffect(() => {
+        visibleGroupsRef.current = visibleGroups;
+    }, [visibleGroups]);
+
+    const getTimeRangeParams = useCallback(() => {
+        let startTime = null;
+        let endTime = null;
+
+        if (startDate) {
+            startTime = new Date(startDate).toISOString();
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            d.setMinutes(59, 59, 999);
+            endTime = d.toISOString();
+        }
+
+        return { startTime, endTime };
+    }, [startDate, endDate]);
+
+    const getRangeKey = useCallback((startTime, endTime) => JSON.stringify({
+        startTime,
+        endTime
+    }), []);
 
     const loadGroups = async () => {
         try {
@@ -89,24 +116,31 @@ const TrendsPage = () => {
             return;
         }
 
-        const sortedGroupIds = [...visibleGroupIds].sort((a, b) => a - b);
+        const { startTime, endTime } = getTimeRangeParams();
+        const rangeKey = getRangeKey(startTime, endTime);
+        currentRangeKeyRef.current = rangeKey;
 
-        let startTime = null;
-        let endTime = null;
+        if (!trendCacheRef.current.has(rangeKey)) {
+            trendCacheRef.current.set(rangeKey, new Map());
+        }
+        const rangeCache = trendCacheRef.current.get(rangeKey);
 
-        if (startDate) {
-            startTime = new Date(startDate).toISOString();
-        }
-        if (endDate) {
-            const d = new Date(endDate);
-            d.setMinutes(59, 59, 999);
-            endTime = d.toISOString();
-        }
+        const visibleDataMap = {};
+        visibleGroupIds.forEach((groupId) => {
+            const cached = rangeCache.get(groupId);
+            if (cached) visibleDataMap[groupId] = cached;
+        });
+        setTrendData(visibleDataMap);
+
+        const missingGroupIds = visibleGroupIds
+            .filter(groupId => !rangeCache.has(groupId))
+            .sort((a, b) => a - b);
+
+        if (missingGroupIds.length === 0) return;
 
         const requestKey = JSON.stringify({
-            groupIds: sortedGroupIds,
-            startTime,
-            endTime
+            rangeKey,
+            groupIds: missingGroupIds
         });
 
         const existingRequest = inFlightTrendRequestsRef.current.get(requestKey);
@@ -115,27 +149,32 @@ const TrendsPage = () => {
             return;
         }
 
-        const requestId = ++latestTrendRequestIdRef.current;
         pendingTrendRequestCountRef.current += 1;
         setLoadingTrends(true);
 
         const requestPromise = (async () => {
             try {
                 const result = await fetchTrendStats({
-                    groupIds: sortedGroupIds,
+                    groupIds: missingGroupIds,
                     startTime,
                     endTime
                 });
 
-                // Ignore stale responses; only latest request should update chart data
-                if (requestId !== latestTrendRequestIdRef.current) return;
-
-                // Convert to map for easy lookup
-                const dataMap = {};
+                const targetRangeCache = trendCacheRef.current.get(rangeKey) || new Map();
                 result.groups.forEach(g => {
-                    dataMap[g.group_id] = g;
+                    targetRangeCache.set(g.group_id, g);
                 });
-                setTrendData(dataMap);
+                trendCacheRef.current.set(rangeKey, targetRangeCache);
+
+                if (rangeKey === currentRangeKeyRef.current) {
+                    const currentVisibleIds = Array.from(visibleGroupsRef.current);
+                    const dataMap = {};
+                    currentVisibleIds.forEach((groupId) => {
+                        const cached = targetRangeCache.get(groupId);
+                        if (cached) dataMap[groupId] = cached;
+                    });
+                    setTrendData(dataMap);
+                }
             } catch (err) {
                 console.error('Failed to load trend data:', err);
             } finally {
@@ -154,7 +193,7 @@ const TrendsPage = () => {
         } catch {
             // requestPromise handles and logs errors
         }
-    }, [visibleGroups, startDate, endDate]);
+    }, [visibleGroups, getTimeRangeParams, getRangeKey]);
 
     // Trigger trend data load when visible groups or time changes
     useEffect(() => {
