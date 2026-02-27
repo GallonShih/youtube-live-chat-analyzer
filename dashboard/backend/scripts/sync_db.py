@@ -5,13 +5,20 @@ DB Sync Script
 在兩個 PostgreSQL 資料庫之間，以時間範圍批次同步指定資料表的資料。
 PK 重複時略過（ON CONFLICT DO NOTHING）。
 
-使用方式：
+使用方式（時間範圍）：
     python sync_db.py \\
         --source-url "postgresql://user:pass@host:5432/dbname" \\
         --target-url "postgresql://user:pass@host:5432/dbname" \\
         --table chat_messages \\
         --start "2025-01-01T00:00:00+00:00" \\
         --end   "2025-01-02T00:00:00+00:00"
+
+使用方式（全表同步，適合無時間欄位的資料表）：
+    python sync_db.py \\
+        --source-url "postgresql://user:pass@host:5432/dbname" \\
+        --target-url "postgresql://user:pass@host:5432/dbname" \\
+        --table replace_words \\
+        --all
 
 選用參數：
     --time-column   指定時間過濾欄位（預設自動判斷）
@@ -175,12 +182,19 @@ def count_rows(
     start: datetime.datetime,
     end: datetime.datetime,
 ) -> int:
-    """計算來源資料列數（用於進度顯示）"""
+    """計算來源資料列數（時間範圍模式）"""
     with conn.cursor() as cur:
         cur.execute(
             f'SELECT COUNT(*) FROM "{table_name}" WHERE "{time_col}" >= %s AND "{time_col}" < %s',
             (start, end),
         )
+        return cur.fetchone()[0]
+
+
+def count_all_rows(conn, table_name: str) -> int:
+    """計算來源資料列數（全表模式）"""
+    with conn.cursor() as cur:
+        cur.execute(f'SELECT COUNT(*) FROM "{table_name}"')
         return cur.fetchone()[0]
 
 
@@ -237,6 +251,47 @@ def fetch_batch_keyset(
             LIMIT %s
         """
         params = (end, cursor_time, cursor_time, cursor_pk, batch_size)
+
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def fetch_batch_keyset_all(
+    conn,
+    table_name: str,
+    columns: list[str],
+    json_cols: dict[str, str],
+    pk_col: str,
+    cursor_pk,
+    batch_size: int,
+) -> list[tuple]:
+    """
+    全表 Keyset Pagination（無時間過濾）。
+    只以 pk_col 作為游標，適合無時間欄位或時間欄位全為 NULL 的資料表。
+    """
+    col_list = ", ".join(
+        f'"{c}"::text AS "{c}"' if c in json_cols else f'"{c}"'
+        for c in columns
+    )
+
+    if cursor_pk is None:
+        sql = f"""
+            SELECT {col_list}
+            FROM "{table_name}"
+            ORDER BY "{pk_col}"
+            LIMIT %s
+        """
+        params = (batch_size,)
+    else:
+        sql = f"""
+            SELECT {col_list}
+            FROM "{table_name}"
+            WHERE "{pk_col}" > %s
+            ORDER BY "{pk_col}"
+            LIMIT %s
+        """
+        params = (cursor_pk, batch_size)
 
     with conn.cursor() as cur:
         cur.execute(sql, params)
@@ -300,8 +355,9 @@ def sync(
     source_url: str,
     target_url: str,
     table_name: str,
-    start: datetime.datetime,
-    end: datetime.datetime,
+    start: Optional[datetime.datetime],
+    end: Optional[datetime.datetime],
+    sync_all: bool,
     time_column: Optional[str],
     batch_size: int,
     dry_run: bool,
@@ -315,7 +371,10 @@ def sync(
 
     print(f"\n{'='*60}")
     print(f"  Table      : {table_name}")
-    print(f"  Time range : {start.isoformat()} → {end.isoformat()}")
+    if sync_all:
+        print(f"  Time range : ALL ROWS")
+    else:
+        print(f"  Time range : {start.isoformat()} → {end.isoformat()}")
     print(f"  Batch size : {batch_size}")
     print(f"  Mode       : {'DRY-RUN (no writes)' if dry_run else 'LIVE'}")
     print(f"{'='*60}\n")
@@ -338,7 +397,7 @@ def sync(
         pk_columns   = get_primary_keys(src_conn, table_name)
         serial_cols  = get_serial_columns(src_conn, table_name)
         json_cols    = get_json_columns(src_conn, table_name)
-        time_col     = time_column or detect_time_column(table_name, columns)
+        time_col     = None if sync_all else (time_column or detect_time_column(table_name, columns))
         has_serial   = bool(serial_cols & set(pk_columns))
 
         if len(pk_columns) > 1:
@@ -350,18 +409,22 @@ def sync(
 
         print(f"Columns     : {columns}")
         print(f"PK column   : {pk_col}")
-        print(f"Time column : {time_col}")
+        if not sync_all:
+            print(f"Time column : {time_col}")
         if serial_cols:
             print(f"Serial cols : {sorted(serial_cols)}")
         if json_cols:
             print(f"JSON cols   : {sorted(json_cols)}")
         print()
 
-        if time_col not in columns:
+        if not sync_all and time_col not in columns:
             raise ValueError(f"Time column '{time_col}' not found in table '{table_name}'.")
 
         # ── 計算總筆數 ──
-        total = count_rows(src_conn, table_name, time_col, start, end)
+        if sync_all:
+            total = count_all_rows(src_conn, table_name)
+        else:
+            total = count_rows(src_conn, table_name, time_col, start, end)
         print(f"Rows to sync: {total:,}")
 
         if total == 0:
@@ -380,8 +443,8 @@ def sync(
             print(f"Row template: {row_template}\n")
 
         # ── 欄位索引（供游標提取用）──
-        time_col_idx = columns.index(time_col)
         pk_col_idx   = columns.index(pk_col)
+        time_col_idx = columns.index(time_col) if not sync_all else None
 
         # ── Keyset 批次同步 ──
         cursor_time    = None
@@ -393,20 +456,27 @@ def sync(
 
         while True:
             batch_num += 1
-            rows = fetch_batch_keyset(
-                src_conn, table_name, columns, json_cols,
-                time_col, pk_col,
-                start, end,
-                cursor_time, cursor_pk,
-                batch_size,
-            )
+            if sync_all:
+                rows = fetch_batch_keyset_all(
+                    src_conn, table_name, columns, json_cols,
+                    pk_col, cursor_pk, batch_size,
+                )
+            else:
+                rows = fetch_batch_keyset(
+                    src_conn, table_name, columns, json_cols,
+                    time_col, pk_col,
+                    start, end,
+                    cursor_time, cursor_pk,
+                    batch_size,
+                )
             if not rows:
                 break
 
             # 更新游標至本批最後一列
-            last_row    = rows[-1]
-            cursor_time = last_row[time_col_idx]
-            cursor_pk   = last_row[pk_col_idx]
+            last_row  = rows[-1]
+            cursor_pk = last_row[pk_col_idx]
+            if not sync_all:
+                cursor_time = last_row[time_col_idx]
 
             inserted = insert_batch(tgt_conn, insert_sql, rows, row_template)
             skipped  = len(rows) - inserted
@@ -480,15 +550,21 @@ def main():
         help="Table name to sync",
     )
     sync_group.add_argument(
+        "--all",
+        action="store_true",
+        dest="sync_all",
+        help="Sync all rows without time filtering (for tables with no time column or all-NULL timestamps)",
+    )
+    sync_group.add_argument(
         "--start",
-        required=True,
+        default=None,
         type=parse_datetime,
         metavar="DATETIME",
         help="Start time (inclusive), ISO 8601 format. e.g. '2025-01-01T00:00:00+00:00'",
     )
     sync_group.add_argument(
         "--end",
-        required=True,
+        default=None,
         type=parse_datetime,
         metavar="DATETIME",
         help="End time (exclusive), ISO 8601 format. e.g. '2025-01-02T00:00:00+00:00'",
@@ -524,7 +600,11 @@ def main():
 
     args = parser.parse_args()
 
-    if args.start >= args.end:
+    if args.sync_all and (args.start or args.end):
+        parser.error("--all cannot be used together with --start / --end")
+    if not args.sync_all and not (args.start and args.end):
+        parser.error("must provide either --all or both --start and --end")
+    if not args.sync_all and args.start >= args.end:
         parser.error("--start must be earlier than --end")
 
     try:
@@ -534,6 +614,7 @@ def main():
             table_name=args.table,
             start=args.start,
             end=args.end,
+            sync_all=args.sync_all,
             time_column=args.time_column,
             batch_size=args.batch_size,
             dry_run=args.dry_run,
