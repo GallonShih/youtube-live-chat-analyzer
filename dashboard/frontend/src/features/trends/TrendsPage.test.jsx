@@ -129,4 +129,54 @@ describe('TrendsPage', () => {
             expect(charts[1]).toHaveTextContent('A:1');
         });
     });
+
+    test('supports toggle all visibility checkbox', async () => {
+        const user = userEvent.setup();
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        const toggleAll = screen.getByLabelText('全部顯示詞彙組');
+
+        expect(toggleAll).not.toBeChecked();
+        expect(fetchTrendStats).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+
+        await user.click(toggleAll);
+        await waitFor(() => {
+            expect(toggleAll).toBeChecked();
+            expect(fetchTrendStats).toHaveBeenCalledTimes(1);
+            expect(screen.getAllByTestId('trend-chart')).toHaveLength(2);
+        });
+
+        await user.click(toggleAll);
+        await waitFor(() => {
+            expect(toggleAll).not.toBeChecked();
+            expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+        });
+    });
+
+    test('dedupes in-flight trend requests with identical params', async () => {
+        const user = userEvent.setup();
+        let resolveRequest;
+        const pendingRequest = new Promise((resolve) => {
+            resolveRequest = resolve;
+        });
+        fetchTrendStats.mockReset();
+        fetchTrendStats.mockReturnValue(pendingRequest);
+
+        render(<TrendsPage />);
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await user.click(screen.getByRole('button', { name: /篩選/ }));
+        await user.click(screen.getByRole('button', { name: /篩選/ }));
+
+        expect(fetchTrendStats).toHaveBeenCalledTimes(1);
+
+        resolveRequest({
+            groups: [{ group_id: 1, total_count: 1, data: [{ hour: '2026-02-18T00:00:00Z', count: 1 }] }],
+        });
+
+        await waitFor(() => expect(screen.getByTestId('trend-chart')).toHaveTextContent('A:1'));
+    });
 });
