@@ -251,4 +251,15 @@ describe('AuthorDetailContent', () => {
 
         mockFetchAll.mockRestore();
     });
+
+    test('shows classify link in messages tab', async () => {
+        const user = userEvent.setup();
+
+        render(<AuthorDetailContent authorId="author_1" />);
+        await screen.findByText('@AuthorOne');
+        await user.click(screen.getByRole('button', { name: 'Messages' }));
+
+        const link = screen.getByRole('link', { name: '分類 Message' });
+        expect(link).toHaveAttribute('href', expect.stringContaining('/authors/author_1/classify?'));
+    });
 });

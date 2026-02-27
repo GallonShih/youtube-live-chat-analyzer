@@ -41,6 +41,10 @@ vi.mock('./features/authors/AuthorPage', () => ({
     default: () => <div>author-page</div>,
 }));
 
+vi.mock('./features/authors/AuthorMessageClassificationPage', () => ({
+    default: () => <div>author-classify-page</div>,
+}));
+
 describe('App routes', () => {
     beforeEach(() => {
         authState.isAdmin = false;
@@ -74,5 +78,11 @@ describe('App routes', () => {
         window.history.pushState({}, '', '/playback');
         render(<App />);
         expect(screen.getByText('playback-page')).toBeInTheDocument();
+    });
+
+    test('supports author classification route', () => {
+        window.history.pushState({}, '', '/authors/author_1/classify');
+        render(<App />);
+        expect(screen.getByText('author-classify-page')).toBeInTheDocument();
     });
 });

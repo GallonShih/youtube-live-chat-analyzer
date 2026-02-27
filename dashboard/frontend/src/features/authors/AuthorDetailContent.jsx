@@ -440,6 +440,13 @@ const AuthorDetailContent = ({
         const query = params.toString();
         return `/authors/${encodeURIComponent(authorId)}${query ? `?${query}` : ''}`;
     }, [authorId, appliedRange]);
+    const classifyPageHref = useMemo(() => {
+        const params = new URLSearchParams();
+        if (appliedRange.startTime) params.append('start_time', appliedRange.startTime);
+        if (appliedRange.endTime) params.append('end_time', appliedRange.endTime);
+        const query = params.toString();
+        return `/authors/${encodeURIComponent(authorId)}/classify${query ? `?${query}` : ''}`;
+    }, [authorId, appliedRange]);
 
     const authorImageUrl = getAuthorImageUrl(summary?.author_images);
     const error = summaryError || messagesError;
@@ -674,6 +681,18 @@ const AuthorDetailContent = ({
 
             {tab === 'messages' && (
                 <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-gray-500">
+                            進入獨立頁面進行訊息分類。
+                        </div>
+                        <a
+                            href={classifyPageHref}
+                            className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                            分類 Message
+                        </a>
+                    </div>
+
                     {messagesLoading ? (
                         <div className="text-sm text-gray-500">載入中...</div>
                     ) : messages.length === 0 ? (
