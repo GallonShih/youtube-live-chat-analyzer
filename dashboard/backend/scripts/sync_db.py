@@ -108,21 +108,24 @@ def get_primary_keys(conn, table_name: str) -> list[str]:
     return [r[0] for r in rows]
 
 
-def get_jsonb_columns(conn, table_name: str) -> set[str]:
-    """找出 JSONB 欄位（頂層值可能是 dict 或 list，都需要用 Json() 包裝）"""
+def get_json_columns(conn, table_name: str) -> dict[str, str]:
+    """
+    找出 JSON / JSONB 欄位，回傳 {column_name: data_type}。
+    兩種型別讀取時都需要 ::text cast，寫入時用對應的 ::json / ::jsonb cast。
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT column_name
+            SELECT column_name, data_type
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name   = %s
-              AND data_type    = 'jsonb'
+              AND data_type    IN ('json', 'jsonb')
             """,
             (table_name,),
         )
         rows = cur.fetchall()
-    return {r[0] for r in rows}
+    return {r[0]: r[1] for r in rows}
 
 
 def get_serial_columns(conn, table_name: str) -> set[str]:
@@ -185,7 +188,7 @@ def fetch_batch_keyset(
     conn,
     table_name: str,
     columns: list[str],
-    jsonb_cols: set[str],
+    json_cols: dict[str, str],
     time_col: str,
     pk_col: str,
     start: datetime.datetime,
@@ -206,7 +209,7 @@ def fetch_batch_keyset(
     """
     # JSONB 欄位 cast 成 text，其餘保持原型別
     col_list = ", ".join(
-        f'"{c}"::text AS "{c}"' if c in jsonb_cols else f'"{c}"'
+        f'"{c}"::text AS "{c}"' if c in json_cols else f'"{c}"'
         for c in columns
     )
 
@@ -265,15 +268,18 @@ def build_insert_sql(
     )
 
 
-def build_row_template(columns: list[str], jsonb_cols: set[str]) -> str:
+def build_row_template(columns: list[str], json_cols: dict[str, str]) -> str:
     """
     建立 execute_values 的 per-row template。
-    JSONB 欄位使用 %s::jsonb，讓 PostgreSQL 把 text 轉回 JSONB：
-      - SQL NULL  → None → %s::jsonb → NULL           ✓
-      - JSON null → "null" → %s::jsonb → JSONB null   ✓
-      - JSON obj  → "{...}" → %s::jsonb → JSONB obj   ✓
+    JSON/JSONB 欄位使用 %s::json 或 %s::jsonb，讓 PostgreSQL 把 text 轉回正確型別：
+      - SQL NULL  → None   → %s::json[b] → NULL           ✓
+      - JSON null → "null" → %s::json[b] → JSON null      ✓
+      - JSON obj  → "{...}"→ %s::json[b] → JSON obj       ✓
     """
-    placeholders = ["%s::jsonb" if c in jsonb_cols else "%s" for c in columns]
+    placeholders = [
+        f"%s::{json_cols[c]}" if c in json_cols else "%s"
+        for c in columns
+    ]
     return "(" + ", ".join(placeholders) + ")"
 
 
@@ -331,10 +337,9 @@ def sync(
         columns      = get_columns(src_conn, table_name)
         pk_columns   = get_primary_keys(src_conn, table_name)
         serial_cols  = get_serial_columns(src_conn, table_name)
-        jsonb_cols   = get_jsonb_columns(src_conn, table_name)
+        json_cols    = get_json_columns(src_conn, table_name)
         time_col     = time_column or detect_time_column(table_name, columns)
         has_serial   = bool(serial_cols & set(pk_columns))
-        jsonb_indices = {i for i, c in enumerate(columns) if c in jsonb_cols}
 
         if len(pk_columns) > 1:
             raise ValueError(
@@ -348,8 +353,8 @@ def sync(
         print(f"Time column : {time_col}")
         if serial_cols:
             print(f"Serial cols : {sorted(serial_cols)}")
-        if jsonb_cols:
-            print(f"JSONB cols  : {sorted(jsonb_cols)}")
+        if json_cols:
+            print(f"JSON cols   : {sorted(json_cols)}")
         print()
 
         if time_col not in columns:
@@ -369,7 +374,7 @@ def sync(
 
         # ── 建立 INSERT SQL 與 per-row template ──
         insert_sql   = build_insert_sql(table_name, columns, pk_columns, has_serial)
-        row_template = build_row_template(columns, jsonb_cols)
+        row_template = build_row_template(columns, json_cols)
         if verbose:
             print(f"Insert SQL  : {insert_sql}")
             print(f"Row template: {row_template}\n")
@@ -389,7 +394,7 @@ def sync(
         while True:
             batch_num += 1
             rows = fetch_batch_keyset(
-                src_conn, table_name, columns, jsonb_cols,
+                src_conn, table_name, columns, json_cols,
                 time_col, pk_col,
                 start, end,
                 cursor_time, cursor_pk,
