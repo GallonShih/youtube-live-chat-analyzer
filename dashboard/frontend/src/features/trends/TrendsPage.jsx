@@ -67,8 +67,8 @@ const TrendsPage = () => {
             setLoadingGroups(true);
             const data = await fetchWordTrendGroups();
             setGroups(data);
-            // Default all groups to visible
-            setVisibleGroups(new Set(data.map(g => g.id)));
+            // Default all groups to hidden; user opt-in per group
+            setVisibleGroups(new Set());
             // Initialize chart order
             setChartOrder(data.map(g => g.id));
         } catch (err) {
@@ -137,7 +137,6 @@ const TrendsPage = () => {
             // Create new
             const created = await createWordTrendGroup(groupData);
             setGroups(prev => [...prev, created]);
-            setVisibleGroups(prev => new Set([...prev, created.id]));
             setChartOrder(prev => [...prev, created.id]);
             setIsAddingNew(false);
         }

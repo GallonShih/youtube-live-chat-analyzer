@@ -66,12 +66,17 @@ describe('TrendsPage', () => {
         deleteWordTrendGroup.mockResolvedValue({ success: true });
     });
 
-    test('loads groups and trend charts, and supports filter actions', async () => {
+    test('defaults all groups hidden and fetches trends only after toggling visible', async () => {
         const user = userEvent.setup();
         render(<TrendsPage />);
 
         await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
-        expect(screen.getAllByTestId('trend-chart').length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+        expect(fetchTrendStats).not.toHaveBeenCalled();
+
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await waitFor(() => expect(fetchTrendStats).toHaveBeenCalledTimes(1));
+        expect(screen.getAllByTestId('trend-chart').length).toBe(1);
 
         await user.click(screen.getByRole('button', { name: '24H' }));
         await user.click(screen.getByRole('button', { name: '3天' }));
@@ -90,6 +95,7 @@ describe('TrendsPage', () => {
         await user.click(screen.getByRole('button', { name: '+ 新增' }));
         await user.click(screen.getAllByRole('button', { name: 'save-group' })[0]);
         await waitFor(() => expect(createWordTrendGroup).toHaveBeenCalled());
+        expect(fetchTrendStats).not.toHaveBeenCalled();
 
         // Update existing group
         await user.click(screen.getAllByRole('button', { name: 'save-group' })[1]);
