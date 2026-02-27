@@ -223,6 +223,7 @@ class WordTrendGroup(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False, unique=True)
     words = Column(JSON, nullable=False)  # Array of strings: ["holo", "cover", "星街"]
+    exclude_words = Column(JSON, nullable=True)  # Optional: messages matching any exclude word are not counted
     color = Column(String(20), default='#5470C6')
     created_at = Column(DateTime(timezone=True), default=func.current_timestamp())
     updated_at = Column(DateTime(timezone=True), default=func.current_timestamp(), onupdate=func.current_timestamp())

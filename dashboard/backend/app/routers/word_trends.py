@@ -6,7 +6,7 @@ for trend analysis, and query hourly message counts for those words.
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta, timezone
@@ -21,10 +21,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/word-trends", tags=["word-trends"])
 
 
+def _escape_like(value: str) -> str:
+    """Escape LIKE metacharacters so user input is treated as literal text."""
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 class WordGroupCreate(BaseModel):
     """Schema for creating a new word group."""
     name: str = Field(..., min_length=1, max_length=100)
     words: List[str] = Field(..., min_items=1)
+    exclude_words: Optional[List[str]] = []
     color: str = Field(default='#5470C6', max_length=20)
 
 
@@ -32,6 +38,7 @@ class WordGroupUpdate(BaseModel):
     """Schema for updating an existing word group."""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     words: Optional[List[str]] = Field(None, min_items=0)
+    exclude_words: Optional[List[str]] = None
     color: Optional[str] = Field(None, max_length=20)
 
 
@@ -40,6 +47,7 @@ class WordGroupResponse(BaseModel):
     id: int
     name: str
     words: List[str]
+    exclude_words: List[str]
     color: str
     created_at: str
     updated_at: str
@@ -86,6 +94,7 @@ def list_word_groups(db: Session = Depends(get_db)):
                 id=g.id,
                 name=g.name,
                 words=g.words or [],
+                exclude_words=g.exclude_words or [],
                 color=g.color or '#5470C6',
                 created_at=g.created_at.isoformat() if g.created_at else "",
                 updated_at=g.updated_at.isoformat() if g.updated_at else ""
@@ -108,6 +117,7 @@ def get_word_group(group_id: int, db: Session = Depends(get_db)):
         id=group.id,
         name=group.name,
         words=group.words or [],
+        exclude_words=group.exclude_words or [],
         color=group.color or '#5470C6',
         created_at=group.created_at.isoformat() if group.created_at else "",
         updated_at=group.updated_at.isoformat() if group.updated_at else ""
@@ -127,19 +137,23 @@ def create_word_group(data: WordGroupCreate, db: Session = Depends(get_db)):
         words = [w.strip() for w in data.words if w.strip()]
         if not words:
             raise HTTPException(status_code=400, detail="At least one non-empty word is required")
-        
+
+        exclude_words = [w.strip() for w in data.exclude_words if w.strip()] if data.exclude_words else []
+
         group = WordTrendGroup(
             name=data.name.strip(),
             words=words,
+            exclude_words=exclude_words or None,
             color=data.color
         )
         db.add(group)
         db.flush()
-        
+
         return WordGroupResponse(
             id=group.id,
             name=group.name,
             words=group.words or [],
+            exclude_words=group.exclude_words or [],
             color=group.color or '#5470C6',
             created_at=group.created_at.isoformat() if group.created_at else "",
             updated_at=group.updated_at.isoformat() if group.updated_at else ""
@@ -180,13 +194,18 @@ def update_word_group(group_id: int, data: WordGroupUpdate, db: Session = Depend
         
         if data.color is not None:
             group.color = data.color
-        
+
+        if data.exclude_words is not None:
+            exclude_words = [w.strip() for w in data.exclude_words if w.strip()]
+            group.exclude_words = exclude_words or None
+
         db.flush()
-        
+
         return WordGroupResponse(
             id=group.id,
             name=group.name,
             words=group.words or [],
+            exclude_words=group.exclude_words or [],
             color=group.color or '#5470C6',
             created_at=group.created_at.isoformat() if group.created_at else "",
             updated_at=group.updated_at.isoformat() if group.updated_at else ""
@@ -266,8 +285,7 @@ def get_trend_stats(data: TrendStatsRequest, db: Session = Depends(get_db)):
             trunc_func = func.date_trunc('hour', ChatMessage.published_at)
             
             # Create OR conditions for word matching
-            from sqlalchemy import or_
-            word_conditions = [ChatMessage.message.ilike(f'%{word}%') for word in words]
+            word_conditions = [ChatMessage.message.ilike(f'%{_escape_like(word)}%') for word in words]
             
             query = db.query(
                 trunc_func.label('hour'),
@@ -280,7 +298,13 @@ def get_trend_stats(data: TrendStatsRequest, db: Session = Depends(get_db)):
             
             if video_id:
                 query = query.filter(ChatMessage.live_stream_id == video_id)
-            
+
+            # Apply exclude_words filter: messages matching any exclude word are not counted
+            exclude_words_list = group.exclude_words or []
+            if exclude_words_list:
+                exclude_conditions = [ChatMessage.message.ilike(f'%{_escape_like(w)}%') for w in exclude_words_list]
+                query = query.filter(~or_(*exclude_conditions))
+
             results = query.group_by(trunc_func).order_by(trunc_func).all()
             
             hourly_data = [

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     ArrowTrendingUpIcon,
     MagnifyingGlassIcon,
@@ -41,6 +41,9 @@ const TrendsPage = () => {
     // Trend data state
     const [trendData, setTrendData] = useState({});
     const [loadingTrends, setLoadingTrends] = useState(false);
+    const inFlightTrendRequestsRef = useRef(new Map());
+    const pendingTrendRequestCountRef = useRef(0);
+    const latestTrendRequestIdRef = useRef(0);
 
     // Chart display options
     const [lineWidth, setLineWidth] = useState(2);
@@ -67,8 +70,8 @@ const TrendsPage = () => {
             setLoadingGroups(true);
             const data = await fetchWordTrendGroups();
             setGroups(data);
-            // Default all groups to visible
-            setVisibleGroups(new Set(data.map(g => g.id)));
+            // Default all groups to hidden; user opt-in per group
+            setVisibleGroups(new Set());
             // Initialize chart order
             setChartOrder(data.map(g => g.id));
         } catch (err) {
@@ -86,37 +89,70 @@ const TrendsPage = () => {
             return;
         }
 
+        const sortedGroupIds = [...visibleGroupIds].sort((a, b) => a - b);
+
+        let startTime = null;
+        let endTime = null;
+
+        if (startDate) {
+            startTime = new Date(startDate).toISOString();
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            d.setMinutes(59, 59, 999);
+            endTime = d.toISOString();
+        }
+
+        const requestKey = JSON.stringify({
+            groupIds: sortedGroupIds,
+            startTime,
+            endTime
+        });
+
+        const existingRequest = inFlightTrendRequestsRef.current.get(requestKey);
+        if (existingRequest) {
+            await existingRequest;
+            return;
+        }
+
+        const requestId = ++latestTrendRequestIdRef.current;
+        pendingTrendRequestCountRef.current += 1;
+        setLoadingTrends(true);
+
+        const requestPromise = (async () => {
+            try {
+                const result = await fetchTrendStats({
+                    groupIds: sortedGroupIds,
+                    startTime,
+                    endTime
+                });
+
+                // Ignore stale responses; only latest request should update chart data
+                if (requestId !== latestTrendRequestIdRef.current) return;
+
+                // Convert to map for easy lookup
+                const dataMap = {};
+                result.groups.forEach(g => {
+                    dataMap[g.group_id] = g;
+                });
+                setTrendData(dataMap);
+            } catch (err) {
+                console.error('Failed to load trend data:', err);
+            } finally {
+                inFlightTrendRequestsRef.current.delete(requestKey);
+                pendingTrendRequestCountRef.current = Math.max(0, pendingTrendRequestCountRef.current - 1);
+                if (pendingTrendRequestCountRef.current === 0) {
+                    setLoadingTrends(false);
+                }
+            }
+        })();
+
+        inFlightTrendRequestsRef.current.set(requestKey, requestPromise);
+
         try {
-            setLoadingTrends(true);
-
-            let startTime = null;
-            let endTime = null;
-
-            if (startDate) {
-                startTime = new Date(startDate).toISOString();
-            }
-            if (endDate) {
-                const d = new Date(endDate);
-                d.setMinutes(59, 59, 999);
-                endTime = d.toISOString();
-            }
-
-            const result = await fetchTrendStats({
-                groupIds: visibleGroupIds,
-                startTime,
-                endTime
-            });
-
-            // Convert to map for easy lookup
-            const dataMap = {};
-            result.groups.forEach(g => {
-                dataMap[g.group_id] = g;
-            });
-            setTrendData(dataMap);
-        } catch (err) {
-            console.error('Failed to load trend data:', err);
-        } finally {
-            setLoadingTrends(false);
+            await requestPromise;
+        } catch {
+            // requestPromise handles and logs errors
         }
     }, [visibleGroups, startDate, endDate]);
 
@@ -137,7 +173,6 @@ const TrendsPage = () => {
             // Create new
             const created = await createWordTrendGroup(groupData);
             setGroups(prev => [...prev, created]);
-            setVisibleGroups(prev => new Set([...prev, created.id]));
             setChartOrder(prev => [...prev, created.id]);
             setIsAddingNew(false);
         }
@@ -171,6 +206,15 @@ const TrendsPage = () => {
         });
     };
 
+    const allVisible = groups.length > 0 && visibleGroups.size === groups.length;
+    const handleToggleAllVisibility = () => {
+        if (allVisible) {
+            setVisibleGroups(new Set());
+            return;
+        }
+        setVisibleGroups(new Set(groups.map(g => g.id)));
+    };
+
     const handleFilter = () => {
         loadTrendData();
     };
@@ -178,6 +222,24 @@ const TrendsPage = () => {
     const handleClearFilter = () => {
         // Reset to default 24h range
         setQuickRange(24);
+    };
+
+    const handleSortByMessageVolume = () => {
+        setChartOrder(prev => {
+            const visibleIds = prev.filter(id => visibleGroups.has(id));
+            const hiddenIds = prev.filter(id => !visibleGroups.has(id));
+
+            const getTotalCount = (groupId) => {
+                const groupData = trendData[groupId];
+                if (!groupData) return 0;
+                if (typeof groupData.total_count === 'number') return groupData.total_count;
+                if (!Array.isArray(groupData.data)) return 0;
+                return groupData.data.reduce((sum, item) => sum + (item.count || 0), 0);
+            };
+
+            visibleIds.sort((a, b) => getTotalCount(b) - getTotalCount(a));
+            return [...visibleIds, ...hiddenIds];
+        });
     };
 
     // Quick time range setters
@@ -305,15 +367,28 @@ const TrendsPage = () => {
                         <div className="glass-card rounded-2xl p-3 sm:p-4">
                             <div className="flex items-center justify-between mb-3 sm:mb-4">
                                 <h2 className="text-base sm:text-lg font-semibold text-gray-800">詞彙組管理</h2>
-                                {isAdmin && (
-                                    <button
-                                        onClick={() => setIsAddingNew(true)}
-                                        disabled={isAddingNew}
-                                        className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                                    >
-                                        + 新增
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={allVisible}
+                                            onChange={handleToggleAllVisibility}
+                                            disabled={groups.length === 0}
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                                            aria-label="全部顯示詞彙組"
+                                        />
+                                        全部顯示
+                                    </label>
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => setIsAddingNew(true)}
+                                            disabled={isAddingNew}
+                                            className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                        >
+                                            + 新增
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {loadingGroups ? (
@@ -388,6 +463,13 @@ const TrendsPage = () => {
                                         />
                                         顯示資料點
                                     </label>
+                                    <button
+                                        onClick={handleSortByMessageVolume}
+                                        disabled={visibleGroups.size < 2}
+                                        className="px-2.5 py-1.5 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                    >
+                                        依訊息量排序
+                                    </button>
                                     {loadingTrends && (
                                         <div className="flex items-center gap-2 text-sm text-indigo-600">
                                             <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />

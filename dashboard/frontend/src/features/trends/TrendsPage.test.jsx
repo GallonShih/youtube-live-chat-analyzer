@@ -57,8 +57,8 @@ describe('TrendsPage', () => {
         ]);
         fetchTrendStats.mockResolvedValue({
             groups: [
-                { group_id: 1, data: [{ ts: 't1', value: 1 }] },
-                { group_id: 2, data: [{ ts: 't2', value: 2 }] },
+                { group_id: 1, total_count: 1, data: [{ hour: '2026-02-18T00:00:00Z', count: 1 }] },
+                { group_id: 2, total_count: 2, data: [{ hour: '2026-02-18T00:00:00Z', count: 2 }] },
             ],
         });
         createWordTrendGroup.mockResolvedValue({ id: 3, name: 'NewGroup', color: '#000', words: ['x'] });
@@ -66,12 +66,17 @@ describe('TrendsPage', () => {
         deleteWordTrendGroup.mockResolvedValue({ success: true });
     });
 
-    test('loads groups and trend charts, and supports filter actions', async () => {
+    test('defaults all groups hidden and fetches trends only after toggling visible', async () => {
         const user = userEvent.setup();
         render(<TrendsPage />);
 
         await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
-        expect(screen.getAllByTestId('trend-chart').length).toBeGreaterThan(0);
+        expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+        expect(fetchTrendStats).not.toHaveBeenCalled();
+
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await waitFor(() => expect(fetchTrendStats).toHaveBeenCalledTimes(1));
+        expect(screen.getAllByTestId('trend-chart').length).toBe(1);
 
         await user.click(screen.getByRole('button', { name: '24H' }));
         await user.click(screen.getByRole('button', { name: '3天' }));
@@ -90,6 +95,7 @@ describe('TrendsPage', () => {
         await user.click(screen.getByRole('button', { name: '+ 新增' }));
         await user.click(screen.getAllByRole('button', { name: 'save-group' })[0]);
         await waitFor(() => expect(createWordTrendGroup).toHaveBeenCalled());
+        expect(fetchTrendStats).not.toHaveBeenCalled();
 
         // Update existing group
         await user.click(screen.getAllByRole('button', { name: 'save-group' })[1]);
@@ -99,5 +105,78 @@ describe('TrendsPage', () => {
         await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
         await user.click(screen.getAllByRole('button', { name: 'delete-group' })[0]);
         await waitFor(() => expect(deleteWordTrendGroup).toHaveBeenCalledWith(1));
+    });
+
+    test('sorts visible charts by message volume when sort button is clicked', async () => {
+        const user = userEvent.setup();
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[1]);
+
+        await waitFor(() => {
+            const charts = screen.getAllByTestId('trend-chart');
+            expect(charts[0]).toHaveTextContent('A:1');
+            expect(charts[1]).toHaveTextContent('B:1');
+        });
+
+        await user.click(screen.getByRole('button', { name: '依訊息量排序' }));
+
+        await waitFor(() => {
+            const charts = screen.getAllByTestId('trend-chart');
+            expect(charts[0]).toHaveTextContent('B:1');
+            expect(charts[1]).toHaveTextContent('A:1');
+        });
+    });
+
+    test('supports toggle all visibility checkbox', async () => {
+        const user = userEvent.setup();
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        const toggleAll = screen.getByLabelText('全部顯示詞彙組');
+
+        expect(toggleAll).not.toBeChecked();
+        expect(fetchTrendStats).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+
+        await user.click(toggleAll);
+        await waitFor(() => {
+            expect(toggleAll).toBeChecked();
+            expect(fetchTrendStats).toHaveBeenCalledTimes(1);
+            expect(screen.getAllByTestId('trend-chart')).toHaveLength(2);
+        });
+
+        await user.click(toggleAll);
+        await waitFor(() => {
+            expect(toggleAll).not.toBeChecked();
+            expect(screen.queryByTestId('trend-chart')).not.toBeInTheDocument();
+        });
+    });
+
+    test('dedupes in-flight trend requests with identical params', async () => {
+        const user = userEvent.setup();
+        let resolveRequest;
+        const pendingRequest = new Promise((resolve) => {
+            resolveRequest = resolve;
+        });
+        fetchTrendStats.mockReset();
+        fetchTrendStats.mockReturnValue(pendingRequest);
+
+        render(<TrendsPage />);
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await user.click(screen.getByRole('button', { name: /篩選/ }));
+        await user.click(screen.getByRole('button', { name: /篩選/ }));
+
+        expect(fetchTrendStats).toHaveBeenCalledTimes(1);
+
+        resolveRequest({
+            groups: [{ group_id: 1, total_count: 1, data: [{ hour: '2026-02-18T00:00:00Z', count: 1 }] }],
+        });
+
+        await waitFor(() => expect(screen.getByTestId('trend-chart')).toHaveTextContent('A:1'));
     });
 });
