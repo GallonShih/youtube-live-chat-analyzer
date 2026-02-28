@@ -116,39 +116,37 @@ export default function IncenseMapPage() {
         return <span className="ml-1">{sortAsc ? '↑' : '↓'}</span>;
     };
 
-    if (loading) return (
-        <div className="min-h-screen font-sans">
-            <div className="max-w-3xl mx-auto p-6">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
+    const PageShell = ({ children }) => (
+        <div className="min-h-screen font-sans text-gray-900">
+            <div className="max-w-7xl mx-auto p-4 md:p-8">
+                <header className="flex justify-between items-center mb-6 relative">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white drop-shadow-lg">
+                        地區上香分布
+                    </h1>
                     <Navigation />
                 </header>
-                <div className="flex items-center justify-center h-64 text-white/70">載入中...</div>
+                {children}
             </div>
         </div>
     );
+
+    if (loading) return (
+        <PageShell>
+            <div className="flex items-center justify-center h-64 text-white/70">載入中...</div>
+        </PageShell>
+    );
     if (error) return (
-        <div className="min-h-screen font-sans">
-            <div className="max-w-3xl mx-auto p-6">
-                <header className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
-                    <Navigation />
-                </header>
-                <div className="flex items-center justify-center h-64 text-red-300">錯誤：{error}</div>
-            </div>
-        </div>
+        <PageShell>
+            <div className="flex items-center justify-center h-64 text-red-300">錯誤：{error}</div>
+        </PageShell>
     );
 
     const displayTotal = mappedCandidates.reduce((s, c) => s + c.count, 0);
     const displayUnique = mappedCandidates.length;
 
     return (
-        <div className="min-h-screen font-sans">
-        <div className="max-w-3xl mx-auto p-6">
-            <header className="flex justify-between items-center mb-1">
-                <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
-                <Navigation />
-            </header>
+        <PageShell>
+            {/* 摘要 */}
             <p className="text-sm text-white/70 mb-4">
                 共 {displayTotal.toLocaleString()} 則上香訊息，{displayUnique} 個候選詞
                 {mappings.length > 0 && (
@@ -157,38 +155,40 @@ export default function IncenseMapPage() {
             </p>
 
             {/* 時間 filter */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-                <input
-                    type="datetime-local"
-                    step="3600"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-                <span className="text-gray-400">→</span>
-                <input
-                    type="datetime-local"
-                    step="3600"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-                <button
-                    onClick={() => load(startDate, endDate)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
-                >
-                    套用
-                </button>
-                <button
-                    onClick={() => { setStartDate(''); setEndDate(''); load('', ''); }}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                >
-                    全部
-                </button>
+            <div className="glass-card p-3 sm:p-4 rounded-2xl mb-4 sm:mb-6">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <input
+                        type="datetime-local"
+                        step="3600"
+                        value={startDate}
+                        onChange={e => setStartDate(e.target.value)}
+                        className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 flex-1 sm:flex-none min-w-0"
+                    />
+                    <span className="text-gray-500">→</span>
+                    <input
+                        type="datetime-local"
+                        step="3600"
+                        value={endDate}
+                        onChange={e => setEndDate(e.target.value)}
+                        className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 flex-1 sm:flex-none min-w-0"
+                    />
+                    <button
+                        onClick={() => load(startDate, endDate)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+                    >
+                        套用
+                    </button>
+                    <button
+                        onClick={() => { setStartDate(''); setEndDate(''); load('', ''); }}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                    >
+                        全部
+                    </button>
+                </div>
             </div>
 
             {/* Mapping 上傳區 */}
-            <div className="mb-4">
+            <div className="glass-card p-3 sm:p-4 rounded-2xl mb-4 sm:mb-6">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                     <input
                         ref={fileInputRef}
@@ -200,14 +200,14 @@ export default function IncenseMapPage() {
                     />
                     <button
                         onClick={() => fileInputRef.current.click()}
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                        className="bg-white/70 hover:bg-white/90 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-gray-300"
                     >
                         + 新增 Mapping JSON
                     </button>
                     {mappings.length > 1 && (
                         <button
                             onClick={clearAllMappings}
-                            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                            className="text-xs text-gray-500 hover:text-red-500 transition-colors"
                             aria-label="清除所有 mapping"
                         >
                             全部清除
@@ -220,11 +220,11 @@ export default function IncenseMapPage() {
 
                 {/* mapping 清單 */}
                 {mappings.length > 0 && (
-                    <ol className="flex flex-col gap-1">
+                    <ol className="flex flex-col gap-1 mt-1">
                         {mappings.map(({ name }, i) => (
                             <li key={i} className="flex items-center gap-2 text-sm">
                                 <span className="text-gray-400 w-5 text-right shrink-0">{i + 1}.</span>
-                                <span className="text-indigo-600 font-medium">{name}</span>
+                                <span className="text-indigo-700 font-medium">{name}</span>
                                 <button
                                     onClick={() => removeMapping(i)}
                                     className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
@@ -239,26 +239,27 @@ export default function IncenseMapPage() {
             </div>
 
             {/* 搜尋 + 下載 */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex gap-2 mb-4">
                 <input
                     type="text"
                     placeholder="搜尋詞彙..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full mr-3 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="flex-1 px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white/80 border border-white/50 text-gray-700 placeholder-gray-400"
                 />
                 <button
                     onClick={handleDownload}
                     disabled={sorted.length === 0}
-                    className="shrink-0 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                    className="shrink-0 bg-white/80 hover:bg-white disabled:opacity-40 text-gray-700 border border-white/50 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
                 >
                     ↓ 下載
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow overflow-hidden">
+            {/* 表格 */}
+            <div className="glass-card rounded-2xl overflow-hidden">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-600 font-semibold">
+                    <thead className="bg-white/30 text-gray-700 font-semibold">
                         <tr>
                             <th className="px-4 py-3 text-left w-12">#</th>
                             <th
@@ -281,22 +282,22 @@ export default function IncenseMapPage() {
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-white/20">
                         {sorted.map((c, i) => (
-                            <tr key={c.word} className="hover:bg-indigo-50 transition-colors">
-                                <td className="px-4 py-2 text-gray-400">{i + 1}</td>
-                                <td className="px-4 py-2 font-medium text-gray-800">{c.word}</td>
-                                <td className="px-4 py-2 text-right text-gray-700">
+                            <tr key={c.word} className="hover:bg-white/20 transition-colors">
+                                <td className="px-4 py-2.5 text-gray-500">{i + 1}</td>
+                                <td className="px-4 py-2.5 font-medium text-gray-800">{c.word}</td>
+                                <td className="px-4 py-2.5 text-right text-gray-700">
                                     {c.count.toLocaleString()}
                                 </td>
-                                <td className="px-4 py-2 text-right text-gray-500">
+                                <td className="px-4 py-2.5 text-right text-gray-600">
                                     {c.percentage}%
                                 </td>
                             </tr>
                         ))}
                         {sorted.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
+                                <td colSpan={4} className="px-4 py-10 text-center text-gray-400">
                                     找不到符合的詞彙
                                 </td>
                             </tr>
@@ -304,7 +305,6 @@ export default function IncenseMapPage() {
                     </tbody>
                 </table>
             </div>
-        </div>
-        </div>
+        </PageShell>
     );
 }
