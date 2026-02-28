@@ -193,4 +193,111 @@ describe('IncenseMapPage', () => {
         const rows = screen.getAllByRole('row');
         expect(rows).toHaveLength(4); // 1 header + 3 data rows
     });
+
+    // ── Mapping 功能 ──────────────────────────────────────────────────────
+
+    const uploadMapping = async (user, json) => {
+        const file = new File([JSON.stringify(json)], 'mapping.json', { type: 'application/json' });
+        const input = document.querySelector('input[type="file"]');
+        await user.upload(input, file);
+    };
+
+    test('shows upload button', async () => {
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: '上傳 Mapping JSON' })).toBeInTheDocument();
+    });
+
+    test('applies mapping and merges counts', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        // 高雄 (2) + 台北 (1) → 南部 (3)
+        await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
+
+        await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
+        expect(screen.queryByText('高雄')).not.toBeInTheDocument();
+        expect(screen.queryByText('台北')).not.toBeInTheDocument();
+        // 南部 count = 3，與台中 count = 3 並列
+        const rows = screen.getAllByRole('row').slice(1);
+        expect(rows).toHaveLength(2); // 台中 + 南部
+    });
+
+    test('recalculates percentage after mapping', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        // 高雄 (2) + 台北 (1) → 南部 (3)；台中 (3)；total = 6
+        await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
+
+        await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
+        // 台中: 3/6 = 50%, 南部: 3/6 = 50%
+        const percentages = screen.getAllByText('50%');
+        expect(percentages.length).toBe(2);
+    });
+
+    test('shows filename and clear button after upload', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await uploadMapping(user, { 高雄: '南部' });
+
+        await waitFor(() => expect(screen.getByText('mapping.json')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: '清除 mapping' })).toBeInTheDocument();
+        expect(screen.getByText(/已套用 mapping/)).toBeInTheDocument();
+    });
+
+    test('clears mapping and restores original data', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
+        await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '清除 mapping' }));
+
+        await waitFor(() => expect(screen.getByText('高雄')).toBeInTheDocument());
+        expect(screen.getByText('台北')).toBeInTheDocument();
+        expect(screen.queryByText('南部')).not.toBeInTheDocument();
+        expect(screen.queryByText(/已套用 mapping/)).not.toBeInTheDocument();
+    });
+
+    test('shows error for invalid JSON file', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        const badFile = new File(['not json {{'], 'bad.json', { type: 'application/json' });
+        const input = document.querySelector('input[type="file"]');
+        await user.upload(input, badFile);
+
+        await waitFor(() =>
+            expect(screen.getByText(/JSON \u683c\u5f0f\u932f\u8aa4|Unexpected token|JSON Parse error/i)).toBeInTheDocument()
+        );
+    });
+
+    test('unmapped words keep original key', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        // 只 map 台北，高雄和台中應保持原名
+        await uploadMapping(user, { 台北: '北部' });
+
+        await waitFor(() => expect(screen.getByText('北部')).toBeInTheDocument());
+        expect(screen.getByText('台中')).toBeInTheDocument();
+        expect(screen.getByText('高雄')).toBeInTheDocument();
+        expect(screen.queryByText('台北')).not.toBeInTheDocument();
+    });
 });
