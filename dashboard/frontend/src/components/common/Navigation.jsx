@@ -12,6 +12,7 @@ import {
     ChevronDownIcon,
     EyeIcon,
     EyeSlashIcon,
+    FireIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -47,6 +48,7 @@ const Navigation = () => {
         { path: '/', label: 'Dashboard', icon: ChartBarIcon },
         { path: '/playback', label: 'Playback', icon: PlayIcon },
         { path: '/trends', label: 'Trends', icon: ArrowTrendingUpIcon },
+        { path: '/incense-map', label: 'Incense', icon: FireIcon },
         ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Cog6ToothIcon }] : []),
     ];
 

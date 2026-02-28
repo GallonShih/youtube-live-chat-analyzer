@@ -9,6 +9,7 @@ import PlaybackPage from './features/playback/PlaybackPage';
 import TrendsPage from './features/trends/TrendsPage';
 import AuthorPage from './features/authors/AuthorPage';
 import AuthorMessageClassificationPage from './features/authors/AuthorMessageClassificationPage';
+import IncenseMapPage from './features/incense-map/IncenseMapPage';
 
 // Protected Route component for admin-only pages
 const ProtectedRoute = ({ children }) => {
@@ -43,6 +44,7 @@ function AppRoutes() {
             <Route path="/trends" element={<TrendsPage />} />
             <Route path="/authors/:authorId" element={<AuthorPage />} />
             <Route path="/authors/:authorId/classify" element={<AuthorMessageClassificationPage />} />
+            <Route path="/incense-map" element={<IncenseMapPage />} />
         </Routes>
     );
 }
