@@ -108,7 +108,7 @@ describe('TrendsPage', () => {
         await waitFor(() => expect(deleteWordTrendGroup).toHaveBeenCalledWith(1));
     });
 
-    test('sorts visible charts by message volume when sort button is clicked', async () => {
+    test('sorts visible charts by message volume with sort mode selector', async () => {
         const user = userEvent.setup();
         render(<TrendsPage />);
 
@@ -122,13 +122,49 @@ describe('TrendsPage', () => {
             expect(charts[1]).toHaveTextContent('B:1');
         });
 
-        await user.click(screen.getByRole('button', { name: '依訊息量排序' }));
+        const selects = screen.getAllByRole('combobox');
+        const sortModeSelect = selects[1];
+        await user.selectOptions(sortModeSelect, 'volume_desc');
 
         await waitFor(() => {
             const charts = screen.getAllByTestId('trend-chart');
             expect(charts[0]).toHaveTextContent('B:1');
             expect(charts[1]).toHaveTextContent('A:1');
         });
+    });
+
+    test('limits displayed charts by top N selector', async () => {
+        const user = userEvent.setup();
+        fetchWordTrendGroups.mockResolvedValue([
+            { id: 1, name: 'A', color: '#f00', words: ['a'] },
+            { id: 2, name: 'B', color: '#0f0', words: ['b'] },
+            { id: 3, name: 'C', color: '#00f', words: ['c'] },
+            { id: 4, name: 'D', color: '#ff0', words: ['d'] },
+            { id: 5, name: 'E', color: '#0ff', words: ['e'] },
+            { id: 6, name: 'F', color: '#f0f', words: ['f'] },
+        ]);
+        fetchTrendStats.mockImplementation(async ({ groupIds }) => ({
+            groups: groupIds.map((id) => ({
+                group_id: id,
+                total_count: id,
+                data: [{ hour: '2026-02-18T00:00:00Z', count: id }],
+            })),
+        }));
+
+        render(<TrendsPage />);
+        await waitFor(() => expect(screen.getByTestId('group-card-6')).toBeInTheDocument());
+
+        for (const btn of screen.getAllByRole('button', { name: 'toggle-group' })) {
+            await user.click(btn);
+        }
+
+        await waitFor(() => expect(screen.getAllByTestId('trend-chart')).toHaveLength(6));
+
+        const selects = screen.getAllByRole('combobox');
+        const topNSelect = selects[2];
+        await user.selectOptions(topNSelect, '5');
+
+        await waitFor(() => expect(screen.getAllByTestId('trend-chart')).toHaveLength(5));
     });
 
     test('supports toggle all visibility checkbox', async () => {
