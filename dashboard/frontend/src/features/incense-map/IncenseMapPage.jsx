@@ -8,13 +8,22 @@ export default function IncenseMapPage() {
     const [sortKey, setSortKey] = useState('count');
     const [sortAsc, setSortAsc] = useState(false);
     const [search, setSearch] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
-    useEffect(() => {
-        fetchIncenseCandidates()
+    const load = (start, end) => {
+        setLoading(true);
+        setError(null);
+        fetchIncenseCandidates({
+            startTime: start || undefined,
+            endTime: end || undefined,
+        })
             .then(setData)
             .catch(e => setError(e.message))
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => { load('', ''); }, []);
 
     const sorted = useMemo(() => {
         if (!data) return [];
@@ -49,9 +58,39 @@ export default function IncenseMapPage() {
     return (
         <div className="max-w-3xl mx-auto p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-1">地區上香分布</h1>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-gray-500 mb-4">
                 共 {data.total_matched.toLocaleString()} 則上香訊息，{data.unique_candidates} 個候選詞
             </p>
+
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+                <input
+                    type="datetime-local"
+                    step="3600"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <span className="text-gray-400">→</span>
+                <input
+                    type="datetime-local"
+                    step="3600"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button
+                    onClick={() => load(startDate, endDate)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+                >
+                    套用
+                </button>
+                <button
+                    onClick={() => { setStartDate(''); setEndDate(''); load('', ''); }}
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                >
+                    全部
+                </button>
+            </div>
 
             <input
                 type="text"
