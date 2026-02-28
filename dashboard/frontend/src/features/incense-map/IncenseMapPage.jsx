@@ -1,6 +1,21 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { fetchIncenseCandidates } from '../../api/incenseMap';
 
+// 對一組 candidates 套用單一 mapping，回傳合併後的新 candidates
+function applyOneMapping(candidates, map) {
+    const grouped = {};
+    for (const { word, count } of candidates) {
+        const target = map[word] ?? word;
+        grouped[target] = (grouped[target] ?? 0) + count;
+    }
+    const total = Object.values(grouped).reduce((a, b) => a + b, 0);
+    return Object.entries(grouped).map(([word, count]) => ({
+        word,
+        count,
+        percentage: total > 0 ? Math.round(count / total * 10000) / 100 : 0,
+    }));
+}
+
 export default function IncenseMapPage() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -10,8 +25,8 @@ export default function IncenseMapPage() {
     const [search, setSearch] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [mapping, setMapping] = useState(null);       // { original: mapped }
-    const [mappingName, setMappingName] = useState(''); // uploaded filename
+    // [{ name: string, map: object }]
+    const [mappings, setMappings] = useState([]);
     const [mappingError, setMappingError] = useState('');
     const fileInputRef = useRef(null);
 
@@ -38,43 +53,34 @@ export default function IncenseMapPage() {
                 const parsed = JSON.parse(ev.target.result);
                 if (typeof parsed !== 'object' || Array.isArray(parsed))
                     throw new Error('JSON 格式錯誤：需為 key-value 物件');
-                setMapping(parsed);
-                setMappingName(file.name);
+                setMappings(prev => [...prev, { name: file.name, map: parsed }]);
                 setMappingError('');
             } catch (err) {
                 setMappingError(err.message);
-                setMapping(null);
-                setMappingName('');
             }
         };
         reader.readAsText(file, 'utf-8');
-        // reset input so same file can be re-uploaded
         e.target.value = '';
     };
 
-    const clearMapping = () => {
-        setMapping(null);
-        setMappingName('');
+    const removeMapping = (index) => {
+        setMappings(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const clearAllMappings = () => {
+        setMappings([]);
         setMappingError('');
     };
 
-    // Apply mapping + aggregate counts
+    // 依序套用每一層 mapping
     const mappedCandidates = useMemo(() => {
         if (!data) return [];
-        if (!mapping) return data.candidates;
-
-        const grouped = {};
-        for (const { word, count } of data.candidates) {
-            const target = mapping[word] ?? word;
-            grouped[target] = (grouped[target] ?? 0) + count;
-        }
-        const total = Object.values(grouped).reduce((a, b) => a + b, 0);
-        return Object.entries(grouped).map(([word, count]) => ({
-            word,
-            count,
-            percentage: total > 0 ? Math.round(count / total * 10000) / 100 : 0,
-        }));
-    }, [data, mapping]);
+        if (mappings.length === 0) return data.candidates;
+        return mappings.reduce(
+            (candidates, { map }) => applyOneMapping(candidates, map),
+            data.candidates
+        );
+    }, [data, mappings]);
 
     const sorted = useMemo(() => {
         let list = mappedCandidates.filter(c =>
@@ -124,7 +130,9 @@ export default function IncenseMapPage() {
             <h1 className="text-2xl font-bold text-gray-800 mb-1">地區上香分布</h1>
             <p className="text-sm text-gray-500 mb-4">
                 共 {displayTotal.toLocaleString()} 則上香訊息，{displayUnique} 個候選詞
-                {mapping && <span className="ml-2 text-indigo-500">（已套用 mapping）</span>}
+                {mappings.length > 0 && (
+                    <span className="ml-2 text-indigo-500">（已套用 {mappings.length} 層 mapping）</span>
+                )}
             </p>
 
             {/* 時間 filter */}
@@ -158,36 +166,54 @@ export default function IncenseMapPage() {
                 </button>
             </div>
 
-            {/* Mapping 上傳 */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json"
-                    onChange={handleMappingUpload}
-                    className="hidden"
-                    aria-label="上傳 mapping JSON"
-                />
-                <button
-                    onClick={() => fileInputRef.current.click()}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                >
-                    上傳 Mapping JSON
-                </button>
-                {mappingName && (
-                    <>
-                        <span className="text-sm text-indigo-600 font-medium">{mappingName}</span>
+            {/* Mapping 上傳區 */}
+            <div className="mb-4">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        onChange={handleMappingUpload}
+                        className="hidden"
+                        aria-label="上傳 mapping JSON"
+                    />
+                    <button
+                        onClick={() => fileInputRef.current.click()}
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                    >
+                        + 新增 Mapping JSON
+                    </button>
+                    {mappings.length > 1 && (
                         <button
-                            onClick={clearMapping}
+                            onClick={clearAllMappings}
                             className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                            aria-label="清除 mapping"
+                            aria-label="清除所有 mapping"
                         >
-                            ✕ 清除
+                            全部清除
                         </button>
-                    </>
-                )}
-                {mappingError && (
-                    <span className="text-sm text-red-500">{mappingError}</span>
+                    )}
+                    {mappingError && (
+                        <span className="text-sm text-red-500">{mappingError}</span>
+                    )}
+                </div>
+
+                {/* mapping 清單 */}
+                {mappings.length > 0 && (
+                    <ol className="flex flex-col gap-1">
+                        {mappings.map(({ name }, i) => (
+                            <li key={i} className="flex items-center gap-2 text-sm">
+                                <span className="text-gray-400 w-5 text-right shrink-0">{i + 1}.</span>
+                                <span className="text-indigo-600 font-medium">{name}</span>
+                                <button
+                                    onClick={() => removeMapping(i)}
+                                    className="text-xs text-gray-400 hover:text-red-500 transition-colors ml-1"
+                                    aria-label={`移除 mapping ${i + 1}`}
+                                >
+                                    ✕
+                                </button>
+                            </li>
+                        ))}
+                    </ol>
                 )}
             </div>
 

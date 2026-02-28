@@ -196,8 +196,8 @@ describe('IncenseMapPage', () => {
 
     // ── Mapping 功能 ──────────────────────────────────────────────────────
 
-    const uploadMapping = async (user, json) => {
-        const file = new File([JSON.stringify(json)], 'mapping.json', { type: 'application/json' });
+    const uploadMapping = async (user, json, filename = 'mapping.json') => {
+        const file = new File([JSON.stringify(json)], filename, { type: 'application/json' });
         const input = document.querySelector('input[type="file"]');
         await user.upload(input, file);
     };
@@ -206,7 +206,7 @@ describe('IncenseMapPage', () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
         render(<IncenseMapPage />);
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
-        expect(screen.getByRole('button', { name: '上傳 Mapping JSON' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '+ 新增 Mapping JSON' })).toBeInTheDocument();
     });
 
     test('applies mapping and merges counts', async () => {
@@ -221,7 +221,6 @@ describe('IncenseMapPage', () => {
         await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
         expect(screen.queryByText('高雄')).not.toBeInTheDocument();
         expect(screen.queryByText('台北')).not.toBeInTheDocument();
-        // 南部 count = 3，與台中 count = 3 並列
         const rows = screen.getAllByRole('row').slice(1);
         expect(rows).toHaveLength(2); // 台中 + 南部
     });
@@ -232,16 +231,14 @@ describe('IncenseMapPage', () => {
         render(<IncenseMapPage />);
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
-        // 高雄 (2) + 台北 (1) → 南部 (3)；台中 (3)；total = 6
         await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
 
         await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
         // 台中: 3/6 = 50%, 南部: 3/6 = 50%
-        const percentages = screen.getAllByText('50%');
-        expect(percentages.length).toBe(2);
+        expect(screen.getAllByText('50%')).toHaveLength(2);
     });
 
-    test('shows filename and clear button after upload', async () => {
+    test('shows filename and remove button after upload', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
         render(<IncenseMapPage />);
@@ -250,11 +247,11 @@ describe('IncenseMapPage', () => {
         await uploadMapping(user, { 高雄: '南部' });
 
         await waitFor(() => expect(screen.getByText('mapping.json')).toBeInTheDocument());
-        expect(screen.getByRole('button', { name: '清除 mapping' })).toBeInTheDocument();
-        expect(screen.getByText(/已套用 mapping/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '移除 mapping 1' })).toBeInTheDocument();
+        expect(screen.getByText(/已套用 1 層 mapping/)).toBeInTheDocument();
     });
 
-    test('clears mapping and restores original data', async () => {
+    test('removes single mapping and restores original data', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
         render(<IncenseMapPage />);
@@ -263,12 +260,49 @@ describe('IncenseMapPage', () => {
         await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
         await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
 
-        await user.click(screen.getByRole('button', { name: '清除 mapping' }));
+        await user.click(screen.getByRole('button', { name: '移除 mapping 1' }));
 
         await waitFor(() => expect(screen.getByText('高雄')).toBeInTheDocument());
         expect(screen.getByText('台北')).toBeInTheDocument();
         expect(screen.queryByText('南部')).not.toBeInTheDocument();
-        expect(screen.queryByText(/已套用 mapping/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/已套用/)).not.toBeInTheDocument();
+    });
+
+    test('applies two mappings sequentially', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        // Layer 1: 高雄+台北 → 南部
+        await uploadMapping(user, { 高雄: '南部', 台北: '南部' }, 'layer1.json');
+        await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
+
+        // Layer 2: 台中+南部 → 全台
+        await uploadMapping(user, { 台中: '全台', 南部: '全台' }, 'layer2.json');
+        await waitFor(() => expect(screen.getByText('全台')).toBeInTheDocument());
+
+        expect(screen.queryByText('台中')).not.toBeInTheDocument();
+        expect(screen.queryByText('南部')).not.toBeInTheDocument();
+        expect(screen.getByText(/已套用 2 層 mapping/)).toBeInTheDocument();
+        // 全台 count = 6, 100%
+        expect(screen.getByText('100%')).toBeInTheDocument();
+    });
+
+    test('shows clear-all button when 2+ mappings loaded', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await uploadMapping(user, { 高雄: '南部' }, 'a.json');
+        await uploadMapping(user, { 台中: '中部' }, 'b.json');
+
+        await waitFor(() => expect(screen.getByRole('button', { name: '清除所有 mapping' })).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '清除所有 mapping' }));
+        await waitFor(() => expect(screen.queryByText(/已套用/)).not.toBeInTheDocument());
+        expect(screen.getByText('高雄')).toBeInTheDocument();
     });
 
     test('shows error for invalid JSON file', async () => {
@@ -292,7 +326,6 @@ describe('IncenseMapPage', () => {
         render(<IncenseMapPage />);
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
-        // 只 map 台北，高雄和台中應保持原名
         await uploadMapping(user, { 台北: '北部' });
 
         await waitFor(() => expect(screen.getByText('北部')).toBeInTheDocument());
