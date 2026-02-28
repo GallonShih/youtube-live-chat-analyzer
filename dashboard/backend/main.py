@@ -10,7 +10,7 @@ from app.routers import (
     stats, chat, admin_words, admin_currency, admin_settings,
     wordcloud, playback, exclusion_wordlist, playback_wordcloud,
     text_mining, replacement_wordlist, emojis, word_trends, word_detail,
-    etl_jobs, prompt_templates, auth, stream_info
+    etl_jobs, prompt_templates, auth, stream_info, incense_map
 )
 from app.etl import init_scheduler, shutdown_scheduler, ETLConfig
 from app.etl.scheduler import register_jobs, start_scheduler
@@ -105,4 +105,4 @@ app.include_router(word_detail.router)
 app.include_router(etl_jobs.router)
 app.include_router(prompt_templates.router)
 app.include_router(stream_info.router)
-
+app.include_router(incense_map.router)
