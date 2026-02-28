@@ -70,6 +70,7 @@ TABLE_TIME_COLUMNS = {
 # 適用於 id 由兩端各自產生、以業務欄位作為唯一識別的資料表
 TABLE_CONFLICT_COLUMNS: dict[str, str] = {
     "word_trend_groups": "name",
+    "replace_words": "source_word",
 }
 
 # SERIAL PK 的資料表目前不支援同步（sequence 不同步問題需額外處理）
