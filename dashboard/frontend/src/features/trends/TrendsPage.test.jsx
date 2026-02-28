@@ -122,9 +122,7 @@ describe('TrendsPage', () => {
             expect(charts[1]).toHaveTextContent('B:1');
         });
 
-        const selects = screen.getAllByRole('combobox');
-        const sortModeSelect = selects[1];
-        await user.selectOptions(sortModeSelect, 'volume_desc');
+        await user.selectOptions(screen.getByLabelText('趨勢排序方式'), 'volume_desc');
 
         await waitFor(() => {
             const charts = screen.getAllByTestId('trend-chart');
@@ -160,9 +158,7 @@ describe('TrendsPage', () => {
 
         await waitFor(() => expect(screen.getAllByTestId('trend-chart')).toHaveLength(6));
 
-        const selects = screen.getAllByRole('combobox');
-        const topNSelect = selects[2];
-        await user.selectOptions(topNSelect, '5');
+        await user.selectOptions(screen.getByLabelText('趨勢顯示數量'), '5');
 
         await waitFor(() => expect(screen.getAllByTestId('trend-chart')).toHaveLength(5));
     });
