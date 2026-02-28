@@ -71,6 +71,7 @@ TABLE_TIME_COLUMNS = {
 TABLE_CONFLICT_COLUMNS: dict[str, str] = {
     "word_trend_groups": "name",
     "replace_words": "source_word",
+    "special_words": "word",
 }
 
 # SERIAL PK 的資料表目前不支援同步（sequence 不同步問題需額外處理）
