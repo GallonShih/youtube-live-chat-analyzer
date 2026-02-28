@@ -50,6 +50,9 @@ const TrendsPage = () => {
     // Chart display options
     const [lineWidth, setLineWidth] = useState(2);
     const [showPoints, setShowPoints] = useState(true);
+    const [chartHeight, setChartHeight] = useState(220);
+    const [minimalStyle, setMinimalStyle] = useState(false);
+    const [minimalYAxisTickSize, setMinimalYAxisTickSize] = useState(16);
     const [sortMode, setSortMode] = useState('manual');
     const [topN, setTopN] = useState('all');
 
@@ -508,6 +511,7 @@ const TrendsPage = () => {
                                     <div className="flex items-center gap-1 sm:gap-2">
                                         <label className="text-xs text-gray-500 hidden sm:inline">線條粗細:</label>
                                         <select
+                                            aria-label="趨勢線條粗細"
                                             value={lineWidth}
                                             onChange={(e) => setLineWidth(Number(e.target.value))}
                                             className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
@@ -528,9 +532,51 @@ const TrendsPage = () => {
                                         />
                                         顯示資料點
                                     </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={minimalStyle}
+                                            onChange={(e) => setMinimalStyle(e.target.checked)}
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        極簡風格
+                                    </label>
+                                    {minimalStyle && (
+                                        <div className="flex items-center gap-1.5">
+                                            <label className="text-xs text-gray-500 hidden sm:inline">Y刻度字級:</label>
+                                            <select
+                                                aria-label="極簡Y刻度大小"
+                                                value={minimalYAxisTickSize}
+                                                onChange={(e) => setMinimalYAxisTickSize(Number(e.target.value))}
+                                                className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                            >
+                                                <option value={12}>小 (12px)</option>
+                                                <option value={16}>中 (16px)</option>
+                                                <option value={20}>大 (20px)</option>
+                                                <option value={24}>特大 (24px)</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                        <label className="text-xs text-gray-500 hidden sm:inline">高度:</label>
+                                        <select
+                                            aria-label="趨勢圖表高度"
+                                            value={chartHeight}
+                                            onChange={(e) => setChartHeight(Number(e.target.value))}
+                                            className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                        >
+                                            <option value={100}>極小 (100px)</option>
+                                            <option value={130}>很小 (130px)</option>
+                                            <option value={160}>小 (160px)</option>
+                                            <option value={220}>中 (220px)</option>
+                                            <option value={300}>大 (300px)</option>
+                                            <option value={380}>特大 (380px)</option>
+                                        </select>
+                                    </div>
                                     <div className="flex items-center gap-1.5">
                                         <label className="text-xs text-gray-500 hidden sm:inline">排序:</label>
                                         <select
+                                            aria-label="趨勢排序方式"
                                             value={sortMode}
                                             onChange={(e) => setSortMode(e.target.value)}
                                             className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
@@ -543,6 +589,7 @@ const TrendsPage = () => {
                                     <div className="flex items-center gap-1.5">
                                         <label className="text-xs text-gray-500 hidden sm:inline">顯示:</label>
                                         <select
+                                            aria-label="趨勢顯示數量"
                                             value={topN}
                                             onChange={(e) => setTopN(e.target.value)}
                                             className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
@@ -591,6 +638,9 @@ const TrendsPage = () => {
                                                     endTime={endDate ? new Date(endDate).toISOString() : null}
                                                     lineWidth={lineWidth}
                                                     showPoints={showPoints}
+                                                    chartHeight={chartHeight}
+                                                    minimalStyle={minimalStyle}
+                                                    minimalYAxisTickSize={minimalYAxisTickSize}
                                                     dragHandleProps={{
                                                         onMouseDown: (e) => e.stopPropagation()
                                                     }}

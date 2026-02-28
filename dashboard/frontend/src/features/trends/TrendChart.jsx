@@ -27,7 +27,27 @@ ChartJS.register(
 /**
  * Renders a single line chart for a word trend group
  */
-const TrendChart = ({ name, color, data, startTime, endTime, lineWidth = 2, showPoints = true, dragHandleProps }) => {
+const TrendChart = ({
+    name,
+    color,
+    data,
+    startTime,
+    endTime,
+    lineWidth = 2,
+    showPoints = true,
+    chartHeight = 192,
+    minimalStyle = false,
+    minimalYAxisTickSize = 16,
+    dragHandleProps
+}) => {
+    const formatYAxisTick = (value) => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return value;
+        if (Math.abs(n) < 1000) return `${n}`;
+        const kValue = Math.round((n / 1000) * 10) / 10;
+        return `${kValue.toFixed(1).replace(/\.0$/, '')}k`;
+    };
+
     // Fill missing hours with 0
     const filledData = useMemo(() => {
         if (data.length === 0) return data;
@@ -109,10 +129,20 @@ const TrendChart = ({ name, color, data, startTime, endTime, lineWidth = 2, show
             minTime = maxTime - 24 * 60 * 60 * 1000; // Default 24h
         }
 
+        const rawMax = data.length > 0 ? Math.max(...data.map(d => d.count)) : 0;
+
         return {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 300 },
+            layout: {
+                padding: {
+                    top: minimalStyle ? 10 : 0,
+                    right: 0,
+                    bottom: 0,
+                    left: 0
+                }
+            },
             interaction: {
                 mode: 'nearest',
                 axis: 'x',
@@ -150,6 +180,7 @@ const TrendChart = ({ name, color, data, startTime, endTime, lineWidth = 2, show
                     max: maxTime,
                     grid: { display: false },
                     ticks: {
+                        display: !minimalStyle,
                         source: 'auto',
                         autoSkip: true,
                         maxTicksLimit: 12,
@@ -158,23 +189,35 @@ const TrendChart = ({ name, color, data, startTime, endTime, lineWidth = 2, show
                 },
                 y: {
                     beginAtZero: true,
+                    grace: minimalStyle ? '12%' : 0,
+                    suggestedMax: minimalStyle
+                        ? (rawMax > 0 ? Math.ceil(rawMax * 1.12) : 1)
+                        : undefined,
                     grid: {
                         color: 'rgba(0,0,0,0.05)',
                         drawBorder: false
                     },
                     ticks: {
+                        includeBounds: true,
+                        callback: (value, index, ticks) => {
+                            if (!minimalStyle) return formatYAxisTick(value);
+                            return index === ticks.length - 1 ? formatYAxisTick(value) : '';
+                        },
                         precision: 0,
-                        font: { size: 11 }
+                        font: {
+                            size: minimalStyle ? minimalYAxisTickSize : 11,
+                            weight: minimalStyle ? '700' : '400'
+                        }
                     },
                     title: {
-                        display: true,
+                        display: !minimalStyle,
                         text: '留言數',
                         font: { size: 12 }
                     }
                 }
             }
         };
-    }, [data, startTime, endTime]);
+    }, [data, startTime, endTime, minimalStyle, minimalYAxisTickSize]);
 
     // Calculate total and max for this period
     const stats = useMemo(() => {
@@ -218,7 +261,7 @@ const TrendChart = ({ name, color, data, startTime, endTime, lineWidth = 2, show
                     <span>最高: <strong className="text-gray-900">{stats.max.toLocaleString()}</strong> ({formatMaxHour(stats.maxHour)})</span>
                 </div>
             </div>
-            <div className="h-48">
+            <div className="min-h-[140px]" style={{ height: `${chartHeight}px` }} data-testid="trend-chart-container">
                 {data.length > 0 ? (
                     <Line data={chartData} options={chartOptions} />
                 ) : (
