@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { fetchIncenseCandidates } from '../../api/incenseMap';
+import Navigation from '../../components/common/Navigation';
 
 // 對一組 candidates 套用單一 mapping，回傳合併後的新 candidates
 function applyOneMapping(candidates, map) {
@@ -116,22 +117,42 @@ export default function IncenseMapPage() {
     };
 
     if (loading) return (
-        <div className="flex items-center justify-center h-64 text-gray-500">載入中...</div>
+        <div className="min-h-screen font-sans">
+            <div className="max-w-3xl mx-auto p-6">
+                <header className="flex justify-between items-center mb-6">
+                    <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
+                    <Navigation />
+                </header>
+                <div className="flex items-center justify-center h-64 text-white/70">載入中...</div>
+            </div>
+        </div>
     );
     if (error) return (
-        <div className="flex items-center justify-center h-64 text-red-500">錯誤：{error}</div>
+        <div className="min-h-screen font-sans">
+            <div className="max-w-3xl mx-auto p-6">
+                <header className="flex justify-between items-center mb-6">
+                    <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
+                    <Navigation />
+                </header>
+                <div className="flex items-center justify-center h-64 text-red-300">錯誤：{error}</div>
+            </div>
+        </div>
     );
 
     const displayTotal = mappedCandidates.reduce((s, c) => s + c.count, 0);
     const displayUnique = mappedCandidates.length;
 
     return (
+        <div className="min-h-screen font-sans">
         <div className="max-w-3xl mx-auto p-6">
-            <h1 className="text-2xl font-bold text-gray-800 mb-1">地區上香分布</h1>
-            <p className="text-sm text-gray-500 mb-4">
+            <header className="flex justify-between items-center mb-1">
+                <h1 className="text-2xl font-bold text-white drop-shadow-lg">地區上香分布</h1>
+                <Navigation />
+            </header>
+            <p className="text-sm text-white/70 mb-4">
                 共 {displayTotal.toLocaleString()} 則上香訊息，{displayUnique} 個候選詞
                 {mappings.length > 0 && (
-                    <span className="ml-2 text-indigo-500">（已套用 {mappings.length} 層 mapping）</span>
+                    <span className="ml-2 text-purple-200">（已套用 {mappings.length} 層 mapping）</span>
                 )}
             </p>
 
@@ -283,6 +304,7 @@ export default function IncenseMapPage() {
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     );
 }

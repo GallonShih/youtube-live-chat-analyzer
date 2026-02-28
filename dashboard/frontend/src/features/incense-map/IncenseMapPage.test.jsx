@@ -1,9 +1,19 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import IncenseMapPage from './IncenseMapPage';
 import { fetchIncenseCandidates } from '../../api/incenseMap';
+import { AuthProvider } from '../../contexts/AuthContext';
+
+const renderPage = () => render(
+    <AuthProvider>
+        <MemoryRouter>
+            <IncenseMapPage />
+        </MemoryRouter>
+    </AuthProvider>
+);
 
 vi.mock('../../api/incenseMap', () => ({
     fetchIncenseCandidates: vi.fn(),
@@ -26,13 +36,13 @@ describe('IncenseMapPage', () => {
 
     test('shows loading state initially', () => {
         fetchIncenseCandidates.mockReturnValue(new Promise(() => {}));
-        render(<IncenseMapPage />);
+        renderPage();
         expect(screen.getByText('載入中...')).toBeInTheDocument();
     });
 
     test('shows error message when API fails', async () => {
         fetchIncenseCandidates.mockRejectedValue(new Error('API error: 500'));
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() =>
             expect(screen.getByText(/錯誤：API error: 500/)).toBeInTheDocument()
         );
@@ -40,7 +50,7 @@ describe('IncenseMapPage', () => {
 
     test('renders summary stats after load', async () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() =>
             expect(screen.getByText(/6 則上香訊息/)).toBeInTheDocument()
         );
@@ -49,7 +59,7 @@ describe('IncenseMapPage', () => {
 
     test('renders all candidates in table', async () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
         expect(screen.getByText('高雄')).toBeInTheDocument();
         expect(screen.getByText('台北')).toBeInTheDocument();
@@ -59,7 +69,7 @@ describe('IncenseMapPage', () => {
     test('filters rows by search input', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await user.type(screen.getByPlaceholderText('搜尋詞彙...'), '高雄');
@@ -72,7 +82,7 @@ describe('IncenseMapPage', () => {
     test('shows no result message when search has no match', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await user.type(screen.getByPlaceholderText('搜尋詞彙...'), '不存在的詞');
@@ -83,7 +93,7 @@ describe('IncenseMapPage', () => {
     test('sorts by count ascending when count header clicked twice', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         const countHeader = screen.getByRole('columnheader', { name: /次數/ });
@@ -99,7 +109,7 @@ describe('IncenseMapPage', () => {
     test('sorts by word when word header clicked', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await user.click(screen.getByRole('columnheader', { name: /詞彙/ }));
@@ -112,7 +122,7 @@ describe('IncenseMapPage', () => {
     test('calls API with start_time on apply', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         const [startInput] = screen.getAllByDisplayValue('');
@@ -129,7 +139,7 @@ describe('IncenseMapPage', () => {
     test('clears filters and reloads on 全部 button click', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await user.click(screen.getByRole('button', { name: '全部' }));
@@ -149,14 +159,10 @@ describe('IncenseMapPage', () => {
         global.URL.createObjectURL = vi.fn().mockReturnValue(mockUrl);
         global.URL.revokeObjectURL = vi.fn();
 
-        const mockClick = vi.fn();
-        const originalCreateElement = document.createElement.bind(document);
-        vi.spyOn(document, 'createElement').mockImplementation((tag, ...args) => {
-            if (tag === 'a') return { href: '', download: '', click: mockClick };
-            return originalCreateElement(tag, ...args);
-        });
+        // Mock click on HTMLAnchorElement prototype so React's <a> elements are unaffected
+        const mockClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await user.click(screen.getByRole('button', { name: /下載/ }));
@@ -165,13 +171,13 @@ describe('IncenseMapPage', () => {
         expect(mockClick).toHaveBeenCalled();
         expect(global.URL.revokeObjectURL).toHaveBeenCalledWith(mockUrl);
 
-        vi.restoreAllMocks();
+        mockClick.mockRestore();
     });
 
     test('download button is disabled when list is empty', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         // 搜尋無結果 → sorted 為空 → 按鈕 disabled
@@ -181,7 +187,7 @@ describe('IncenseMapPage', () => {
 
     test('renders rank numbers in first column', async () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         // 第一欄有 #1 #2 #3，用 getAllByText 確認至少各有一個
@@ -204,7 +210,7 @@ describe('IncenseMapPage', () => {
 
     test('shows upload button', async () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
         expect(screen.getByRole('button', { name: '+ 新增 Mapping JSON' })).toBeInTheDocument();
     });
@@ -212,7 +218,7 @@ describe('IncenseMapPage', () => {
     test('applies mapping and merges counts', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         // 高雄 (2) + 台北 (1) → 南部 (3)
@@ -228,7 +234,7 @@ describe('IncenseMapPage', () => {
     test('recalculates percentage after mapping', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
@@ -241,7 +247,7 @@ describe('IncenseMapPage', () => {
     test('shows filename and remove button after upload', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await uploadMapping(user, { 高雄: '南部' });
@@ -254,7 +260,7 @@ describe('IncenseMapPage', () => {
     test('removes single mapping and restores original data', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
@@ -271,7 +277,7 @@ describe('IncenseMapPage', () => {
     test('applies two mappings sequentially', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         // Layer 1: 高雄+台北 → 南部
@@ -292,7 +298,7 @@ describe('IncenseMapPage', () => {
     test('shows clear-all button when 2+ mappings loaded', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await uploadMapping(user, { 高雄: '南部' }, 'a.json');
@@ -308,7 +314,7 @@ describe('IncenseMapPage', () => {
     test('shows error for invalid JSON file', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         const badFile = new File(['not json {{'], 'bad.json', { type: 'application/json' });
@@ -323,7 +329,7 @@ describe('IncenseMapPage', () => {
     test('unmapped words keep original key', async () => {
         const user = userEvent.setup();
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
-        render(<IncenseMapPage />);
+        renderPage();
         await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
 
         await uploadMapping(user, { 台北: '北部' });
