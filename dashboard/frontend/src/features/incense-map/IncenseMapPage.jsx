@@ -38,6 +38,17 @@ export default function IncenseMapPage() {
         return list;
     }, [data, sortKey, sortAsc, search]);
 
+    const handleDownload = () => {
+        const text = sorted.map(c => c.word).join('\n');
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'incense_words.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const handleSort = (key) => {
         if (sortKey === key) setSortAsc(v => !v);
         else { setSortKey(key); setSortAsc(false); }
@@ -92,14 +103,22 @@ export default function IncenseMapPage() {
                 </button>
             </div>
 
-            <input
-                type="text"
-                placeholder="搜尋詞彙..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="mb-4 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-
+            <div className="flex justify-between items-center mb-4">
+                <input
+                    type="text"
+                    placeholder="搜尋詞彙..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full mr-3 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button
+                    onClick={handleDownload}
+                    disabled={sorted.length === 0}
+                    className="shrink-0 bg-gray-100 hover:bg-gray-200 disabled:opacity-40 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                >
+                    ↓ 下載
+                </button>
+            </div>
             <div className="bg-white rounded-xl shadow overflow-hidden">
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-600 font-semibold">

@@ -141,6 +141,44 @@ describe('IncenseMapPage', () => {
         );
     });
 
+    test('download button triggers file download with word list', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+
+        const mockUrl = 'blob:mock-url';
+        global.URL.createObjectURL = vi.fn().mockReturnValue(mockUrl);
+        global.URL.revokeObjectURL = vi.fn();
+
+        const mockClick = vi.fn();
+        const originalCreateElement = document.createElement.bind(document);
+        vi.spyOn(document, 'createElement').mockImplementation((tag, ...args) => {
+            if (tag === 'a') return { href: '', download: '', click: mockClick };
+            return originalCreateElement(tag, ...args);
+        });
+
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: /下載/ }));
+
+        expect(global.URL.createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+        expect(mockClick).toHaveBeenCalled();
+        expect(global.URL.revokeObjectURL).toHaveBeenCalledWith(mockUrl);
+
+        vi.restoreAllMocks();
+    });
+
+    test('download button is disabled when list is empty', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        render(<IncenseMapPage />);
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        // 搜尋無結果 → sorted 為空 → 按鈕 disabled
+        await user.type(screen.getByPlaceholderText('搜尋詞彙...'), '不存在');
+        expect(screen.getByRole('button', { name: /下載/ })).toBeDisabled();
+    });
+
     test('renders rank numbers in first column', async () => {
         fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
         render(<IncenseMapPage />);
