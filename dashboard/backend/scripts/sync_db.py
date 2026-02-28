@@ -66,6 +66,14 @@ TABLE_TIME_COLUMNS = {
     "word_analysis_log": "created_at",
 }
 
+# ── 各資料表自訂衝突欄位（SERIAL PK 將自動排除出 INSERT）────────────────────
+# 適用於 id 由兩端各自產生、以業務欄位作為唯一識別的資料表
+TABLE_CONFLICT_COLUMNS: dict[str, str] = {
+    "word_trend_groups": "name",
+    "replace_words": "source_word",
+    "special_words": "word",
+}
+
 # SERIAL PK 的資料表目前不支援同步（sequence 不同步問題需額外處理）
 UNSUPPORTED_TABLES = {"stream_stats"}
 
@@ -302,38 +310,45 @@ def fetch_batch_keyset_all(
 
 def build_insert_sql(
     table_name: str,
-    columns: list[str],
-    pk_columns: list[str],
+    insert_columns: list[str],
     has_serial: bool,
+    conflict_column: Optional[str],
 ) -> str:
     """
     建立 execute_values 相容的 INSERT 語句。
     VALUES 後使用單一 %s，由 execute_values 展開為多列。
-    有 SERIAL/IDENTITY PK 時加上 OVERRIDING SYSTEM VALUE。
+
+    conflict_column 未指定：
+      - INSERT 包含所有欄位（含 SERIAL PK，加 OVERRIDING SYSTEM VALUE）
+      - ON CONFLICT DO NOTHING（涵蓋所有 UNIQUE / PK 約束）
+    conflict_column 已指定：
+      - INSERT 排除 SERIAL PK（讓 target 自動產生 id）
+      - ON CONFLICT ("conflict_column") DO NOTHING
     """
-    col_list      = ", ".join(f'"{c}"' for c in columns)
-    conflict_cols = ", ".join(f'"{c}"' for c in pk_columns)
-    overriding    = "OVERRIDING SYSTEM VALUE " if has_serial else ""
+    col_list  = ", ".join(f'"{c}"' for c in insert_columns)
+    overriding = "OVERRIDING SYSTEM VALUE " if (has_serial and not conflict_column) else ""
+    conflict  = f'ON CONFLICT ("{conflict_column}") DO NOTHING' if conflict_column else "ON CONFLICT DO NOTHING"
 
     return (
         f'INSERT INTO "{table_name}" ({col_list}) '
         f"{overriding}"
         f"VALUES %s "
-        f"ON CONFLICT ({conflict_cols}) DO NOTHING"
+        f"{conflict}"
     )
 
 
-def build_row_template(columns: list[str], json_cols: dict[str, str]) -> str:
+def build_row_template(insert_columns: list[str], json_cols: dict[str, str]) -> str:
     """
     建立 execute_values 的 per-row template。
     JSON/JSONB 欄位使用 %s::json 或 %s::jsonb，讓 PostgreSQL 把 text 轉回正確型別：
       - SQL NULL  → None   → %s::json[b] → NULL           ✓
       - JSON null → "null" → %s::json[b] → JSON null      ✓
       - JSON obj  → "{...}"→ %s::json[b] → JSON obj       ✓
+    insert_columns 為實際要 INSERT 的欄位（可能已排除 SERIAL PK）。
     """
     placeholders = [
         f"%s::{json_cols[c]}" if c in json_cols else "%s"
-        for c in columns
+        for c in insert_columns
     ]
     return "(" + ", ".join(placeholders) + ")"
 
@@ -359,6 +374,7 @@ def sync(
     end: Optional[datetime.datetime],
     sync_all: bool,
     time_column: Optional[str],
+    conflict_column: Optional[str],
     batch_size: int,
     dry_run: bool,
     verbose: bool,
@@ -415,6 +431,11 @@ def sync(
             print(f"Serial cols : {sorted(serial_cols)}")
         if json_cols:
             print(f"JSON cols   : {sorted(json_cols)}")
+
+        # ── 決定衝突欄位（優先用手動指定，否則查 TABLE_CONFLICT_COLUMNS）──
+        conflict_column = conflict_column or TABLE_CONFLICT_COLUMNS.get(table_name)
+        if conflict_column:
+            print(f"Conflict on : {conflict_column} (SERIAL PK excluded from INSERT)")
         print()
 
         if not sync_all and time_col not in columns:
@@ -435,9 +456,20 @@ def sync(
             print("Dry-run mode: skipping actual write.")
             return
 
+        # ── 決定 INSERT 欄位（conflict_column 模式下排除 SERIAL PK）──
+        serial_pk_cols = serial_cols & set(pk_columns)
+        if conflict_column:
+            if conflict_column not in columns:
+                raise ValueError(f"--conflict-column '{conflict_column}' not found in table '{table_name}'.")
+            insert_columns  = [c for c in columns if c not in serial_pk_cols]
+            insert_indices  = [i for i, c in enumerate(columns) if c not in serial_pk_cols]
+        else:
+            insert_columns  = columns
+            insert_indices  = list(range(len(columns)))
+
         # ── 建立 INSERT SQL 與 per-row template ──
-        insert_sql   = build_insert_sql(table_name, columns, pk_columns, has_serial)
-        row_template = build_row_template(columns, json_cols)
+        insert_sql   = build_insert_sql(table_name, insert_columns, has_serial, conflict_column)
+        row_template = build_row_template(insert_columns, json_cols)
         if verbose:
             print(f"Insert SQL  : {insert_sql}")
             print(f"Row template: {row_template}\n")
@@ -478,7 +510,8 @@ def sync(
             if not sync_all:
                 cursor_time = last_row[time_col_idx]
 
-            inserted = insert_batch(tgt_conn, insert_sql, rows, row_template)
+            insert_rows = [tuple(r[i] for i in insert_indices) for r in rows]
+            inserted = insert_batch(tgt_conn, insert_sql, insert_rows, row_template)
             skipped  = len(rows) - inserted
             total_inserted += inserted
             total_skipped  += skipped
@@ -579,6 +612,16 @@ def main():
         ),
     )
     sync_group.add_argument(
+        "--conflict-column",
+        default=None,
+        metavar="COLUMN",
+        help=(
+            "Use this column as the conflict target instead of PK. "
+            "SERIAL PK will be excluded from INSERT (target auto-generates id). "
+            "e.g. --conflict-column name"
+        ),
+    )
+    sync_group.add_argument(
         "--batch-size",
         type=int,
         default=1000,
@@ -616,6 +659,7 @@ def main():
             end=args.end,
             sync_all=args.sync_all,
             time_column=args.time_column,
+            conflict_column=args.conflict_column,
             batch_size=args.batch_size,
             dry_run=args.dry_run,
             verbose=args.verbose,

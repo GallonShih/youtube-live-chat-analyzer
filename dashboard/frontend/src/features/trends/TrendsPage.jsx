@@ -42,12 +42,19 @@ const TrendsPage = () => {
     const [trendData, setTrendData] = useState({});
     const [loadingTrends, setLoadingTrends] = useState(false);
     const inFlightTrendRequestsRef = useRef(new Map());
+    const trendCacheRef = useRef(new Map());
     const pendingTrendRequestCountRef = useRef(0);
-    const latestTrendRequestIdRef = useRef(0);
+    const currentRangeKeyRef = useRef('');
+    const visibleGroupsRef = useRef(visibleGroups);
 
     // Chart display options
     const [lineWidth, setLineWidth] = useState(2);
     const [showPoints, setShowPoints] = useState(true);
+    const [chartHeight, setChartHeight] = useState(220);
+    const [minimalStyle, setMinimalStyle] = useState(false);
+    const [minimalYAxisTickSize, setMinimalYAxisTickSize] = useState(16);
+    const [sortMode, setSortMode] = useState('manual');
+    const [topN, setTopN] = useState('all');
 
     // Apply default period
     const [defaultApplied, setDefaultApplied] = useState(false);
@@ -64,6 +71,31 @@ const TrendsPage = () => {
     useEffect(() => {
         loadGroups();
     }, []);
+
+    useEffect(() => {
+        visibleGroupsRef.current = visibleGroups;
+    }, [visibleGroups]);
+
+    const getTimeRangeParams = useCallback(() => {
+        let startTime = null;
+        let endTime = null;
+
+        if (startDate) {
+            startTime = new Date(startDate).toISOString();
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            d.setMinutes(59, 59, 999);
+            endTime = d.toISOString();
+        }
+
+        return { startTime, endTime };
+    }, [startDate, endDate]);
+
+    const getRangeKey = useCallback((startTime, endTime) => JSON.stringify({
+        startTime,
+        endTime
+    }), []);
 
     const loadGroups = async () => {
         try {
@@ -89,24 +121,45 @@ const TrendsPage = () => {
             return;
         }
 
-        const sortedGroupIds = [...visibleGroupIds].sort((a, b) => a - b);
-
-        let startTime = null;
-        let endTime = null;
-
-        if (startDate) {
-            startTime = new Date(startDate).toISOString();
+        let targetGroupIds = visibleGroupIds;
+        if (sortMode === 'manual' && topN !== 'all') {
+            const limit = Number(topN);
+            if (Number.isFinite(limit) && limit > 0) {
+                const manualOrderedVisible = chartOrder.filter((id) => visibleGroups.has(id));
+                targetGroupIds = manualOrderedVisible.slice(0, limit);
+            }
         }
-        if (endDate) {
-            const d = new Date(endDate);
-            d.setMinutes(59, 59, 999);
-            endTime = d.toISOString();
+
+        if (targetGroupIds.length === 0) {
+            setTrendData({});
+            return;
         }
+
+        const { startTime, endTime } = getTimeRangeParams();
+        const rangeKey = getRangeKey(startTime, endTime);
+        currentRangeKeyRef.current = rangeKey;
+
+        if (!trendCacheRef.current.has(rangeKey)) {
+            trendCacheRef.current.set(rangeKey, new Map());
+        }
+        const rangeCache = trendCacheRef.current.get(rangeKey);
+
+        const visibleDataMap = {};
+        targetGroupIds.forEach((groupId) => {
+            const cached = rangeCache.get(groupId);
+            if (cached) visibleDataMap[groupId] = cached;
+        });
+        setTrendData(visibleDataMap);
+
+        const missingGroupIds = targetGroupIds
+            .filter(groupId => !rangeCache.has(groupId))
+            .sort((a, b) => a - b);
+
+        if (missingGroupIds.length === 0) return;
 
         const requestKey = JSON.stringify({
-            groupIds: sortedGroupIds,
-            startTime,
-            endTime
+            rangeKey,
+            groupIds: missingGroupIds
         });
 
         const existingRequest = inFlightTrendRequestsRef.current.get(requestKey);
@@ -115,27 +168,41 @@ const TrendsPage = () => {
             return;
         }
 
-        const requestId = ++latestTrendRequestIdRef.current;
         pendingTrendRequestCountRef.current += 1;
         setLoadingTrends(true);
 
         const requestPromise = (async () => {
             try {
                 const result = await fetchTrendStats({
-                    groupIds: sortedGroupIds,
+                    groupIds: missingGroupIds,
                     startTime,
                     endTime
                 });
 
-                // Ignore stale responses; only latest request should update chart data
-                if (requestId !== latestTrendRequestIdRef.current) return;
-
-                // Convert to map for easy lookup
-                const dataMap = {};
+                const targetRangeCache = trendCacheRef.current.get(rangeKey) || new Map();
                 result.groups.forEach(g => {
-                    dataMap[g.group_id] = g;
+                    targetRangeCache.set(g.group_id, g);
                 });
-                setTrendData(dataMap);
+                trendCacheRef.current.set(rangeKey, targetRangeCache);
+
+                if (rangeKey === currentRangeKeyRef.current) {
+                    const currentVisibleIds = Array.from(visibleGroupsRef.current);
+                    let renderTargetIds = currentVisibleIds;
+                    if (sortMode === 'manual' && topN !== 'all') {
+                        const limit = Number(topN);
+                        if (Number.isFinite(limit) && limit > 0) {
+                            renderTargetIds = chartOrder
+                                .filter((id) => visibleGroupsRef.current.has(id))
+                                .slice(0, limit);
+                        }
+                    }
+                    const dataMap = {};
+                    renderTargetIds.forEach((groupId) => {
+                        const cached = targetRangeCache.get(groupId);
+                        if (cached) dataMap[groupId] = cached;
+                    });
+                    setTrendData(dataMap);
+                }
             } catch (err) {
                 console.error('Failed to load trend data:', err);
             } finally {
@@ -154,7 +221,7 @@ const TrendsPage = () => {
         } catch {
             // requestPromise handles and logs errors
         }
-    }, [visibleGroups, startDate, endDate]);
+    }, [visibleGroups, getTimeRangeParams, getRangeKey, sortMode, topN, chartOrder]);
 
     // Trigger trend data load when visible groups or time changes
     useEffect(() => {
@@ -224,23 +291,13 @@ const TrendsPage = () => {
         setQuickRange(24);
     };
 
-    const handleSortByMessageVolume = () => {
-        setChartOrder(prev => {
-            const visibleIds = prev.filter(id => visibleGroups.has(id));
-            const hiddenIds = prev.filter(id => !visibleGroups.has(id));
-
-            const getTotalCount = (groupId) => {
-                const groupData = trendData[groupId];
-                if (!groupData) return 0;
-                if (typeof groupData.total_count === 'number') return groupData.total_count;
-                if (!Array.isArray(groupData.data)) return 0;
-                return groupData.data.reduce((sum, item) => sum + (item.count || 0), 0);
-            };
-
-            visibleIds.sort((a, b) => getTotalCount(b) - getTotalCount(a));
-            return [...visibleIds, ...hiddenIds];
-        });
-    };
+    const getTotalCount = useCallback((groupId) => {
+        const groupData = trendData[groupId];
+        if (!groupData) return 0;
+        if (typeof groupData.total_count === 'number') return groupData.total_count;
+        if (!Array.isArray(groupData.data)) return 0;
+        return groupData.data.reduce((sum, item) => sum + (item.count || 0), 0);
+    }, [trendData]);
 
     // Quick time range setters
     const setQuickRange = (hours) => {
@@ -252,11 +309,13 @@ const TrendsPage = () => {
 
     // Drag and drop handlers for chart reordering
     const handleDragStart = (e, id) => {
+        if (sortMode !== 'manual') return;
         setDraggedId(id);
         e.dataTransfer.effectAllowed = 'move';
     };
 
     const handleDragOver = (e, id) => {
+        if (sortMode !== 'manual') return;
         e.preventDefault();
         if (draggedId === null || draggedId === id) return;
 
@@ -275,12 +334,21 @@ const TrendsPage = () => {
     };
 
     const handleDragEnd = () => {
+        if (sortMode !== 'manual') return;
         setDraggedId(null);
     };
 
     // Get ordered visible groups
-    const orderedVisibleGroups = chartOrder
-        .filter(id => visibleGroups.has(id))
+    const manualOrderedVisibleIds = chartOrder.filter((id) => visibleGroups.has(id));
+    const volumeOrderedVisibleIds = [...manualOrderedVisibleIds].sort((a, b) => {
+        if (sortMode === 'volume_asc') return getTotalCount(a) - getTotalCount(b);
+        return getTotalCount(b) - getTotalCount(a);
+    });
+    const sortedVisibleIds = sortMode === 'manual' ? manualOrderedVisibleIds : volumeOrderedVisibleIds;
+    const limitedVisibleIds = topN === 'all'
+        ? sortedVisibleIds
+        : sortedVisibleIds.slice(0, Math.max(0, Number(topN) || 0));
+    const orderedVisibleGroups = limitedVisibleIds
         .map(id => groups.find(g => g.id === id))
         .filter(Boolean);
 
@@ -443,6 +511,7 @@ const TrendsPage = () => {
                                     <div className="flex items-center gap-1 sm:gap-2">
                                         <label className="text-xs text-gray-500 hidden sm:inline">線條粗細:</label>
                                         <select
+                                            aria-label="趨勢線條粗細"
                                             value={lineWidth}
                                             onChange={(e) => setLineWidth(Number(e.target.value))}
                                             className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
@@ -463,13 +532,74 @@ const TrendsPage = () => {
                                         />
                                         顯示資料點
                                     </label>
-                                    <button
-                                        onClick={handleSortByMessageVolume}
-                                        disabled={visibleGroups.size < 2}
-                                        className="px-2.5 py-1.5 text-xs sm:text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                                    >
-                                        依訊息量排序
-                                    </button>
+                                    <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={minimalStyle}
+                                            onChange={(e) => setMinimalStyle(e.target.checked)}
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        極簡風格
+                                    </label>
+                                    {minimalStyle && (
+                                        <div className="flex items-center gap-1.5">
+                                            <label className="text-xs text-gray-500 hidden sm:inline">Y刻度字級:</label>
+                                            <select
+                                                aria-label="極簡Y刻度大小"
+                                                value={minimalYAxisTickSize}
+                                                onChange={(e) => setMinimalYAxisTickSize(Number(e.target.value))}
+                                                className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                            >
+                                                <option value={12}>小 (12px)</option>
+                                                <option value={16}>中 (16px)</option>
+                                                <option value={20}>大 (20px)</option>
+                                                <option value={24}>特大 (24px)</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5">
+                                        <label className="text-xs text-gray-500 hidden sm:inline">高度:</label>
+                                        <select
+                                            aria-label="趨勢圖表高度"
+                                            value={chartHeight}
+                                            onChange={(e) => setChartHeight(Number(e.target.value))}
+                                            className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                        >
+                                            <option value={100}>極小 (100px)</option>
+                                            <option value={130}>很小 (130px)</option>
+                                            <option value={160}>小 (160px)</option>
+                                            <option value={220}>中 (220px)</option>
+                                            <option value={300}>大 (300px)</option>
+                                            <option value={380}>特大 (380px)</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <label className="text-xs text-gray-500 hidden sm:inline">排序:</label>
+                                        <select
+                                            aria-label="趨勢排序方式"
+                                            value={sortMode}
+                                            onChange={(e) => setSortMode(e.target.value)}
+                                            className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                        >
+                                            <option value="manual">手動排序</option>
+                                            <option value="volume_desc">訊息量高→低</option>
+                                            <option value="volume_asc">訊息量低→高</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <label className="text-xs text-gray-500 hidden sm:inline">顯示:</label>
+                                        <select
+                                            aria-label="趨勢顯示數量"
+                                            value={topN}
+                                            onChange={(e) => setTopN(e.target.value)}
+                                            className="border border-gray-300 rounded px-2 py-1 text-xs sm:text-sm"
+                                        >
+                                            <option value="all">全部</option>
+                                            <option value="5">前 5</option>
+                                            <option value="10">前 10</option>
+                                            <option value="20">前 20</option>
+                                        </select>
+                                    </div>
                                     {loadingTrends && (
                                         <div className="flex items-center gap-2 text-sm text-indigo-600">
                                             <div className="w-4 h-4 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -494,7 +624,7 @@ const TrendsPage = () => {
                                         return (
                                             <div
                                                 key={group.id}
-                                                draggable
+                                                draggable={sortMode === 'manual'}
                                                 onDragStart={(e) => handleDragStart(e, group.id)}
                                                 onDragOver={(e) => handleDragOver(e, group.id)}
                                                 onDragEnd={handleDragEnd}
@@ -508,6 +638,9 @@ const TrendsPage = () => {
                                                     endTime={endDate ? new Date(endDate).toISOString() : null}
                                                     lineWidth={lineWidth}
                                                     showPoints={showPoints}
+                                                    chartHeight={chartHeight}
+                                                    minimalStyle={minimalStyle}
+                                                    minimalYAxisTickSize={minimalYAxisTickSize}
                                                     dragHandleProps={{
                                                         onMouseDown: (e) => e.stopPropagation()
                                                     }}
