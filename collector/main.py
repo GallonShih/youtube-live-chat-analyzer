@@ -45,18 +45,27 @@ class CollectorWorker:
         self._url_changed = threading.Event()
         self._stream_ended = threading.Event()
         self._stream_upcoming = threading.Event()
+        self._chat_run_token = 0
 
-    def _start_chat_thread(self):
-        """Start chat collection thread if it is not running."""
-        if self.chat_thread and self.chat_thread.is_alive():
+    def _start_chat_thread(self, force_restart=False):
+        """Start chat collection thread.
+
+        If force_restart=True, start a new chat loop even when an old thread
+        is still alive. A run token prevents stale loops from continuing after
+        they return to the top-level while condition.
+        """
+        if self.chat_thread and self.chat_thread.is_alive() and not force_restart:
             return
+        self._chat_run_token += 1
+        run_token = self._chat_run_token
         self.chat_thread = threading.Thread(
             target=self._run_chat_collection,
+            args=(run_token,),
             name="ChatCollector",
             daemon=True,
         )
         self.chat_thread.start()
-        logger.info("Chat collection thread started")
+        logger.info(f"Chat collection thread started (token={run_token})")
 
     def start(self):
         """Start the Collector worker"""
@@ -199,14 +208,14 @@ class CollectorWorker:
         except Exception as e:
             logger.error(f"Failed to update live_broadcast_content for {video_id}: {e}")
 
-    def _run_chat_collection(self):
+    def _run_chat_collection(self, run_token):
         """Run chat collection with retry logic
         
         Note: Will attempt to collect chat regardless of stream status (upcoming/live).
         This allows collecting waiting room chat if available before stream starts.
         If chat is not available, the retry logic will handle reconnection attempts.
         """
-        while self.is_running:
+        while self.is_running and run_token == self._chat_run_token:
             self._url_changed.clear()
 
             try:
@@ -341,14 +350,17 @@ class CollectorWorker:
 
                         with self._restart_lock:
                             # Stop current collector and give chat thread time to unwind
+                            old_thread = self.chat_thread
                             self.chat_collector.stop_collection()
-                            if self.chat_thread and self.chat_thread.is_alive():
-                                self.chat_thread.join(timeout=10)
+                            if old_thread and old_thread.is_alive():
+                                old_thread.join(timeout=10)
+                                if old_thread.is_alive():
+                                    logger.warning("Chat watchdog: previous chat thread did not exit within 10s, forcing new chat loop")
 
                             # Create new collector (no signal registration from non-main thread)
                             self.chat_collector = ChatCollector(self.video_id, register_signals=False)
                             # Ensure collection loop is running after replacement
-                            self._start_chat_thread()
+                            self._start_chat_thread(force_restart=True)
                             # Wake any waits immediately
                             self._url_changed.set()
 
@@ -359,7 +371,7 @@ class CollectorWorker:
                         logger.warning("Chat watchdog: missing heartbeat and chat thread is not running, restarting chat loop")
                         with self._restart_lock:
                             self.chat_collector = ChatCollector(self.video_id, register_signals=False)
-                            self._start_chat_thread()
+                            self._start_chat_thread(force_restart=True)
                             self._url_changed.set()
                     else:
                         logger.debug("Chat watchdog: collector or last_activity_time not initialized yet")
