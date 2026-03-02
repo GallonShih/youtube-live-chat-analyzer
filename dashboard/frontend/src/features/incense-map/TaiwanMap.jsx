@@ -3,8 +3,8 @@ import { geoMercator, geoPath, geoArea, scaleLinear } from 'd3';
 import useTaiwanMap from './useTaiwanMap';
 
 /** 主地圖 SVG 尺寸 */
-const MAIN_WIDTH = 480;
-const MAIN_HEIGHT = 640;
+const MAIN_WIDTH = 420;
+const MAIN_HEIGHT = 520;
 
 /** 離島名稱 — 主地圖投影時排除（只有金門、連江，澎湖留在主地圖） */
 const ISLAND_NAMES = new Set(['連江', '金門']);
@@ -108,6 +108,7 @@ function InsetMap({ feature: ft, label, width, height, topN, regionData, colorSc
 export default function TaiwanMap({ regionData }) {
     const { features, loading, error } = useTaiwanMap();
     const [tooltip, setTooltip] = useState(null);
+    const [scale, setScale] = useState(60); // 預設 60% 螢幕高度
 
     // 主地圖只包含本島（排除離島）
     const mainFeatures = useMemo(
@@ -169,10 +170,25 @@ export default function TaiwanMap({ regionData }) {
 
     return (
         <div className="relative">
-            {/* Summary */}
-            <p className="text-sm text-white/70 mb-3">
-                {matchedCount} 個地區有資料 / {features.length - matchedCount} 個地區無資料
-            </p>
+            {/* Summary + size slider */}
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <p className="text-sm text-white/70">
+                    {matchedCount} 個地區有資料 / {features.length - matchedCount} 個地區無資料
+                </p>
+                <div className="flex items-center gap-2 text-xs text-white/50">
+                    <span>小</span>
+                    <input
+                        type="range"
+                        min={30}
+                        max={90}
+                        value={scale}
+                        onChange={(e) => setScale(Number(e.target.value))}
+                        className="w-24 accent-indigo-400"
+                        aria-label="地圖大小"
+                    />
+                    <span>大</span>
+                </div>
+            </div>
 
             {/* Main map container with insets overlaid */}
             <div className="relative glass-card rounded-2xl overflow-hidden">
@@ -180,7 +196,12 @@ export default function TaiwanMap({ regionData }) {
                 <svg
                     width="100%"
                     viewBox={`0 0 ${MAIN_WIDTH} ${MAIN_HEIGHT}`}
-                    style={{ display: 'block' }}
+                    style={{
+                        display: 'block',
+                        maxHeight: `${scale}vh`,
+                        width: 'auto',
+                        margin: '0 auto',
+                    }}
                 >
                     {mainFeatures.map((feat) => {
                         const name = feat.properties.COUNTYNAME;
