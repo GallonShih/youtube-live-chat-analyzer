@@ -4,6 +4,14 @@ import Navigation from '../../components/common/Navigation';
 import TaiwanMap from './TaiwanMap';
 import { REGION_NAMES } from './useTaiwanMap';
 
+/** 非地理區域的上香對象（遊戲/品牌），logo 可稍後替換為實際圖片 URL */
+const BRANDS = [
+    { name: '逆水寒', logo: null },
+    { name: '傳說對決', logo: null },
+    { name: '格力變頻空調', logo: null },
+];
+const BRAND_NAMES = new Set(BRANDS.map((b) => b.name));
+
 // 對一組 candidates 套用單一 mapping，回傳合併後的新 candidates
 function applyOneMapping(candidates, map) {
     const grouped = {};
@@ -86,12 +94,12 @@ export default function IncenseMapPage() {
         );
     }, [data, mappings]);
 
-    // 將 mappedCandidates 中匹配行政區名稱的詞彙轉為 regionData
+    // 將 mappedCandidates 中匹配行政區或品牌名稱的詞彙轉為 regionData
     const regionData = useMemo(() => {
         const result = {};
         for (const { word, count, percentage } of mappedCandidates) {
             const normalized = word.replace(/臺/g, '台');
-            if (REGION_NAMES.has(normalized)) {
+            if (REGION_NAMES.has(normalized) || BRAND_NAMES.has(normalized)) {
                 result[normalized] = { count, percentage };
             }
         }
@@ -282,7 +290,7 @@ export default function IncenseMapPage() {
 
             {/* 地圖 Tab */}
             {activeTab === 'map' && (
-                <TaiwanMap regionData={regionData} />
+                <TaiwanMap regionData={regionData} brands={BRANDS} />
             )}
 
             {/* 表格 Tab */}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import { geoMercator, geoPath, geoArea, scaleLinear } from 'd3';
 import useTaiwanMap from './useTaiwanMap';
 
@@ -14,6 +14,44 @@ const INSETS = [
     { name: '連江', label: '連江 (馬祖)', width: 200, height: 180, topN: 2 },
     { name: '金門', label: '金門',       width: 200, height: 150, topN: 2 },
 ];
+
+/**
+ * 計算 inset 面板佔據的禁區矩形列表。
+ * Inset 面板位於容器 left:12, top:12, 間距 gap:8 垂直排列。
+ */
+function getInsetRects() {
+    const pad = 12; // top-3 = 0.75rem ≈ 12px
+    const gap = 8;  // gap-2
+    const rects = [];
+    let y = pad;
+    for (const { width, height } of INSETS) {
+        rects.push({ x: pad, y, w: width, h: height });
+        y += height + gap;
+    }
+    return rects;
+}
+const INSET_RECTS = getInsetRects();
+const CARD_SIZE = 90;
+
+/**
+ * 檢查矩形 A 與 B 是否重疊
+ */
+function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+/**
+ * 如果 (x, y) 處的卡片與任一 inset 重疊，將卡片推到 inset 下方。
+ */
+function avoidInsetOverlap(x, y) {
+    for (const r of INSET_RECTS) {
+        if (rectsOverlap(x, y, CARD_SIZE, CARD_SIZE, r.x, r.y, r.w, r.h)) {
+            // 推到這個 inset 的正下方
+            y = r.y + r.h + 8;
+        }
+    }
+    return { x, y };
+}
 
 /**
  * 從 MultiPolygon / Polygon 中只保留面積最大的 N 個 polygon。
@@ -105,10 +143,137 @@ function InsetMap({ feature: ft, label, width, height, topN, regionData, colorSc
     );
 }
 
-export default function TaiwanMap({ regionData }) {
+/**
+ * 品牌/遊戲卡片 — 非地理區域的上香對象，用色階深淺表示數值。
+ * 可在地圖容器內自由拖曳（直接操作 DOM style，避免高頻 re-render）。
+ */
+function BrandCard({ name, logo, x, y, containerRef, onDrop, regionData, colorScale, onTooltip }) {
+    const data = regionData[name];
+    const bgColor = data ? colorScale(data.count) : '#e5e7eb';
+    const textColor = data && data.count > 0 ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.6)';
+    const elRef = useRef(null);
+    const dragging = useRef(false);
+    const offset = useRef({ dx: 0, dy: 0 });
+
+    const clamp = useCallback((clientX, clientY) => {
+        const container = containerRef.current;
+        if (!container) return { x: 0, y: 0 };
+        const rect = container.getBoundingClientRect();
+        return {
+            x: Math.max(0, Math.min(clientX - rect.left - offset.current.dx, rect.width - 90)),
+            y: Math.max(0, Math.min(clientY - rect.top - offset.current.dy, rect.height - 90)),
+        };
+    }, [containerRef]);
+
+    const onPointerDown = useCallback((e) => {
+        dragging.current = true;
+        const el = elRef.current;
+        offset.current = { dx: e.clientX - el.offsetLeft - (containerRef.current?.getBoundingClientRect().left ?? 0) + (containerRef.current?.getBoundingClientRect().left ?? 0) - el.getBoundingClientRect().left + (e.clientX - e.clientX), dy: 0 };
+        // 簡單計算：pointer 在卡片內的 offset
+        const cardRect = el.getBoundingClientRect();
+        offset.current = { dx: e.clientX - cardRect.left, dy: e.clientY - cardRect.top };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        el.style.cursor = 'grabbing';
+        el.style.zIndex = '20';
+    }, [containerRef]);
+
+    const onPointerMove = useCallback((e) => {
+        if (!dragging.current) return;
+        const container = containerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        let nx = Math.max(0, Math.min(e.clientX - rect.left - offset.current.dx, rect.width - 90));
+        let ny = Math.max(0, Math.min(e.clientY - rect.top - offset.current.dy, rect.height - 90));
+        // 避開 inset 區域
+        const safe = avoidInsetOverlap(nx, ny);
+        nx = safe.x; ny = Math.min(safe.y, rect.height - 90);
+        const el = elRef.current;
+        el.style.left = `${nx}px`;
+        el.style.top = `${ny}px`;
+    }, [containerRef]);
+
+    const onPointerUp = useCallback((e) => {
+        if (!dragging.current) return;
+        dragging.current = false;
+        const el = elRef.current;
+        el.style.cursor = 'grab';
+        el.style.zIndex = '';
+        // 同步最終位置到 React state
+        const container = containerRef.current;
+        if (container) {
+            const rect = container.getBoundingClientRect();
+            let nx = Math.max(0, Math.min(e.clientX - rect.left - offset.current.dx, rect.width - 90));
+            let ny = Math.max(0, Math.min(e.clientY - rect.top - offset.current.dy, rect.height - 90));
+            const safe = avoidInsetOverlap(nx, ny);
+            onDrop(name, safe.x, Math.min(safe.y, rect.height - 90));
+        }
+    }, [name, onDrop, containerRef]);
+
+    return (
+        <div
+            ref={elRef}
+            className="rounded-lg overflow-hidden border border-white/20 flex flex-col items-center justify-center gap-1 select-none"
+            style={{
+                width: 90, height: 90,
+                backgroundColor: bgColor,
+                cursor: 'grab',
+                position: 'absolute',
+                left: x, top: y,
+                touchAction: 'none',
+                transition: 'background-color 0.2s',
+            }}
+            data-testid={`brand-${name}`}
+            data-count={data?.count ?? 0}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onMouseMove={(e) => {
+                if (!dragging.current)
+                    onTooltip({ x: e.clientX, y: e.clientY, name, data });
+            }}
+            onMouseLeave={() => onTooltip(null)}
+        >
+            {logo ? (
+                <img
+                    src={logo}
+                    alt={name}
+                    className="w-10 h-10 object-contain pointer-events-none"
+                    draggable={false}
+                />
+            ) : (
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg pointer-events-none"
+                     style={{ color: textColor }}>
+                    {name.charAt(0)}
+                </div>
+            )}
+            <span className="text-[10px] font-semibold leading-tight text-center px-1 pointer-events-none"
+                  style={{ color: textColor }}>
+                {name}
+            </span>
+        </div>
+    );
+}
+
+export default function TaiwanMap({ regionData, brands = [] }) {
     const { features, loading, error } = useTaiwanMap();
     const [tooltip, setTooltip] = useState(null);
-    const [scale, setScale] = useState(60); // 預設 60% 螢幕高度
+    const [scale, setScale] = useState(60);
+    const mapContainerRef = useRef(null);
+
+    // 品牌卡片位置（相對於地圖容器），預設放在左下角（避開左上角 inset 區域）
+    const [brandPositions, setBrandPositions] = useState(() => {
+        const pos = {};
+        brands.forEach((b, i) => {
+            // 左下角起始，每個卡片橫向間隔 96px，每排 3 個
+            pos[b.name] = { x: 12 + (i % 3) * 96, y: 380 + Math.floor(i / 3) * 96 };
+        });
+        return pos;
+    });
+
+    // 拖曳結束時才更新 state（避免高頻 re-render）
+    const onBrandDrop = useCallback((name, x, y) => {
+        setBrandPositions((prev) => ({ ...prev, [name]: { x, y } }));
+    }, []);
 
     // 主地圖只包含本島（排除離島）
     const mainFeatures = useMemo(
@@ -191,7 +356,7 @@ export default function TaiwanMap({ regionData }) {
             </div>
 
             {/* Main map container with insets overlaid */}
-            <div className="relative glass-card rounded-2xl overflow-hidden">
+            <div ref={mapContainerRef} className="relative glass-card rounded-2xl overflow-hidden">
                 {/* Main SVG (本島 + 澎湖) */}
                 <svg
                     width="100%"
@@ -242,6 +407,22 @@ export default function TaiwanMap({ regionData }) {
                         />
                     ))}
                 </div>
+
+                {/* Draggable brand / game cards */}
+                {brands.map(({ name, logo }) => (
+                    <BrandCard
+                        key={name}
+                        name={name}
+                        logo={logo}
+                        x={brandPositions[name]?.x ?? 12}
+                        y={brandPositions[name]?.y ?? 380}
+                        containerRef={mapContainerRef}
+                        onDrop={onBrandDrop}
+                        regionData={regionData}
+                        colorScale={colorScale}
+                        onTooltip={handleTooltip}
+                    />
+                ))}
             </div>
 
             {/* Color legend */}
