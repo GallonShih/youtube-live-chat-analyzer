@@ -21,13 +21,27 @@ vi.mock('../../api/incenseMap', () => ({
 
 // Mock TaiwanMap to avoid d3/network issues in page-level tests
 vi.mock('./TaiwanMap', () => ({
-    default: ({ regionData }) => (
+    default: ({ regionData, countries }) => (
         <div data-testid="taiwan-map">
             {Object.entries(regionData).map(([name, d]) => (
                 <span key={name} data-region={name} data-count={d.count} />
             ))}
+            {(countries || []).map((c) => (
+                <span key={c.name} data-testid={`map-country-${c.name}`} />
+            ))}
         </div>
     ),
+}));
+
+// Mock useWorldCountries to avoid network calls
+vi.mock('./useWorldCountries', () => ({
+    default: vi.fn(() => ({ countryFeatures: [], loading: false, error: null })),
+    COUNTRY_NAME_MAP: {
+        日本: { code: '392', en: 'Japan' },
+        韓國: { code: '410', en: 'South Korea' },
+        美國: { code: '840', en: 'United States of America' },
+    },
+    COUNTRY_OPTIONS: ['日本', '美國', '韓國'],
 }));
 
 const MOCK_DATA = {
@@ -515,5 +529,124 @@ describe('IncenseMapPage', () => {
         await user.click(screen.getByLabelText('移除品牌 逆水寒'));
 
         expect(screen.queryByText('逆水寒')).not.toBeInTheDocument();
+    });
+
+    // ── 國家管理 ─────────────────────────────────────────────────────────
+
+    test('map tab shows add-country button', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        expect(screen.getByRole('button', { name: /新增國家/ })).toBeInTheDocument();
+        expect(screen.queryByTestId('country-modal')).not.toBeInTheDocument();
+    });
+
+    test('clicking 新增國家 opens modal with select', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+
+        expect(screen.getByTestId('country-modal')).toBeInTheDocument();
+        expect(screen.getByLabelText('國家名稱')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '確認新增' })).toBeDisabled();
+    });
+
+    test('can add a country via modal', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+
+        const select = screen.getByLabelText('國家名稱');
+        fireEvent.change(select, { target: { value: '日本' } });
+
+        await user.click(screen.getByRole('button', { name: '確認新增' }));
+
+        await waitFor(() => expect(screen.queryByTestId('country-modal')).not.toBeInTheDocument());
+        // 國家標籤出現在地圖 tab 中
+        expect(screen.getByText('日本')).toBeInTheDocument();
+    });
+
+    test('country modal shows error for duplicate', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        // 先新增日本
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+        fireEvent.change(screen.getByLabelText('國家名稱'), { target: { value: '日本' } });
+        await user.click(screen.getByRole('button', { name: '確認新增' }));
+        await waitFor(() => expect(screen.queryByTestId('country-modal')).not.toBeInTheDocument());
+
+        // 再次新增日本
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+        fireEvent.change(screen.getByLabelText('國家名稱'), { target: { value: '日本' } });
+        await user.click(screen.getByRole('button', { name: '確認新增' }));
+
+        expect(screen.getByTestId('country-modal')).toBeInTheDocument();
+        expect(screen.getByText('此國家已存在')).toBeInTheDocument();
+    });
+
+    test('can remove a country', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        // 新增日本
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+        fireEvent.change(screen.getByLabelText('國家名稱'), { target: { value: '日本' } });
+        await user.click(screen.getByRole('button', { name: '確認新增' }));
+        await waitFor(() => expect(screen.getByText('日本')).toBeInTheDocument());
+
+        // 移除日本
+        await user.click(screen.getByLabelText('移除國家 日本'));
+        expect(screen.queryByText('日本')).not.toBeInTheDocument();
+    });
+
+    test('country modal can be closed via cancel', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+        expect(screen.getByTestId('country-modal')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: '取消' }));
+        expect(screen.queryByTestId('country-modal')).not.toBeInTheDocument();
+    });
+
+    test('countries prop is passed to TaiwanMap', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        // 新增韓國
+        await user.click(screen.getByRole('button', { name: /新增國家/ }));
+        fireEvent.change(screen.getByLabelText('國家名稱'), { target: { value: '韓國' } });
+        await user.click(screen.getByRole('button', { name: '確認新增' }));
+
+        await waitFor(() => expect(screen.getByTestId('map-country-韓國')).toBeInTheDocument());
     });
 });

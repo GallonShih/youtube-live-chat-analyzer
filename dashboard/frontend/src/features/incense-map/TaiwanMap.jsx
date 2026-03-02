@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useCallback, memo } from 'react';
 import { geoMercator, geoPath, geoArea, scaleLinear } from 'd3';
 import useTaiwanMap from './useTaiwanMap';
+import useWorldCountries from './useWorldCountries';
 
 /** 主地圖 SVG 尺寸 */
 const MAIN_WIDTH = 420;
@@ -16,6 +17,7 @@ const INSETS = [
 ];
 
 const CARD_SIZE = 90;
+const COUNTRY_INSET_SIZE = { width: 160, height: 140 };
 
 /**
  * 共用拖曳 hook — 直接操作 DOM style 確保流暢，放開時才同步 state。
@@ -222,6 +224,68 @@ const BrandCard = memo(function BrandCard({ name, logo, x, y, containerRef, onDr
 });
 
 /**
+ * 國家放大圖 (Country Inset) — 用 world-atlas 的 GeoJSON 渲染單一國家輪廓。
+ * 可在地圖容器內自由拖曳，與離島 InsetMap 共用相同互動模式。
+ */
+const CountryInset = memo(function CountryInset({ name, feature: ft, x, y, containerRef, onDrop, regionData, colorScale, onTooltip }) {
+    const { width, height } = COUNTRY_INSET_SIZE;
+    const labelHeight = 22;
+    const svgHeight = height - labelHeight;
+
+    const handleDrop = useCallback((nx, ny) => onDrop(name, nx, ny), [name, onDrop]);
+    const { elRef, dragging, onPointerDown, onPointerMove, onPointerUp } = useDrag(containerRef, handleDrop, width, height);
+
+    const projection = useMemo(() => {
+        if (!ft) return null;
+        const pad = 8;
+        return geoMercator().fitExtent(
+            [[pad, pad], [width - pad, svgHeight - pad]],
+            ft
+        );
+    }, [ft, width, svgHeight]);
+
+    const pathGen = useMemo(() => (projection ? geoPath(projection) : null), [projection]);
+
+    if (!ft || !pathGen) return null;
+
+    const data = regionData[name];
+    const fill = data ? colorScale(data.count) : '#e5e7eb';
+
+    return (
+        <div
+            ref={elRef}
+            className="glass-card rounded-lg overflow-hidden border border-white/20 select-none"
+            style={{ width, height, position: 'absolute', left: x, top: y, cursor: 'grab', touchAction: 'none', zIndex: 10 }}
+            data-testid={`country-${name}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onMouseMove={(e) => {
+                if (!dragging.current)
+                    onTooltip({ x: e.clientX, y: e.clientY, name, data });
+            }}
+            onMouseLeave={() => onTooltip(null)}
+        >
+            <div className="text-[11px] font-semibold text-white/60 px-2 pt-1 pb-0 leading-tight pointer-events-none"
+                 style={{ height: labelHeight }}>
+                {name}
+            </div>
+            <svg width={width} height={svgHeight} style={{ display: 'block' }} className="pointer-events-none">
+                <path
+                    d={pathGen(ft) ?? ''}
+                    fill={fill}
+                    stroke="rgba(255,255,255,0.8)"
+                    strokeWidth={1.2}
+                    style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
+                    data-region={name}
+                    data-count={data?.count ?? 0}
+                />
+            </svg>
+        </div>
+    );
+});
+
+/**
  * 主地圖 SVG（本島 + 澎湖）— memo 避免 brands 變動導致地圖路徑重繪。
  */
 const MainMapSvg = memo(function MainMapSvg({ mainFeatures, pathGen, regionData, colorScale, scale, onTooltip }) {
@@ -261,8 +325,10 @@ const MainMapSvg = memo(function MainMapSvg({ mainFeatures, pathGen, regionData,
     );
 });
 
-export default memo(function TaiwanMap({ regionData, brands = [] }) {
+export default memo(function TaiwanMap({ regionData, brands = [], countries = [] }) {
     const { features, loading, error } = useTaiwanMap();
+    const countryNames = useMemo(() => countries.map((c) => c.name), [countries]);
+    const { countryFeatures } = useWorldCountries(countryNames);
     const [tooltip, setTooltip] = useState(null);
     const [scale, setScale] = useState(60);
     const mapContainerRef = useRef(null);
@@ -277,6 +343,10 @@ export default memo(function TaiwanMap({ regionData, brands = [] }) {
         }
         brands.forEach((b, i) => {
             pos[`brand-${b.name}`] = { x: 12 + (i % 3) * 96, y: iy + Math.floor(i / 3) * 96 };
+        });
+        // Country insets: 右側垂直排列
+        countries.forEach((c, i) => {
+            pos[`country-${c.name}`] = { x: MAIN_WIDTH - COUNTRY_INSET_SIZE.width - 12, y: 12 + i * (COUNTRY_INSET_SIZE.height + 8) };
         });
         return pos;
     });
@@ -312,6 +382,29 @@ export default memo(function TaiwanMap({ regionData, brands = [] }) {
         prevBrandCountRef.current = brands.length;
     }
 
+    // 國家 inset 增量位置管理
+    const prevCountryCountRef = useRef(countries.length);
+    if (countries.length !== prevCountryCountRef.current) {
+        const newPositions = { ...positions };
+        let needsUpdate = false;
+        countries.forEach((c, i) => {
+            const key = `country-${c.name}`;
+            if (!newPositions[key]) {
+                newPositions[key] = { x: MAIN_WIDTH - COUNTRY_INSET_SIZE.width - 12, y: 12 + i * (COUNTRY_INSET_SIZE.height + 8) };
+                needsUpdate = true;
+            }
+        });
+        const countryKeys = new Set(countries.map((c) => `country-${c.name}`));
+        for (const key of Object.keys(newPositions)) {
+            if (key.startsWith('country-') && !countryKeys.has(key)) {
+                delete newPositions[key];
+                needsUpdate = true;
+            }
+        }
+        if (needsUpdate) setPositions(newPositions);
+        prevCountryCountRef.current = countries.length;
+    }
+
     const onItemDrop = useCallback((key, x, y) => {
         setPositions((prev) => ({ ...prev, [key]: { x, y } }));
     }, []);
@@ -326,6 +419,10 @@ export default memo(function TaiwanMap({ regionData, brands = [] }) {
 
     const onBrandDrop = useCallback((name, x, y) => {
         onItemDrop(`brand-${name}`, x, y);
+    }, [onItemDrop]);
+
+    const onCountryDrop = useCallback((name, x, y) => {
+        onItemDrop(`country-${name}`, x, y);
     }, [onItemDrop]);
 
     // 主地圖只包含本島（排除離島）
@@ -454,6 +551,25 @@ export default memo(function TaiwanMap({ regionData, brands = [] }) {
                             y={pos.y}
                             containerRef={mapContainerRef}
                             onDrop={onBrandDrop}
+                            regionData={regionData}
+                            colorScale={colorScale}
+                            onTooltip={handleTooltip}
+                        />
+                    );
+                })}
+
+                {/* Draggable country inset maps */}
+                {countryFeatures.map(({ name, feature: ft }) => {
+                    const pos = positions[`country-${name}`] ?? { x: MAIN_WIDTH - COUNTRY_INSET_SIZE.width - 12, y: 12 };
+                    return (
+                        <CountryInset
+                            key={name}
+                            name={name}
+                            feature={ft}
+                            x={pos.x}
+                            y={pos.y}
+                            containerRef={mapContainerRef}
+                            onDrop={onCountryDrop}
                             regionData={regionData}
                             colorScale={colorScale}
                             onTooltip={handleTooltip}

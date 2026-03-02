@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import TaiwanMap from './TaiwanMap';
 import useTaiwanMap from './useTaiwanMap';
+import useWorldCountries from './useWorldCountries';
 
 // 模擬 22 個行政區 features（簡化版幾何，足以測試邏輯）
 const makeMockFeature = (name) => ({
@@ -38,6 +39,17 @@ vi.mock('./useTaiwanMap', () => ({
     ]),
     cleanName: (name) => name.replace(/[縣市]$|縣市$/, ''),
     processTopology: vi.fn(),
+}));
+
+// Mock useWorldCountries hook
+vi.mock('./useWorldCountries', () => ({
+    default: vi.fn(() => ({
+        countryFeatures: [],
+        loading: false,
+        error: null,
+    })),
+    COUNTRY_NAME_MAP: {},
+    COUNTRY_OPTIONS: [],
 }));
 
 const REGION_DATA = {
@@ -150,5 +162,44 @@ describe('TaiwanMap', () => {
         render(<TaiwanMap regionData={REGION_DATA} />);
         expect(screen.getByTestId('map-error')).toBeInTheDocument();
         expect(screen.getByText(/地圖載入失敗/)).toBeInTheDocument();
+    });
+
+    test('renders country insets when countries prop is provided', () => {
+        const MOCK_JP_FEATURE = {
+            type: 'Feature',
+            id: '392',
+            properties: { name: 'Japan' },
+            geometry: { type: 'Polygon', coordinates: [[[130, 30], [145, 30], [145, 45], [130, 45], [130, 30]]] },
+        };
+        useWorldCountries.mockReturnValue({
+            countryFeatures: [{ name: '日本', feature: MOCK_JP_FEATURE }],
+            loading: false,
+            error: null,
+        });
+        render(<TaiwanMap regionData={REGION_DATA} countries={[{ name: '日本' }]} />);
+        expect(screen.getByTestId('country-日本')).toBeInTheDocument();
+        expect(screen.getByText('日本')).toBeInTheDocument();
+    });
+
+    test('country inset shows tooltip on mouse move', () => {
+        const MOCK_KR_FEATURE = {
+            type: 'Feature',
+            id: '410',
+            properties: { name: 'South Korea' },
+            geometry: { type: 'Polygon', coordinates: [[[126, 33], [130, 33], [130, 38], [126, 38], [126, 33]]] },
+        };
+        useWorldCountries.mockReturnValue({
+            countryFeatures: [{ name: '韓國', feature: MOCK_KR_FEATURE }],
+            loading: false,
+            error: null,
+        });
+        const regionDataWithCountry = { ...REGION_DATA, 韓國: { count: 25, percentage: 12.5 } };
+        render(<TaiwanMap regionData={regionDataWithCountry} countries={[{ name: '韓國' }]} />);
+        const countryInset = screen.getByTestId('country-韓國');
+        fireEvent.mouseMove(countryInset, { clientX: 300, clientY: 100 });
+        expect(screen.getByTestId('map-tooltip')).toBeInTheDocument();
+        // '韓國' appears in both inset label and tooltip
+        expect(screen.getAllByText('韓國').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByText(/25 次/)).toBeInTheDocument();
     });
 });
