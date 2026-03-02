@@ -19,6 +19,17 @@ vi.mock('../../api/incenseMap', () => ({
     fetchIncenseCandidates: vi.fn(),
 }));
 
+// Mock TaiwanMap to avoid d3/network issues in page-level tests
+vi.mock('./TaiwanMap', () => ({
+    default: ({ regionData }) => (
+        <div data-testid="taiwan-map">
+            {Object.entries(regionData).map(([name, d]) => (
+                <span key={name} data-region={name} data-count={d.count} />
+            ))}
+        </div>
+    ),
+}));
+
 const MOCK_DATA = {
     total_matched: 6,
     unique_candidates: 3,
@@ -44,8 +55,13 @@ describe('IncenseMapPage', () => {
         fetchIncenseCandidates.mockRejectedValue(new Error('API error: 500'));
         renderPage();
         await waitFor(() =>
-            expect(screen.getByText(/錯誤：API error: 500/)).toBeInTheDocument()
+            expect(screen.getByText(/資料載入失敗：API error: 500/)).toBeInTheDocument()
         );
+        // 即使 API 失敗，仍應顯示 tab 切換
+        expect(screen.getByRole('button', { name: '地圖' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '表格' })).toBeInTheDocument();
+        // 應有重試按鈕
+        expect(screen.getByRole('button', { name: '重試' })).toBeInTheDocument();
     });
 
     test('renders summary stats after load', async () => {
@@ -338,5 +354,64 @@ describe('IncenseMapPage', () => {
         expect(screen.getByText('台中')).toBeInTheDocument();
         expect(screen.getByText('高雄')).toBeInTheDocument();
         expect(screen.queryByText('台北')).not.toBeInTheDocument();
+    });
+
+    // ── Tab 切換 ──────────────────────────────────────────────────────────
+
+    test('renders tab switcher with 地圖 and 表格 tabs', async () => {
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: '地圖' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '表格' })).toBeInTheDocument();
+    });
+
+    test('default tab is 表格, shows table content', async () => {
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.queryByTestId('taiwan-map')).not.toBeInTheDocument();
+    });
+
+    test('clicking 地圖 tab shows TaiwanMap and hides table', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        expect(screen.getByTestId('taiwan-map')).toBeInTheDocument();
+        expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    test('regionData passed to TaiwanMap contains matched candidates', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        const map = screen.getByTestId('taiwan-map');
+        expect(map.querySelector('[data-region="台中"]')).toBeInTheDocument();
+        expect(map.querySelector('[data-region="高雄"]')).toBeInTheDocument();
+    });
+
+    test('regionData respects applied mappings', async () => {
+        const user = userEvent.setup();
+        fetchIncenseCandidates.mockResolvedValue(MOCK_DATA);
+        renderPage();
+        await waitFor(() => expect(screen.getByText('台中')).toBeInTheDocument());
+
+        await uploadMapping(user, { 高雄: '南部', 台北: '南部' });
+        await waitFor(() => expect(screen.getByText('南部')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: '地圖' }));
+
+        const map = screen.getByTestId('taiwan-map');
+        expect(map.querySelector('[data-region="台中"]')).toBeInTheDocument();
+        expect(map.querySelector('[data-region="南部"]')).not.toBeInTheDocument();
     });
 });

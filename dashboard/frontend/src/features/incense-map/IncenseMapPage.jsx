@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { fetchIncenseCandidates } from '../../api/incenseMap';
 import Navigation from '../../components/common/Navigation';
+import TaiwanMap from './TaiwanMap';
+import { REGION_NAMES } from './useTaiwanMap';
 
 // 對一組 candidates 套用單一 mapping，回傳合併後的新 candidates
 function applyOneMapping(candidates, map) {
@@ -29,6 +31,7 @@ export default function IncenseMapPage() {
     // [{ name: string, map: object }]
     const [mappings, setMappings] = useState([]);
     const [mappingError, setMappingError] = useState('');
+    const [activeTab, setActiveTab] = useState('table');
     const fileInputRef = useRef(null);
 
     const load = (start, end) => {
@@ -83,6 +86,18 @@ export default function IncenseMapPage() {
         );
     }, [data, mappings]);
 
+    // 將 mappedCandidates 中匹配行政區名稱的詞彙轉為 regionData
+    const regionData = useMemo(() => {
+        const result = {};
+        for (const { word, count, percentage } of mappedCandidates) {
+            const normalized = word.replace(/臺/g, '台');
+            if (REGION_NAMES.has(normalized)) {
+                result[normalized] = { count, percentage };
+            }
+        }
+        return result;
+    }, [mappedCandidates]);
+
     const sorted = useMemo(() => {
         let list = mappedCandidates.filter(c =>
             search === '' || c.word.includes(search)
@@ -135,17 +150,27 @@ export default function IncenseMapPage() {
             <div className="flex items-center justify-center h-64 text-white/70">載入中...</div>
         </PageShell>
     );
-    if (error) return (
-        <PageShell>
-            <div className="flex items-center justify-center h-64 text-red-300">錯誤：{error}</div>
-        </PageShell>
-    );
 
     const displayTotal = mappedCandidates.reduce((s, c) => s + c.count, 0);
     const displayUnique = mappedCandidates.length;
 
     return (
         <PageShell>
+            {/* API 錯誤提示（不阻擋頁面） */}
+            {error && (
+                <div className="glass-card p-3 rounded-2xl mb-4 border border-red-400/30 bg-red-500/10">
+                    <p className="text-sm text-red-300">
+                        ⚠ 資料載入失敗：{error}
+                        <button
+                            onClick={() => load(startDate, endDate)}
+                            className="ml-3 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-200 px-2 py-0.5 rounded transition-colors"
+                        >
+                            重試
+                        </button>
+                    </p>
+                </div>
+            )}
+
             {/* 摘要 */}
             <p className="text-sm text-white/70 mb-4">
                 共 {displayTotal.toLocaleString()} 則上香訊息，{displayUnique} 個候選詞
@@ -238,6 +263,31 @@ export default function IncenseMapPage() {
                 )}
             </div>
 
+            {/* Tab 切換 */}
+            <div className="flex gap-1 mb-4">
+                {[{ key: 'map', label: '地圖' }, { key: 'table', label: '表格' }].map(({ key, label }) => (
+                    <button
+                        key={key}
+                        onClick={() => setActiveTab(key)}
+                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            activeTab === key
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-white/20 hover:bg-white/30 text-white'
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {/* 地圖 Tab */}
+            {activeTab === 'map' && (
+                <TaiwanMap regionData={regionData} />
+            )}
+
+            {/* 表格 Tab */}
+            {activeTab === 'table' && (
+            <>
             {/* 搜尋 + 下載 */}
             <div className="flex gap-2 mb-4">
                 <input
@@ -305,6 +355,8 @@ export default function IncenseMapPage() {
                     </tbody>
                 </table>
             </div>
+            </>
+            )}
         </PageShell>
     );
 }
