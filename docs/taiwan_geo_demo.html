@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3.js 台灣地圖 (簡化名稱版)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            overflow: hidden;
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        .map-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .county {
+            stroke: #fff;
+            stroke-width: 0.3;
+            transition: fill 0.2s, stroke-width 0.2s;
+            cursor: pointer;
+        }
+        .county:hover {
+            stroke-width: 1.5;
+            filter: brightness(0.9);
+        }
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+            font-size: 14px;
+            z-index: 100;
+            display: none;
+        }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            max-width: 300px;
+            z-index: 40;
+        }
+        .inset-box {
+            position: absolute;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            overflow: hidden;
+            z-index: 30;
+        }
+        .inset-label {
+            position: absolute;
+            top: 4px;
+            left: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #64748b;
+            background: rgba(255,255,255,0.8);
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+        #matsu-inset { top: 20px; right: 20px; width: 140px; height: 140px; }
+        #kinmen-inset { top: 170px; right: 20px; width: 140px; height: 140px; }
+    </style>
+</head>
+<body>
+
+    <div class="info-panel">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2">台灣行政區 (簡化版)</h1>
+        <p class="text-slate-500 text-sm mb-4">地圖已移除名稱中的「縣」與「市」後綴，並維持地理合併功能。</p>
+        <div id="active-county" class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <span class="text-slate-400 text-xs uppercase font-semibold">當前選取</span>
+            <div id="county-name" class="text-xl font-bold text-blue-600">尚未選取</div>
+        </div>
+        <button onclick="resetZoom()" class="mt-4 w-full py-2 bg-slate-800 text-white rounded-lg text-sm hover:bg-slate-700 transition">重設地圖視角</button>
+    </div>
+
+    <div id="matsu-inset" class="inset-box">
+        <div class="inset-label">連江 (馬祖)</div>
+    </div>
+    <div id="kinmen-inset" class="inset-box">
+        <div class="inset-label">金門</div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+    <div class="map-container" id="map"></div>
+
+    <script>
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        let finalFeatureCollection = [];
+        
+        const svg = d3.select("#map").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        const g = svg.append("g");
+
+        const zoom = d3.zoom()
+            .scaleExtent([1, 40])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+                g.selectAll(".county").style("stroke-width", 0.5 / event.transform.k);
+            });
+        svg.call(zoom);
+
+        const projection = d3.geoMercator();
+        const path = d3.geoPath().projection(projection);
+        const colorScale = d3.scaleOrdinal(d3.schemeTableau10);
+
+        // 名稱去後綴處理函數
+        const cleanName = (name) => name.replace(/[縣市]$|縣市$/, "");
+
+        const MAP_URL = "https://cdn.jsdelivr.net/npm/taiwan-atlas/counties-10t.json";
+
+        async function initMap() {
+            try {
+                const response = await fetch(MAP_URL);
+                const topology = await response.json();
+                
+                const countyObjects = topology.objects.counties.geometries;
+                
+                // 定義合併規則 (使用原始數據名稱進行比對)
+                const mergeGroups = [
+                    { name: "新竹", targets: ["新竹縣", "新竹市"] },
+                    { name: "嘉義", targets: ["嘉義縣", "嘉義市"] }
+                ];
+
+                const mergedFeatures = [];
+                const mergedNames = new Set();
+
+                mergeGroups.forEach(group => {
+                    const groupGeometries = countyObjects.filter(d => group.targets.includes(d.properties.COUNTYNAME));
+                    if (groupGeometries.length > 0) {
+                        const mergedShape = topojson.merge(topology, groupGeometries);
+                        mergedShape.properties = { COUNTYNAME: group.name };
+                        mergedFeatures.push(mergedShape);
+                        group.targets.forEach(t => mergedNames.add(t));
+                    }
+                });
+
+                // 取得其他不需要合併的縣市並清洗名稱
+                const otherCounties = topojson.feature(topology, {
+                    type: "GeometryCollection",
+                    geometries: countyObjects.filter(d => !mergedNames.has(d.properties.COUNTYNAME))
+                }).features.map(f => {
+                    f.properties.COUNTYNAME = cleanName(f.properties.COUNTYNAME);
+                    return f;
+                });
+
+                // 整合最終顯示集合
+                finalFeatureCollection = [...otherCounties, ...mergedFeatures];
+
+                // 主圖適配
+                projection.fitSize([width, height], { type: "FeatureCollection", features: finalFeatureCollection });
+
+                // 1. 繪製主地圖
+                drawPaths(g, finalFeatureCollection, projection);
+
+                // 2. 建立離島放大圖 (使用清洗後的名稱)
+                createInset("matsu-inset", "連江");
+                createInset("kinmen-inset", "金門");
+
+            } catch (error) {
+                console.error("載入地圖失敗:", error);
+            }
+        }
+
+        function drawPaths(container, features, proj) {
+            const localPath = d3.geoPath().projection(proj);
+            
+            return container.selectAll("path")
+                .data(features)
+                .enter()
+                .append("path")
+                .attr("class", "county")
+                .attr("d", localPath)
+                .attr("fill", d => colorScale(d.properties.COUNTYNAME))
+                .on("mouseover", function(event, d) {
+                    d3.select("#tooltip")
+                        .style("display", "block")
+                        .html(`<strong>${d.properties.COUNTYNAME}</strong>`)
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mousemove", function(event) {
+                    d3.select("#tooltip")
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => d3.select("#tooltip").style("display", "none"))
+                .on("click", (event, d) => {
+                    event.stopPropagation();
+                    selectCounty(d);
+                });
+        }
+
+        function createInset(elementId, countyName) {
+            const insetContainer = d3.select(`#${elementId}`);
+            const insetWidth = 140;
+            const insetHeight = 140;
+            
+            const insetSvg = insetContainer.append("svg")
+                .attr("width", insetWidth)
+                .attr("height", insetHeight);
+            
+            const feature = finalFeatureCollection.find(f => f.properties.COUNTYNAME === countyName);
+            if (!feature) return;
+
+            const insetProjection = d3.geoMercator()
+                .fitExtent([[5, 5], [insetWidth - 5, insetHeight - 5]], feature);
+            
+            const insetPath = d3.geoPath().projection(insetProjection);
+
+            insetSvg.append("rect")
+                .attr("width", insetWidth)
+                .attr("height", insetHeight)
+                .attr("fill", "#f1f5f9")
+                .style("cursor", "pointer")
+                .on("click", () => selectCounty(feature));
+
+            insetSvg.append("path")
+                .datum(feature)
+                .attr("d", insetPath)
+                .attr("fill", colorScale(countyName))
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1)
+                .style("cursor", "pointer")
+                .on("mouseover", (event) => {
+                    d3.select("#tooltip").style("display", "block").html(`<strong>${countyName}</strong>`)
+                        .style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => d3.select("#tooltip").style("display", "none"))
+                .on("click", (event) => {
+                    event.stopPropagation();
+                    selectCounty(feature);
+                });
+        }
+
+        function selectCounty(d) {
+            d3.select("#county-name").text(d.properties.COUNTYNAME);
+            const [[x0, y0], [x1, y1]] = path.bounds(d);
+            const scale = Math.max(1, Math.min(30, 0.7 / Math.max((x1 - x0) / width, (y1 - y0) / height)));
+            
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-(x0 + x1) / 2, -(y0 + y1) / 2)
+            );
+        }
+
+        window.resetZoom = function() {
+            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+            d3.select("#county-name").text("尚未選取");
+        }
+
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            svg.attr("width", newWidth).attr("height", newHeight);
+            projection.fitSize([newWidth, newHeight], { type: "FeatureCollection", features: finalFeatureCollection });
+            g.selectAll("path").attr("d", path);
+        });
+
+        initMap();
+    </script>
+</body>
+</html>
