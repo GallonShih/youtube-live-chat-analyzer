@@ -5,6 +5,7 @@ export const CHART_MODES = {
     OVERVIEW: 'overview',   // A: Fixed full range, data fills in progressively
     GROWING: 'growing',     // B: X-axis grows with data, no fixed max
     ROLLING: 'rolling',     // C: Fixed-width window follows current position
+    ALL: 'all',             // A+B+C: Render all chart modes together
 };
 
 /** Rolling window size options (hours) */
@@ -40,15 +41,19 @@ export function useChartAxisMode() {
      * @param {Array} snapshots - All loaded snapshots
      * @param {Object|null} currentSnapshot - The snapshot at currentIndex
      * @param {number} stepSeconds - Step interval in seconds
+     * @param {string=} modeOverride - Optional mode override
+     * @param {number=} rollingWindowHoursOverride - Optional rolling window override
      * @returns {{ min: number|undefined, max: number|undefined }}
      */
-    const getTimeRange = useCallback((snapshots, currentSnapshot, stepSeconds) => {
+    const getTimeRange = useCallback((snapshots, currentSnapshot, stepSeconds, modeOverride, rollingWindowHoursOverride) => {
         if (!snapshots.length) return { min: undefined, max: undefined };
 
+        const mode = modeOverride || chartMode;
+        const rollingHours = rollingWindowHoursOverride ?? rollingWindowHours;
         const allMin = new Date(snapshots[0].timestamp).getTime();
         const allMax = new Date(snapshots[snapshots.length - 1].timestamp).getTime();
 
-        if (chartMode === CHART_MODES.OVERVIEW) {
+        if (mode === CHART_MODES.OVERVIEW) {
             return { min: allMin, max: allMax };
         }
 
@@ -58,7 +63,7 @@ export function useChartAxisMode() {
         // Right padding: 1 step worth of time
         const rightPadding = stepSeconds * 1000;
 
-        if (chartMode === CHART_MODES.GROWING) {
+        if (mode === CHART_MODES.GROWING) {
             return {
                 min: allMin,
                 max: currentTime + rightPadding,
@@ -66,7 +71,7 @@ export function useChartAxisMode() {
         }
 
         // ROLLING mode
-        const windowMs = rollingWindowHours * 60 * 60 * 1000;
+        const windowMs = rollingHours * 60 * 60 * 1000;
         return {
             min: Math.max(allMin, currentTime - windowMs),
             max: currentTime + rightPadding,
@@ -84,17 +89,31 @@ export function useChartAxisMode() {
      * @param {Array} snapshots - All loaded snapshots
      * @param {Array} visibleSnapshots - Snapshots up to currentIndex
      * @param {Object|null} currentSnapshot - Current snapshot
+     * @param {string=} modeOverride - Optional mode override
+     * @param {number=} rollingWindowHoursOverride - Optional rolling window override
+     * @param {boolean=} dynamicYAxisOverride - Optional dynamic Y-axis override
      * @returns {{ maxViewerCount: number, maxMessageCount: number }}
      */
-    const getMaxValues = useCallback((snapshots, visibleSnapshots, currentSnapshot) => {
+    const getMaxValues = useCallback((
+        snapshots,
+        visibleSnapshots,
+        currentSnapshot,
+        modeOverride,
+        rollingWindowHoursOverride,
+        dynamicYAxisOverride
+    ) => {
         if (!snapshots.length) return { maxViewerCount: 0, maxMessageCount: 0 };
+
+        const mode = modeOverride || chartMode;
+        const rollingHours = rollingWindowHoursOverride ?? rollingWindowHours;
+        const dynamic = dynamicYAxisOverride ?? dynamicYAxis;
 
         // Global max (used by overview, and non-dynamic modes)
         const globalMaxV = Math.max(...snapshots.map(s => s.viewer_count || 0));
         const globalMaxM = Math.max(...snapshots.map(s => s.hourly_messages || 0));
 
         // Overview always uses global max
-        if (chartMode === CHART_MODES.OVERVIEW || !dynamicYAxis) {
+        if (mode === CHART_MODES.OVERVIEW || !dynamic) {
             return { maxViewerCount: globalMaxV, maxMessageCount: globalMaxM };
         }
 
@@ -104,12 +123,12 @@ export function useChartAxisMode() {
 
         // Determine which snapshots to use for dynamic Y-axis
         let relevantSnaps;
-        if (chartMode === CHART_MODES.GROWING) {
+        if (mode === CHART_MODES.GROWING) {
             // Growing: use all visible snapshots (everything up to currentIndex)
             relevantSnaps = visibleSnapshots;
         } else {
             // Rolling: use only snapshots within the rolling window
-            const windowMs = rollingWindowHours * 60 * 60 * 1000;
+            const windowMs = rollingHours * 60 * 60 * 1000;
             const currentTime = new Date(currentSnapshot.timestamp).getTime();
             const windowMin = currentTime - windowMs;
             relevantSnaps = visibleSnapshots.filter(s =>

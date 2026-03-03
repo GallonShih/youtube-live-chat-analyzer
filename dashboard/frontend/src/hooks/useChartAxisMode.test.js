@@ -49,6 +49,24 @@ describe('useChartAxisMode', () => {
             expect(range.max).toBe(currentTime + 300 * 1000);
         });
 
+        test('supports mode override for all-mode rendering', () => {
+            const { result } = renderHook(() => useChartAxisMode());
+            const snapshots = makeSnapshots(100, Date.now(), 300000);
+            const current = snapshots[50];
+
+            const range = result.current.getTimeRange(
+                snapshots,
+                current,
+                300,
+                CHART_MODES.ROLLING,
+                2
+            );
+            const currentTime = new Date(current.timestamp).getTime();
+
+            expect(range.min).toBe(currentTime - 2 * 60 * 60 * 1000);
+            expect(range.max).toBe(currentTime + 300 * 1000);
+        });
+
         test('rolling mode: min=current-window, max=current+1step', () => {
             const { result } = renderHook(() => useChartAxisMode());
             act(() => {

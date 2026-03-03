@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 
 const STORAGE_KEY = 'playback-layout';
+const CHART_SINGLE_HEIGHT = 10;
+const CHART_ALL_MODES_HEIGHT = 30;
 
 // Default layout for the 5 chart blocks
 // Using a 12-column grid system
@@ -38,6 +40,9 @@ export function usePlaybackLayout() {
         return DEFAULT_LAYOUT;
     });
 
+    const chartExpandedRef = useRef(false);
+    const lastSingleChartHeightRef = useRef(CHART_SINGLE_HEIGHT);
+
     // Persist layout changes to localStorage
     useEffect(() => {
         try {
@@ -53,8 +58,48 @@ export function usePlaybackLayout() {
             ['controls', 'stats', 'chart', 'wordcloud', 'barrace'].includes(item.i)
         );
         if (filteredLayout.length === 5) {
+            if (!chartExpandedRef.current) {
+                const chartItem = filteredLayout.find((item) => item.i === 'chart');
+                if (chartItem?.h) {
+                    lastSingleChartHeightRef.current = chartItem.h;
+                }
+            }
             setLayout(filteredLayout);
         }
+    }, []);
+
+    // Auto resize chart panel when switching chart modes
+    const setChartExpanded = useCallback((expanded) => {
+        setLayout((prevLayout) => {
+            const chartItem = prevLayout.find((item) => item.i === 'chart');
+            if (!chartItem) return prevLayout;
+
+            if (expanded && !chartExpandedRef.current) {
+                lastSingleChartHeightRef.current = chartItem.h || CHART_SINGLE_HEIGHT;
+            }
+
+            const targetHeight = expanded
+                ? CHART_ALL_MODES_HEIGHT
+                : (lastSingleChartHeightRef.current || CHART_SINGLE_HEIGHT);
+            if (chartItem.h === targetHeight) {
+                chartExpandedRef.current = expanded;
+                return prevLayout;
+            }
+
+            const delta = targetHeight - chartItem.h;
+            const chartBottom = chartItem.y + chartItem.h;
+            chartExpandedRef.current = expanded;
+
+            return prevLayout.map((item) => {
+                if (item.i === 'chart') {
+                    return { ...item, h: targetHeight };
+                }
+                if (item.y >= chartBottom) {
+                    return { ...item, y: Math.max(0, item.y + delta) };
+                }
+                return item;
+            });
+        });
     }, []);
 
     // Reset to default layout
@@ -66,6 +111,7 @@ export function usePlaybackLayout() {
     return {
         layout,
         handleLayoutChange,
+        setChartExpanded,
         resetLayout,
         defaultLayout: DEFAULT_LAYOUT
     };

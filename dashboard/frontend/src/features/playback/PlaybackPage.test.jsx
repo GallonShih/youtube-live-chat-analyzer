@@ -54,6 +54,7 @@ vi.mock('../../hooks/useReplacementWordlists', () => ({
 
 const resetLayoutMock = vi.fn();
 const handleLayoutChangeMock = vi.fn();
+const setChartExpandedMock = vi.fn();
 
 vi.mock('../../hooks/usePlaybackLayout', () => ({
     usePlaybackLayout: () => ({
@@ -65,6 +66,7 @@ vi.mock('../../hooks/usePlaybackLayout', () => ({
             { i: 'barrace', x: 7, y: 19, w: 5, h: 14 },
         ],
         handleLayoutChange: handleLayoutChangeMock,
+        setChartExpanded: setChartExpandedMock,
         resetLayout: resetLayoutMock,
     }),
 }));
@@ -156,5 +158,23 @@ describe('PlaybackPage', () => {
         const iconButtons = screen.getAllByRole('button');
         await user.click(iconButtons.find((btn) => btn.className.includes('rounded-full')) || iconButtons[0]);
         expect(hook.togglePlayback).toHaveBeenCalledTimes(1);
+    });
+
+    test('shows chart mode option for rendering all three modes', () => {
+        usePlayback.mockReturnValue(makeHook());
+        render(<PlaybackPage />);
+        expect(screen.getByText('三模式')).toBeInTheDocument();
+    });
+
+    test('auto-expands and collapses chart block when switching chart mode', async () => {
+        usePlayback.mockReturnValue(makeHook());
+        const user = userEvent.setup();
+        render(<PlaybackPage />);
+
+        await user.click(screen.getByText('三模式'));
+        expect(setChartExpandedMock).toHaveBeenCalledWith(true);
+
+        await user.click(screen.getByRole('button', { name: '全景' }));
+        expect(setChartExpandedMock).toHaveBeenCalledWith(false);
     });
 });

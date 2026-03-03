@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Responsive, useContainerWidth } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -62,13 +62,12 @@ function PlaybackPage() {
 
     const { savedWordlists: savedExclusionWordlists, loading: loadingExclusionWordlists } = useWordlists();
     const { savedWordlists: savedReplacementWordlists, loading: loadingReplacementWordlists } = useReplacementWordlists();
-    const { layout, handleLayoutChange, resetLayout } = usePlaybackLayout();
+    const { layout, handleLayoutChange, setChartExpanded, resetLayout } = usePlaybackLayout();
     const {
         chartMode, setChartMode,
         rollingWindowHours, setRollingWindowHours,
         dynamicYAxis, setDynamicYAxis,
         getTimeRange, getMaxValues,
-        shouldShowPositionLine, chartAnimation,
     } = useChartAxisMode();
 
     // Chart mode options
@@ -76,6 +75,7 @@ function PlaybackPage() {
         { value: CHART_MODES.OVERVIEW, label: '全景' },
         { value: CHART_MODES.GROWING, label: '延伸' },
         { value: CHART_MODES.ROLLING, label: '推進' },
+        { value: CHART_MODES.ALL, label: '三模式' },
     ];
 
     // Word cloud config state
@@ -265,15 +265,22 @@ function PlaybackPage() {
         ],
     }), [viewerData, hourlyMessageData]);
 
-    // Max values (mode-aware via hook)
-    const { maxViewerCount, maxMessageCount } = useMemo(() =>
-        getMaxValues(snapshots, visibleSnapshots, currentSnapshot),
-    [getMaxValues, snapshots, visibleSnapshots, currentSnapshot]);
+    const modeLabels = {
+        [CHART_MODES.OVERVIEW]: '全景',
+        [CHART_MODES.GROWING]: '延伸',
+        [CHART_MODES.ROLLING]: '推進',
+    };
 
-    // Time range (mode-aware via hook)
-    const timeRange = useMemo(() =>
-        getTimeRange(snapshots, currentSnapshot, stepSeconds),
-    [getTimeRange, snapshots, currentSnapshot, stepSeconds]);
+    const activeChartModes = useMemo(() => (
+        chartMode === CHART_MODES.ALL
+            ? [CHART_MODES.OVERVIEW, CHART_MODES.GROWING, CHART_MODES.ROLLING]
+            : [chartMode]
+    ), [chartMode]);
+
+    const handleChartModeChange = useCallback((nextMode) => {
+        setChartMode(nextMode);
+        setChartExpanded(nextMode === CHART_MODES.ALL);
+    }, [setChartExpanded, setChartMode]);
 
     // Plugins
     const currentPositionPlugin = useMemo(() => ({
@@ -312,8 +319,8 @@ function PlaybackPage() {
         }
     }), []);
 
-    // Chart options
-    const chartOptions = useMemo(() => ({
+    // Shared chart options factory
+    const buildChartOptions = useCallback(({ timeRange, maxViewerCount, maxMessageCount, chartAnimation }) => ({
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
@@ -367,7 +374,41 @@ function PlaybackPage() {
             },
         },
         animation: chartAnimation,
-    }), [timeRange, maxViewerCount, maxMessageCount, chartAnimation]);
+    }), []);
+
+    // Per-mode chart configs (single mode or all 3 modes)
+    const chartConfigs = useMemo(() => activeChartModes.map((mode) => {
+        const timeRange = getTimeRange(snapshots, currentSnapshot, stepSeconds, mode, rollingWindowHours);
+        const { maxViewerCount, maxMessageCount } = getMaxValues(
+            snapshots,
+            visibleSnapshots,
+            currentSnapshot,
+            mode,
+            rollingWindowHours,
+            dynamicYAxis
+        );
+        const shouldShowPositionLine = mode !== CHART_MODES.ROLLING;
+        const chartAnimation = mode === CHART_MODES.ROLLING ? { duration: 300 } : false;
+
+        return {
+            mode,
+            label: modeLabels[mode],
+            options: buildChartOptions({ timeRange, maxViewerCount, maxMessageCount, chartAnimation }),
+            plugins: shouldShowPositionLine ? [hourGridPlugin, currentPositionPlugin] : [hourGridPlugin],
+        };
+    }), [
+        activeChartModes,
+        buildChartOptions,
+        currentPositionPlugin,
+        currentSnapshot,
+        dynamicYAxis,
+        getMaxValues,
+        getTimeRange,
+        rollingWindowHours,
+        snapshots,
+        stepSeconds,
+        visibleSnapshots,
+    ]);
 
 
     return (
@@ -640,10 +681,10 @@ function PlaybackPage() {
                                                 <SegmentedControl
                                                     options={chartModeOptions}
                                                     value={chartMode}
-                                                    onChange={setChartMode}
+                                                    onChange={handleChartModeChange}
                                                     size="sm"
                                                 />
-                                                {chartMode === CHART_MODES.ROLLING && (
+                                                {(chartMode === CHART_MODES.ROLLING || chartMode === CHART_MODES.ALL) && (
                                                     <select
                                                         className="border border-gray-300 rounded-md px-2 py-1 text-xs cursor-pointer"
                                                         value={rollingWindowHours}
@@ -671,7 +712,20 @@ function PlaybackPage() {
                                             </div>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
-                                            <Chart type='bar' options={chartOptions} data={chartData} plugins={shouldShowPositionLine ? [hourGridPlugin, currentPositionPlugin] : [hourGridPlugin]} />
+                                            {chartMode === CHART_MODES.ALL ? (
+                                                <div className="h-full grid grid-cols-1 gap-4">
+                                                    {chartConfigs.map((config) => (
+                                                        <div key={config.mode} className="min-h-[300px] rounded-xl border border-gray-200/70 bg-white/40 p-2">
+                                                            <div className="px-1 pb-1 text-xs font-semibold text-gray-600">{config.label}</div>
+                                                            <div className="h-[calc(100%-22px)]">
+                                                                <Chart type='bar' options={config.options} data={chartData} plugins={config.plugins} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <Chart type='bar' options={chartConfigs[0].options} data={chartData} plugins={chartConfigs[0].plugins} />
+                                            )}
                                         </div>
                                     </div>
 
