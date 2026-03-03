@@ -13,18 +13,21 @@ import {
     TrophyIcon,
     ArrowTrendingUpIcon,
     ChartBarIcon,
+    ViewfinderCircleIcon,
 } from '@heroicons/react/24/outline';
 import { registerChartComponents, hourGridPlugin } from '../../utils/chartSetup';
 import Navigation from '../../components/common/Navigation';
 import DynamicWordCloud from '../../components/common/DynamicWordCloud';
 import BarChartRace from '../../components/common/BarChartRace';
 import DateTimeHourSelector from '../../components/common/DateTimeHourSelector';
+import SegmentedControl from '../../components/common/SegmentedControl';
 import { formatNumber, formatCurrency, formatTimestamp, formatLocalHour } from '../../utils/formatters';
 import { usePlayback } from '../../hooks/usePlayback';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
 import { usePlaybackLayout } from '../../hooks/usePlaybackLayout';
 import { useDefaultStartTime } from '../../hooks/useDefaultStartTime';
+import { useChartAxisMode, CHART_MODES, ROLLING_WINDOW_OPTIONS } from '../../hooks/useChartAxisMode';
 
 registerChartComponents();
 
@@ -60,6 +63,20 @@ function PlaybackPage() {
     const { savedWordlists: savedExclusionWordlists, loading: loadingExclusionWordlists } = useWordlists();
     const { savedWordlists: savedReplacementWordlists, loading: loadingReplacementWordlists } = useReplacementWordlists();
     const { layout, handleLayoutChange, resetLayout } = usePlaybackLayout();
+    const {
+        chartMode, setChartMode,
+        rollingWindowHours, setRollingWindowHours,
+        dynamicYAxis, setDynamicYAxis,
+        getTimeRange, getMaxValues,
+        shouldShowPositionLine, chartAnimation,
+    } = useChartAxisMode();
+
+    // Chart mode options
+    const chartModeOptions = [
+        { value: CHART_MODES.OVERVIEW, label: '全景' },
+        { value: CHART_MODES.GROWING, label: '延伸' },
+        { value: CHART_MODES.ROLLING, label: '推進' },
+    ];
 
     // Word cloud config state
     const [windowHours, setWindowHours] = useState(4);
@@ -245,19 +262,15 @@ function PlaybackPage() {
         ],
     }), [viewerData, hourlyMessageData]);
 
-    // Max values
-    const { maxViewerCount, maxMessageCount } = useMemo(() => {
-        if (!snapshots.length) return { maxViewerCount: 0, maxMessageCount: 0 };
-        const maxV = Math.max(...snapshots.map(s => s.viewer_count || 0));
-        const maxM = Math.max(...snapshots.map(s => s.hourly_messages || 0));
-        return { maxViewerCount: maxV, maxMessageCount: maxM };
-    }, [snapshots]);
+    // Max values (mode-aware via hook)
+    const { maxViewerCount, maxMessageCount } = useMemo(() =>
+        getMaxValues(snapshots, visibleSnapshots, currentSnapshot),
+    [getMaxValues, snapshots, visibleSnapshots, currentSnapshot]);
 
-    // Time range
-    const timeRange = snapshots.length > 0 ? {
-        min: new Date(snapshots[0].timestamp).getTime(),
-        max: new Date(snapshots[snapshots.length - 1].timestamp).getTime()
-    } : { min: undefined, max: undefined };
+    // Time range (mode-aware via hook)
+    const timeRange = useMemo(() =>
+        getTimeRange(snapshots, currentSnapshot, stepSeconds),
+    [getTimeRange, snapshots, currentSnapshot, stepSeconds]);
 
     // Plugins
     const currentPositionPlugin = useMemo(() => ({
@@ -350,8 +363,8 @@ function PlaybackPage() {
                 ticks: { precision: 0 }
             },
         },
-        animation: false,
-    }), [timeRange, maxViewerCount, maxMessageCount]);
+        animation: chartAnimation,
+    }), [timeRange, maxViewerCount, maxMessageCount, chartAnimation]);
 
 
     return (
@@ -596,9 +609,46 @@ function PlaybackPage() {
                                             <span className="text-gray-400 select-none">⋮⋮</span>
                                             <ArrowTrendingUpIcon className="w-5 h-5 text-gray-700" />
                                             <h3 className="text-base font-bold text-gray-800">觀看人數與留言趨勢</h3>
+                                            <div
+                                                className="ml-auto flex items-center gap-2"
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                            >
+                                                <SegmentedControl
+                                                    options={chartModeOptions}
+                                                    value={chartMode}
+                                                    onChange={setChartMode}
+                                                    size="sm"
+                                                />
+                                                {chartMode === CHART_MODES.ROLLING && (
+                                                    <select
+                                                        className="border border-gray-300 rounded-md px-2 py-1 text-xs cursor-pointer"
+                                                        value={rollingWindowHours}
+                                                        onChange={(e) => setRollingWindowHours(Number(e.target.value))}
+                                                    >
+                                                        {ROLLING_WINDOW_OPTIONS.map(opt => (
+                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                                {chartMode !== CHART_MODES.OVERVIEW && (
+                                                    <button
+                                                        onClick={() => setDynamicYAxis(prev => !prev)}
+                                                        className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${
+                                                            dynamicYAxis
+                                                                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                                                                : 'bg-white border-gray-300 text-gray-500'
+                                                        }`}
+                                                        title={dynamicYAxis ? 'Y 軸：動態縮放' : 'Y 軸：固定範圍'}
+                                                    >
+                                                        <ViewfinderCircleIcon className="w-3.5 h-3.5" />
+                                                        <span>{dynamicYAxis ? '動態 Y' : '固定 Y'}</span>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="p-4 h-[calc(100%-52px)]">
-                                            <Chart type='bar' options={chartOptions} data={chartData} plugins={[hourGridPlugin, currentPositionPlugin]} />
+                                            <Chart type='bar' options={chartOptions} data={chartData} plugins={shouldShowPositionLine ? [hourGridPlugin, currentPositionPlugin] : [hourGridPlugin]} />
                                         </div>
                                     </div>
 

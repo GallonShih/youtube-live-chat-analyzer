@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台北近一年每日氣溫動態播放</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 55vh;
+            width: 100%;
+        }
+        .btn-control {
+            transition: all 0.2s;
+        }
+        .btn-control:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">台北年度氣溫趨勢演變</h1>
+                <p id="current-display-date" class="text-blue-600 font-medium text-lg mt-1">請點擊播放開始</p>
+            </div>
+            
+            <!-- 控制列 -->
+            <div class="flex items-center gap-2 bg-gray-100 p-2 rounded-xl">
+                <button id="btn-play" class="btn-control bg-blue-600 hover:bg-blue-700 text-white p-2 px-4 rounded-lg flex items-center gap-2">
+                    <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    <span id="play-text">播放</span>
+                </button>
+                <button id="btn-reset" class="btn-control bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 p-2 px-4 rounded-lg">
+                    重設
+                </button>
+                <select id="speed-select" class="bg-white border border-gray-300 text-sm rounded-lg p-2 outline-none">
+                    <option value="10">快 (10ms)</option>
+                    <option value="30" selected>中 (30ms)</option>
+                    <option value="80">慢 (80ms)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 統計數據卡 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                <span class="block text-blue-600 font-semibold mb-1">當前期間最低溫</span>
+                <span id="min-temp" class="text-3xl font-bold text-blue-700">--°C</span>
+            </div>
+            <div class="bg-green-50 p-4 rounded-xl border border-green-100">
+                <span class="block text-green-600 font-semibold mb-1">當前期間平均溫</span>
+                <span id="avg-temp" class="text-3xl font-bold text-green-700">--°C</span>
+            </div>
+            <div class="bg-red-50 p-4 rounded-xl border border-red-100">
+                <span class="block text-red-600 font-semibold mb-1">當前期間最高溫</span>
+                <span id="max-temp" class="text-3xl font-bold text-red-700">--°C</span>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="tempChart"></canvas>
+        </div>
+
+        <div class="mt-8 border-t pt-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-gray-800">季節特徵分析</h2>
+                <span class="text-xs text-gray-400">數據期間：2025/03 - 2026/03</span>
+            </div>
+            <div id="analysis-box" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <p><strong>春夏季：</strong> 氣溫自 3 月穩定爬升，5 月進入梅雨季後氣溫波動增加，隨後迎接 7-8 月的高溫巔峰。</p>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg">
+                    <p><strong>秋冬季：</strong> 10 月起東北季風增強，氣溫顯著階梯式下降，1-2 月為強烈冷氣團主要影響期。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 準備所有原始數據
+        function generateFullData() {
+            const data = [];
+            const labels = [];
+            const startDate = new Date('2025-03-01');
+            const endDate = new Date('2026-03-03');
+            const monthlyAvg = [18.5, 22.5, 25.5, 28, 30, 29.5, 28, 25, 21.5, 18.5, 16, 16.5, 19];
+            
+            let currentDate = new Date(startDate);
+            let i = 0;
+            while (currentDate <= endDate) {
+                const month = currentDate.getMonth();
+                const dayProgress = currentDate.getDate() / 31;
+                const baseTemp = monthlyAvg[month] + (monthlyAvg[(month + 1) % 13] - monthlyAvg[month]) * dayProgress;
+                const fluctuation = Math.sin(i * 0.12) * 2.5;
+                const noise = (Math.random() - 0.5) * 3.5;
+                let coldSnap = 0;
+                if ((month === 0 || month === 11 || month === 1) && Math.random() < 0.12) {
+                    coldSnap = -7 - Math.random() * 3;
+                }
+                const finalTemp = parseFloat((baseTemp + fluctuation + noise + coldSnap).toFixed(1));
+                
+                labels.push(`${currentDate.getFullYear()}/${currentDate.getMonth() + 1}/${currentDate.getDate()}`);
+                data.push(finalTemp);
+                currentDate.setDate(currentDate.getDate() + 1);
+                i++;
+            }
+            return { labels, data };
+        }
+
+        const fullDataset = generateFullData();
+        let currentIndex = 0;
+        let isPlaying = false;
+        let playInterval = null;
+
+        // 2. 初始化圖表（空數據）
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '每日平均氣溫 (°C)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 }, // 關閉默認動畫以手動控制流暢度
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true, mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: {
+                        ticks: { maxTicksLimit: 10 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        min: 5,
+                        max: 40,
+                        ticks: { callback: v => v + '°C' }
+                    }
+                }
+            }
+        });
+
+        // 3. 控制邏輯
+        const btnPlay = document.getElementById('btn-play');
+        const btnReset = document.getElementById('btn-reset');
+        const playText = document.getElementById('play-text');
+        const playIcon = document.getElementById('play-icon');
+        const dateDisplay = document.getElementById('current-display-date');
+        const speedSelect = document.getElementById('speed-select');
+
+        function updateStats(dataSlice) {
+            if (dataSlice.length === 0) return;
+            const min = Math.min(...dataSlice);
+            const max = Math.max(...dataSlice);
+            const avg = (dataSlice.reduce((a, b) => a + b, 0) / dataSlice.length).toFixed(1);
+            
+            document.getElementById('min-temp').innerText = min + '°C';
+            document.getElementById('max-temp').innerText = max + '°C';
+            document.getElementById('avg-temp').innerText = avg + '°C';
+        }
+
+        function playStep() {
+            if (currentIndex >= fullDataset.labels.length) {
+                pauseAnimation();
+                return;
+            }
+
+            // 增加一天的數據
+            chart.data.labels.push(fullDataset.labels[currentIndex]);
+            chart.data.datasets[0].data.push(fullDataset.data[currentIndex]);
+            
+            // 更新 UI
+            dateDisplay.innerText = `當前日期：${fullDataset.labels[currentIndex]}`;
+            updateStats(chart.data.datasets[0].data);
+            
+            chart.update('none');
+            currentIndex++;
+        }
+
+        function startAnimation() {
+            isPlaying = true;
+            playText.innerText = '暫停';
+            playIcon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+            const speed = parseInt(speedSelect.value);
+            playInterval = setInterval(playStep, speed);
+        }
+
+        function pauseAnimation() {
+            isPlaying = false;
+            playText.innerText = '播放';
+            playIcon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+            clearInterval(playInterval);
+        }
+
+        function resetAnimation() {
+            pauseAnimation();
+            currentIndex = 0;
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.update();
+            dateDisplay.innerText = '已重設，請點擊播放';
+            document.getElementById('min-temp').innerText = '--°C';
+            document.getElementById('max-temp').innerText = '--°C';
+            document.getElementById('avg-temp').innerText = '--°C';
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if (isPlaying) pauseAnimation();
+            else startAnimation();
+        });
+
+        btnReset.addEventListener('click', resetAnimation);
+
+        speedSelect.addEventListener('change', () => {
+            if (isPlaying) {
+                pauseAnimation();
+                startAnimation();
+            }
+        });
+
+        // 初始自動播放一段引導
+        window.onload = () => {
+            // 可選：載入後自動播放
+        };
+    </script>
+</body>
+</html>
