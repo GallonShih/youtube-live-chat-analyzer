@@ -8,6 +8,7 @@ import {
     PauseIcon,
     CloudIcon,
     ClockIcon,
+    FlagIcon,
     ArrowPathIcon,
     ExclamationTriangleIcon,
     TrophyIcon,
@@ -21,7 +22,9 @@ import DynamicWordCloud from '../../components/common/DynamicWordCloud';
 import BarChartRace from '../../components/common/BarChartRace';
 import DateTimeHourSelector from '../../components/common/DateTimeHourSelector';
 import SegmentedControl from '../../components/common/SegmentedControl';
+import EventMarkerModal from '../dashboard/EventMarkerModal';
 import { formatNumber, formatCurrency, formatTimestamp, formatLocalHour } from '../../utils/formatters';
+import eventMarkerPlugin from '../../utils/eventMarkerPlugin';
 import { usePlayback } from '../../hooks/usePlayback';
 import { useWordlists } from '../../hooks/useWordlists';
 import { useReplacementWordlists } from '../../hooks/useReplacementWordlists';
@@ -84,6 +87,10 @@ function PlaybackPage() {
     const [wordLimit, setWordLimit] = useState(30);
     const [selectedWordlistId, setSelectedWordlistId] = useState(null);
     const [selectedReplacementWordlistId, setSelectedReplacementWordlistId] = useState(null);
+    const [eventMarkers, setEventMarkers] = useState([]);
+    const [showMarkerModal, setShowMarkerModal] = useState(false);
+    const [showMarkerLabels, setShowMarkerLabels] = useState(true);
+    const [markerOpacity, setMarkerOpacity] = useState(20);
 
     // Refs
     const playIntervalRef = useRef(null);
@@ -320,13 +327,26 @@ function PlaybackPage() {
     }), []);
 
     // Shared chart options factory
-    const buildChartOptions = useCallback(({ timeRange, maxViewerCount, maxMessageCount, chartAnimation }) => ({
+    const buildChartOptions = useCallback(({
+        timeRange,
+        maxViewerCount,
+        maxMessageCount,
+        chartAnimation,
+        eventMarkers,
+        showMarkerLabels,
+        markerOpacity,
+    }) => ({
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         plugins: {
             legend: { position: 'top' },
             title: { display: true, text: 'Playback Analytics' },
+            eventMarker: {
+                markers: eventMarkers.filter((m) => m.startTime && m.endTime),
+                showLabels: showMarkerLabels,
+                opacity: markerOpacity,
+            },
             tooltip: {
                 enabled: true,
                 callbacks: {
@@ -393,8 +413,18 @@ function PlaybackPage() {
         return {
             mode,
             label: modeLabels[mode],
-            options: buildChartOptions({ timeRange, maxViewerCount, maxMessageCount, chartAnimation }),
-            plugins: shouldShowPositionLine ? [hourGridPlugin, currentPositionPlugin] : [hourGridPlugin],
+            options: buildChartOptions({
+                timeRange,
+                maxViewerCount,
+                maxMessageCount,
+                chartAnimation,
+                eventMarkers,
+                showMarkerLabels,
+                markerOpacity,
+            }),
+            plugins: shouldShowPositionLine
+                ? [hourGridPlugin, eventMarkerPlugin, currentPositionPlugin]
+                : [hourGridPlugin, eventMarkerPlugin],
         };
     }), [
         activeChartModes,
@@ -404,9 +434,12 @@ function PlaybackPage() {
         dynamicYAxis,
         getMaxValues,
         getTimeRange,
+        markerOpacity,
         rollingWindowHours,
+        showMarkerLabels,
         snapshots,
         stepSeconds,
+        eventMarkers,
         visibleSnapshots,
     ]);
 
@@ -678,6 +711,19 @@ function PlaybackPage() {
                                                 onMouseDown={(e) => e.stopPropagation()}
                                                 onPointerDown={(e) => e.stopPropagation()}
                                             >
+                                                <button
+                                                    onClick={() => setShowMarkerModal(true)}
+                                                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-600 cursor-pointer"
+                                                    title="事件標記"
+                                                >
+                                                    <FlagIcon className="w-3.5 h-3.5" />
+                                                    <span>事件標記</span>
+                                                    {eventMarkers.length > 0 && (
+                                                        <span className="bg-blue-600 text-white text-[10px] rounded-full min-w-4 h-4 px-1 inline-flex items-center justify-center">
+                                                            {eventMarkers.length}
+                                                        </span>
+                                                    )}
+                                                </button>
                                                 <SegmentedControl
                                                     options={chartModeOptions}
                                                     value={chartMode}
@@ -808,6 +854,16 @@ function PlaybackPage() {
                                 </Responsive>
                             )}
                         </div>
+                        <EventMarkerModal
+                            isOpen={showMarkerModal}
+                            onClose={() => setShowMarkerModal(false)}
+                            markers={eventMarkers}
+                            setMarkers={setEventMarkers}
+                            showLabels={showMarkerLabels}
+                            opacity={markerOpacity}
+                            setOpacity={setMarkerOpacity}
+                            setShowLabels={setShowMarkerLabels}
+                        />
                     </>
                 )}
             </div>
