@@ -24,7 +24,12 @@ vi.mock('../../hooks/useDefaultStartTime', () => ({
 }));
 
 vi.mock('./TrendChart', () => ({
-    default: ({ name, data }) => <div data-testid="trend-chart">{name}:{data.length}</div>,
+    default: ({ name, data, onColorChange }) => (
+        <div data-testid="trend-chart">
+            {name}:{data.length}
+            {onColorChange && <button onClick={() => onColorChange('#ff0000')}>change-color</button>}
+        </div>
+    ),
 }));
 
 vi.mock('./WordGroupCard', () => ({
@@ -212,6 +217,24 @@ describe('TrendsPage', () => {
             expect(charts.length).toBe(2);
         });
         expect(fetchTrendStats).toHaveBeenCalledTimes(2);
+    });
+
+    test('calls updateWordTrendGroup when chart color changes and updates group state', async () => {
+        const user = userEvent.setup();
+        updateWordTrendGroup.mockResolvedValue({ id: 1, name: 'A', color: '#ff0000', words: ['a'] });
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await waitFor(() => expect(screen.getByTestId('trend-chart')).toBeInTheDocument());
+
+        await user.click(screen.getByRole('button', { name: 'change-color' }));
+        await waitFor(() =>
+            expect(updateWordTrendGroup).toHaveBeenCalledWith(
+                1,
+                expect.objectContaining({ color: '#ff0000' })
+            )
+        );
     });
 
     test('dedupes in-flight trend requests with identical params', async () => {

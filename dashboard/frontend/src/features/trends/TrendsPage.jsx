@@ -245,6 +245,13 @@ const TrendsPage = () => {
         }
     };
 
+    const handleColorChange = async (groupId, newColor) => {
+        const group = groups.find(g => g.id === groupId);
+        if (!group) return;
+        const updated = await updateWordTrendGroup(groupId, { ...group, color: newColor });
+        setGroups(prev => prev.map(g => g.id === updated.id ? updated : g));
+    };
+
     const handleDeleteGroup = async (id) => {
         await deleteWordTrendGroup(id);
         setGroups(prev => prev.filter(g => g.id !== id));
@@ -644,6 +651,8 @@ const TrendsPage = () => {
                                                     dragHandleProps={{
                                                         onMouseDown: (e) => e.stopPropagation()
                                                     }}
+                                                    isAdmin={isAdmin}
+                                                    onColorChange={(newColor) => handleColorChange(group.id, newColor)}
                                                 />
                                             </div>
                                         );

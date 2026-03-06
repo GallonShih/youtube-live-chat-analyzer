@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { PencilIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Line } from 'react-chartjs-2';
 import {
     Chart as ChartJS,
@@ -27,6 +28,11 @@ ChartJS.register(
 /**
  * Renders a single line chart for a word trend group
  */
+const presetColors = [
+    '#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE',
+    '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC', '#48c9b0'
+];
+
 const TrendChart = ({
     name,
     color,
@@ -38,8 +44,12 @@ const TrendChart = ({
     chartHeight = 192,
     minimalStyle = false,
     minimalYAxisTickSize = 16,
-    dragHandleProps
+    dragHandleProps,
+    isAdmin = false,
+    onColorChange
 }) => {
+    const [isEditingColor, setIsEditingColor] = useState(false);
+    const [editColor, setEditColor] = useState(color);
     const formatYAxisTick = (value) => {
         const n = Number(value);
         if (!Number.isFinite(n)) return value;
@@ -238,9 +248,19 @@ const TrendChart = ({
         return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:00`;
     };
 
+    const handleConfirmColor = () => {
+        onColorChange?.(editColor);
+        setIsEditingColor(false);
+    };
+
+    const handleCancelColor = () => {
+        setEditColor(color);
+        setIsEditingColor(false);
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-md p-5 mb-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                     {/* Drag handle */}
                     <span
@@ -255,13 +275,61 @@ const TrendChart = ({
                         style={{ backgroundColor: color }}
                     />
                     <h3 className="text-lg font-semibold text-gray-800">{name}</h3>
+                    {isAdmin && !isEditingColor && (
+                        <button
+                            aria-label="編輯顏色"
+                            onClick={() => { setEditColor(color); setIsEditingColor(true); }}
+                            className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <PencilIcon className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
                 <div className="flex gap-4 text-sm text-gray-600">
                     <span>總計: <strong className="text-gray-900">{stats.total.toLocaleString()}</strong></span>
                     <span>最高: <strong className="text-gray-900">{stats.max.toLocaleString()}</strong> ({formatMaxHour(stats.maxHour)})</span>
                 </div>
             </div>
-            <div className="min-h-[140px]" style={{ height: `${chartHeight}px` }} data-testid="trend-chart-container">
+            {isEditingColor && (
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    {presetColors.map((c) => (
+                        <button
+                            key={c}
+                            onClick={() => setEditColor(c)}
+                            className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${editColor === c ? 'border-gray-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                            style={{ backgroundColor: c }}
+                        />
+                    ))}
+                    <input
+                        type="text"
+                        aria-label="顏色代碼"
+                        value={editColor}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <input
+                        type="color"
+                        value={editColor}
+                        onChange={(e) => setEditColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                    />
+                    <button
+                        aria-label="確認顏色"
+                        onClick={handleConfirmColor}
+                        className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <CheckIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                        aria-label="取消顏色編輯"
+                        onClick={handleCancelColor}
+                        className="p-1.5 text-gray-600 hover:bg-gray-100 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-gray-400"
+                    >
+                        <XMarkIcon className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+            <div className={`min-h-[140px] ${isEditingColor ? 'mt-0' : 'mt-2'}`} style={{ height: `${chartHeight}px` }} data-testid="trend-chart-container">
                 {data.length > 0 ? (
                     <Line data={chartData} options={chartOptions} />
                 ) : (

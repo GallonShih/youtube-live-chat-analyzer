@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import TrendChart from './TrendChart';
 
@@ -75,6 +76,48 @@ describe('TrendChart', () => {
             />,
         );
         expect(screen.getByText('此時段無符合的留言資料')).toBeInTheDocument();
+    });
+
+    test('does not render edit color button when isAdmin is false', () => {
+        render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={false} />);
+        expect(screen.queryByLabelText('編輯顏色')).not.toBeInTheDocument();
+    });
+
+    test('renders edit color button when isAdmin is true', () => {
+        render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={true} onColorChange={vi.fn()} />);
+        expect(screen.getByLabelText('編輯顏色')).toBeInTheDocument();
+    });
+
+    test('clicking edit color button reveals inline color picker', async () => {
+        const user = userEvent.setup();
+        render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={true} onColorChange={vi.fn()} />);
+        await user.click(screen.getByLabelText('編輯顏色'));
+        expect(screen.getByLabelText('顏色代碼')).toBeInTheDocument();
+        expect(screen.getByLabelText('確認顏色')).toBeInTheDocument();
+        expect(screen.getByLabelText('取消顏色編輯')).toBeInTheDocument();
+    });
+
+    test('confirms color change calls onColorChange and closes picker', async () => {
+        const user = userEvent.setup();
+        const onColorChange = vi.fn();
+        render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={true} onColorChange={onColorChange} />);
+        await user.click(screen.getByLabelText('編輯顏色'));
+        const input = screen.getByLabelText('顏色代碼');
+        await user.clear(input);
+        await user.type(input, '#ff0000');
+        await user.click(screen.getByLabelText('確認顏色'));
+        expect(onColorChange).toHaveBeenCalledWith('#ff0000');
+        expect(screen.queryByLabelText('顏色代碼')).not.toBeInTheDocument();
+    });
+
+    test('cancels color editing without calling onColorChange', async () => {
+        const user = userEvent.setup();
+        const onColorChange = vi.fn();
+        render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={true} onColorChange={onColorChange} />);
+        await user.click(screen.getByLabelText('編輯顏色'));
+        await user.click(screen.getByLabelText('取消顏色編輯'));
+        expect(onColorChange).not.toHaveBeenCalled();
+        expect(screen.queryByLabelText('顏色代碼')).not.toBeInTheDocument();
     });
 
     test('renders line chart and stats for data points', () => {
