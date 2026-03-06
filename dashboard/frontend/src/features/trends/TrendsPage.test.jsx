@@ -24,8 +24,8 @@ vi.mock('../../hooks/useDefaultStartTime', () => ({
 }));
 
 vi.mock('./TrendChart', () => ({
-    default: ({ name, data, onColorChange }) => (
-        <div data-testid="trend-chart">
+    default: ({ name, data, onColorChange, maWindow }) => (
+        <div data-testid="trend-chart" data-ma-window={maWindow ?? 0}>
             {name}:{data.length}
             {onColorChange && <button onClick={() => onColorChange('#ff0000')}>change-color</button>}
         </div>
@@ -217,6 +217,20 @@ describe('TrendsPage', () => {
             expect(charts.length).toBe(2);
         });
         expect(fetchTrendStats).toHaveBeenCalledTimes(2);
+    });
+
+    test('moving average selector passes maWindow to visible trend charts', async () => {
+        const user = userEvent.setup();
+        render(<TrendsPage />);
+
+        await waitFor(() => expect(screen.getByTestId('group-card-1')).toBeInTheDocument());
+        await user.click(screen.getAllByRole('button', { name: 'toggle-group' })[0]);
+        await waitFor(() => expect(screen.getByTestId('trend-chart')).toBeInTheDocument());
+
+        expect(screen.getByTestId('trend-chart')).toHaveAttribute('data-ma-window', '0');
+
+        await user.selectOptions(screen.getByLabelText('移動平均視窗'), '6');
+        expect(screen.getByTestId('trend-chart')).toHaveAttribute('data-ma-window', '6');
     });
 
     test('calls updateWordTrendGroup when chart color changes and updates group state', async () => {

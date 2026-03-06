@@ -46,7 +46,8 @@ const TrendChart = ({
     minimalYAxisTickSize = 16,
     dragHandleProps,
     isAdmin = false,
-    onColorChange
+    onColorChange,
+    maWindow = 0
 }) => {
     const [isEditingColor, setIsEditingColor] = useState(false);
     const [editColor, setEditColor] = useState(color);
@@ -100,11 +101,21 @@ const TrendChart = ({
         return filled;
     }, [data, startTime, endTime]);
 
+    const displayData = useMemo(() => {
+        if (!maWindow || maWindow <= 0) return filledData;
+        return filledData.map((d, i) => {
+            const start = Math.max(0, i - maWindow + 1);
+            const slice = filledData.slice(start, i + 1);
+            const avg = slice.reduce((sum, p) => sum + p.count, 0) / slice.length;
+            return { ...d, count: avg };
+        });
+    }, [filledData, maWindow]);
+
     const chartData = useMemo(() => ({
         datasets: [
             {
                 label: name,
-                data: filledData.map(d => ({
+                data: displayData.map(d => ({
                     x: new Date(d.hour).getTime(),
                     y: d.count
                 })),
@@ -112,15 +123,15 @@ const TrendChart = ({
                 backgroundColor: 'transparent',
                 tension: 0.3,
                 fill: false,
-                pointRadius: showPoints ? 3 : 0,
-                pointHoverRadius: showPoints ? 6 : 0,
+                pointRadius: (maWindow > 0) ? 0 : (showPoints ? 3 : 0),
+                pointHoverRadius: (maWindow > 0) ? 0 : (showPoints ? 6 : 0),
                 pointBackgroundColor: color,
                 pointBorderColor: color,
                 pointBorderWidth: 1,
                 borderWidth: lineWidth,
             }
         ]
-    }), [name, color, filledData, lineWidth, showPoints]);
+    }), [name, color, displayData, lineWidth, showPoints, maWindow]);
 
     const chartOptions = useMemo(() => {
         // Calculate min/max from data or use provided times

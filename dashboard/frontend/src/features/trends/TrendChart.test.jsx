@@ -78,6 +78,65 @@ describe('TrendChart', () => {
         expect(screen.getByText('此時段無符合的留言資料')).toBeInTheDocument();
     });
 
+    test('when maWindow is 0 renders original data unchanged', () => {
+        render(
+            <TrendChart
+                name="A"
+                color="#5470C6"
+                data={[
+                    { hour: '2026-02-18T00:00:00Z', count: 3 },
+                    { hour: '2026-02-18T01:00:00Z', count: 6 },
+                    { hour: '2026-02-18T02:00:00Z', count: 9 },
+                ]}
+                startTime="2026-02-18T00:00:00Z"
+                endTime="2026-02-18T02:00:00Z"
+                maWindow={0}
+            />,
+        );
+        const dataset = lineMock.mock.calls.at(-1)[0].data.datasets[0];
+        expect(dataset.data[0].y).toBe(3);
+        expect(dataset.data[1].y).toBe(6);
+        expect(dataset.data[2].y).toBe(9);
+    });
+
+    test('when maWindow is 3, replaces data with 3-hour moving average', () => {
+        render(
+            <TrendChart
+                name="A"
+                color="#5470C6"
+                data={[
+                    { hour: '2026-02-18T00:00:00Z', count: 3 },
+                    { hour: '2026-02-18T01:00:00Z', count: 6 },
+                    { hour: '2026-02-18T02:00:00Z', count: 9 },
+                ]}
+                startTime="2026-02-18T00:00:00Z"
+                endTime="2026-02-18T02:00:00Z"
+                maWindow={3}
+            />,
+        );
+        const dataset = lineMock.mock.calls.at(-1)[0].data.datasets[0];
+        // partial window at start: avg of available points
+        expect(dataset.data[0].y).toBeCloseTo(3);      // (3)/1
+        expect(dataset.data[1].y).toBeCloseTo(4.5);    // (3+6)/2
+        expect(dataset.data[2].y).toBeCloseTo(6);      // (3+6+9)/3
+    });
+
+    test('when maWindow active, pointRadius is 0 regardless of showPoints prop', () => {
+        render(
+            <TrendChart
+                name="A"
+                color="#5470C6"
+                data={[{ hour: '2026-02-18T00:00:00Z', count: 5 }]}
+                startTime="2026-02-18T00:00:00Z"
+                endTime="2026-02-18T00:00:00Z"
+                maWindow={3}
+                showPoints={true}
+            />,
+        );
+        const dataset = lineMock.mock.calls.at(-1)[0].data.datasets[0];
+        expect(dataset.pointRadius).toBe(0);
+    });
+
     test('does not render edit color button when isAdmin is false', () => {
         render(<TrendChart name="A" color="#5470C6" data={[]} isAdmin={false} />);
         expect(screen.queryByLabelText('編輯顏色')).not.toBeInTheDocument();
