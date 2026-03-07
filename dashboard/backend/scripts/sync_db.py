@@ -364,6 +364,125 @@ def insert_batch(conn, sql: str, rows: list[tuple], row_template: str) -> int:
     return max(inserted, 0)
 
 
+# ── chat_messages 專用：pre-filter 分頁策略 ──────────────────────────────────
+
+CHUNKED_PREFILTER_TABLES = {"chat_messages"}
+DEFAULT_CHUNK_MINUTES = 15
+
+
+def fetch_target_pks(
+    conn,
+    table_name: str,
+    pk_col: str,
+    time_col: str,
+    start: datetime.datetime,
+    end: datetime.datetime,
+) -> set:
+    """取得 target 在指定時間範圍內已存在的 PK set，供 pre-filter 使用。"""
+    with conn.cursor() as cur:
+        cur.execute(
+            f'SELECT "{pk_col}" FROM "{table_name}" '
+            f'WHERE "{time_col}" >= %s AND "{time_col}" < %s',
+            (start, end),
+        )
+        return {r[0] for r in cur.fetchall()}
+
+
+def sync_chunked_prefilter(
+    src_conn,
+    tgt_conn,
+    table_name: str,
+    columns: list[str],
+    pk_col: str,
+    pk_col_idx: int,
+    time_col: str,
+    time_col_idx: int,
+    json_cols: dict[str, str],
+    insert_columns: list[str],
+    insert_indices: list[int],
+    insert_sql: str,
+    row_template: str,
+    start: datetime.datetime,
+    end: datetime.datetime,
+    total: int,
+    chunk_minutes: int,
+    batch_size: int,
+    verbose: bool,
+) -> tuple[int, int, int]:
+    """
+    Chunked pre-filter 同步策略（僅限 chat_messages）。
+
+    將時間範圍切成 chunk_minutes 的小塊，每塊先從 target 取出已存在的 PK set，
+    再從 source 讀取資料時過濾掉已存在的 row，只 INSERT 真正新的資料。
+
+    回傳 (total_processed, total_inserted, total_prefilter_skipped)
+    注意：total_prefilter_skipped 不含 ON CONFLICT 略過的筆數（理論上應為 0）。
+    """
+    chunk_delta = datetime.timedelta(minutes=chunk_minutes)
+    chunk_start = start
+    chunk_num   = 0
+
+    total_processed = 0
+    total_inserted  = 0
+    total_skipped   = 0
+    batch_num       = 0
+
+    while chunk_start < end:
+        chunk_end = min(chunk_start + chunk_delta, end)
+        chunk_num += 1
+
+        # ── 取 target 已存在的 PK set ──
+        target_pks = fetch_target_pks(tgt_conn, table_name, pk_col, time_col, chunk_start, chunk_end)
+        if verbose:
+            print(
+                f"\n  [Chunk {chunk_num}] {chunk_start.strftime('%H:%M')} → {chunk_end.strftime('%H:%M')} "
+                f"| target already has {len(target_pks):,} PKs"
+            )
+
+        # ── Keyset 批次讀取 + pre-filter ──
+        cursor_time = None
+        cursor_pk   = None
+
+        while True:
+            batch_num += 1
+            rows = fetch_batch_keyset(
+                src_conn, table_name, columns, json_cols,
+                time_col, pk_col,
+                chunk_start, chunk_end,
+                cursor_time, cursor_pk,
+                batch_size,
+            )
+            if not rows:
+                break
+
+            last_row    = rows[-1]
+            cursor_pk   = last_row[pk_col_idx]
+            cursor_time = last_row[time_col_idx]
+
+            # pre-filter：排除 target 已有的 PK
+            new_rows   = [r for r in rows if r[pk_col_idx] not in target_pks]
+            prefiltered = len(rows) - len(new_rows)
+
+            inserted = 0
+            if new_rows:
+                insert_rows = [tuple(r[i] for i in insert_indices) for r in new_rows]
+                inserted    = insert_batch(tgt_conn, insert_sql, insert_rows, row_template)
+
+            total_processed += len(rows)
+            total_inserted  += inserted
+            total_skipped   += prefiltered
+
+            pct = min(total_processed / total * 100, 100)
+            print(
+                f"  Batch {batch_num:4d} | processed {total_processed:8,}/{total:,} "
+                f"| inserted {inserted:5,} | pre-filtered {prefiltered:5,} | {pct:.1f}%"
+            )
+
+        chunk_start = chunk_end
+
+    return total_processed, total_inserted, total_skipped
+
+
 # ── 主流程 ────────────────────────────────────────────────────────────────────
 
 def sync(
@@ -376,6 +495,7 @@ def sync(
     time_column: Optional[str],
     conflict_column: Optional[str],
     batch_size: int,
+    chunk_minutes: int,
     dry_run: bool,
     verbose: bool,
 ) -> None:
@@ -478,56 +598,86 @@ def sync(
         pk_col_idx   = columns.index(pk_col)
         time_col_idx = columns.index(time_col) if not sync_all else None
 
-        # ── Keyset 批次同步 ──
-        cursor_time    = None
-        cursor_pk      = None
-        processed      = 0
-        total_inserted = 0
-        total_skipped  = 0
-        batch_num      = 0
+        use_chunked = (table_name in CHUNKED_PREFILTER_TABLES) and (not sync_all)
+        if use_chunked:
+            print(f"Strategy    : chunked pre-filter (chunk={chunk_minutes}min)\n")
+        else:
+            print()
 
-        while True:
-            batch_num += 1
-            if sync_all:
-                rows = fetch_batch_keyset_all(
-                    src_conn, table_name, columns, json_cols,
-                    pk_col, cursor_pk, batch_size,
-                )
-            else:
-                rows = fetch_batch_keyset(
-                    src_conn, table_name, columns, json_cols,
-                    time_col, pk_col,
-                    start, end,
-                    cursor_time, cursor_pk,
-                    batch_size,
-                )
-            if not rows:
-                break
-
-            # 更新游標至本批最後一列
-            last_row  = rows[-1]
-            cursor_pk = last_row[pk_col_idx]
-            if not sync_all:
-                cursor_time = last_row[time_col_idx]
-
-            insert_rows = [tuple(r[i] for i in insert_indices) for r in rows]
-            inserted = insert_batch(tgt_conn, insert_sql, insert_rows, row_template)
-            skipped  = len(rows) - inserted
-            total_inserted += inserted
-            total_skipped  += skipped
-            processed      += len(rows)
-
-            pct = min(processed / total * 100, 100)
-            print(
-                f"  Batch {batch_num:4d} | processed {processed:8,}/{total:,} "
-                f"| inserted {inserted:5,} | skipped {skipped:5,} | {pct:.1f}%"
+        # ── 同步策略分支 ──
+        if use_chunked:
+            processed, total_inserted, total_skipped = sync_chunked_prefilter(
+                src_conn=src_conn,
+                tgt_conn=tgt_conn,
+                table_name=table_name,
+                columns=columns,
+                pk_col=pk_col,
+                pk_col_idx=pk_col_idx,
+                time_col=time_col,
+                time_col_idx=time_col_idx,
+                json_cols=json_cols,
+                insert_columns=insert_columns,
+                insert_indices=insert_indices,
+                insert_sql=insert_sql,
+                row_template=row_template,
+                start=start,
+                end=end,
+                total=total,
+                chunk_minutes=chunk_minutes,
+                batch_size=batch_size,
+                verbose=verbose,
             )
+            skipped_label = "pre-filtered"
+        else:
+            cursor_time    = None
+            cursor_pk      = None
+            processed      = 0
+            total_inserted = 0
+            total_skipped  = 0
+            batch_num      = 0
+
+            while True:
+                batch_num += 1
+                if sync_all:
+                    rows = fetch_batch_keyset_all(
+                        src_conn, table_name, columns, json_cols,
+                        pk_col, cursor_pk, batch_size,
+                    )
+                else:
+                    rows = fetch_batch_keyset(
+                        src_conn, table_name, columns, json_cols,
+                        time_col, pk_col,
+                        start, end,
+                        cursor_time, cursor_pk,
+                        batch_size,
+                    )
+                if not rows:
+                    break
+
+                last_row  = rows[-1]
+                cursor_pk = last_row[pk_col_idx]
+                if not sync_all:
+                    cursor_time = last_row[time_col_idx]
+
+                insert_rows = [tuple(r[i] for i in insert_indices) for r in rows]
+                inserted = insert_batch(tgt_conn, insert_sql, insert_rows, row_template)
+                skipped  = len(rows) - inserted
+                total_inserted += inserted
+                total_skipped  += skipped
+                processed      += len(rows)
+
+                pct = min(processed / total * 100, 100)
+                print(
+                    f"  Batch {batch_num:4d} | processed {processed:8,}/{total:,} "
+                    f"| inserted {inserted:5,} | skipped {skipped:5,} | {pct:.1f}%"
+                )
+            skipped_label = "PK conflict"
 
         # ── 結果摘要 ──
         print(f"\n{'─'*60}")
         print(f"  Total fetched  : {processed:,}")
         print(f"  Total inserted : {total_inserted:,}")
-        print(f"  Total skipped  : {total_skipped:,} (PK conflict)")
+        print(f"  Total skipped  : {total_skipped:,} ({skipped_label})")
         print(f"{'─'*60}")
 
     finally:
@@ -628,6 +778,16 @@ def main():
         metavar="N",
         help="Number of rows per batch (default: 1000)",
     )
+    sync_group.add_argument(
+        "--chunk-minutes",
+        type=int,
+        default=DEFAULT_CHUNK_MINUTES,
+        metavar="N",
+        help=(
+            f"Time chunk size in minutes for chunked pre-filter strategy "
+            f"(default: {DEFAULT_CHUNK_MINUTES}, applies to: {sorted(CHUNKED_PREFILTER_TABLES)})"
+        ),
+    )
 
     # ── 行為控制 ──
     parser.add_argument(
@@ -661,6 +821,7 @@ def main():
             time_column=args.time_column,
             conflict_column=args.conflict_column,
             batch_size=args.batch_size,
+            chunk_minutes=args.chunk_minutes,
             dry_run=args.dry_run,
             verbose=args.verbose,
         )
