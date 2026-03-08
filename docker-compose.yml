@@ -57,7 +57,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-hermes}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hermes}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - 5433:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d:ro
